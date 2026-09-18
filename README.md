@@ -43,3 +43,34 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
   release "Fix/Update Android Runtime":
   https://github.com/ProjectBerry/BB10-Resources/releases/tag/runtime_v_update
   Extracted locally into `q20-runtime/` (not committed here).
+
+## References
+
+* https://github.com/acmiyaguchi/bbnix
+  from-source cross-build userland for BlackBerry 10 / QNX 8 (armle-v7)
+  expressed as Nix derivations; a ready made toolchain pipeline for our
+  target ABI
+* https://github.com/Psyden57/BB-PlayBook-gcc-9.3.0
+  GCC 9.3.0 cross toolchain for BlackBerry PlayBook (QNX 6.5 armle-v7);
+  modern C++ compiler for QNX targets, relevant to the toolchain gap
+* https://github.com/D-os/libbinder
+  standalone build of android/platform/frameworks/native/libs/binder
+  outside the AOSP tree; useful for building libbinder against QNX libc
+* https://github.com/AsteroidOS/android_bionic
+  bionic patched for libhybris compatibility; reference for building
+  Android userspace on a foreign kernel/libc
+* https://github.com/gentoobionic/bionic
+  bionic built standalone with GCC (Gentoo); reference for porting bionic
+  off Linux
+* https://github.com/GrapheneOS/platform_bionic
+  hardened bionic fork; source of post-6.0 fixes and hardening backports
+* https://github.com/sw7ft/BerryCore
+  continuation of Berry Much OS; BB10/QNX userland tooling and build
+  knowledge
+* https://github.com/BerryFarm/berrymuch
+  power user Unix distribution for BlackBerry 10; running our own binaries
+  on the Q20
+* https://github.com/ZElfeheil/qvm-android-rpi4
+  Android Automotive as a guest VM on the QNX 8 hypervisor; alternative
+  architecture (virtualization instead of graft) and QNX-side integration
+  patterns
