@@ -1,0 +1,10 @@
+services:
+  aosp6:
+    image: q20-aosp6:trusty
+    platform: linux/amd64
+    volumes:
+      - .:/workspace/project
+    working_dir: /workspace/project
+    command: /bin/bash
+    stdin_open: true
+    tty: true

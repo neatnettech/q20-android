@@ -1,0 +1,10 @@
+.DS_Store
+*.crdownload
+
+# downloaded source, not ours (see README)
+Blackberry-Research/
+art/
+bionic/
+libcore/
+frameworks/
+system/
