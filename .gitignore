@@ -11,3 +11,6 @@ system/
 q20-runtime/
 toolchains/
 bbnix/
+
+# device photos (personal hardware)
+internals/
