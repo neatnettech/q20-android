@@ -182,11 +182,19 @@ On-device verification (2026-09-23, Q20 CLASSICROW via dev-mode SSH):
 toolchain, uploaded, executed. Futex shim self-check PASS on-device.
 dlsym probe of the device libc:
 
+Signal delivery probes (also on-device, verified):
+- Null pointer fault: handler runs correctly (ART implicit null checks OK).
+- Guard page fault (stack overflow): kernel kills the process, handler
+  never runs (no alt stack). ART implicit SO checks are impossible on QNX.
+- Fix applied in `art/runtime/runtime.cc`: `implicit_so_checks_ = false`
+  under `__QNXNTO__`; the interpreter uses explicit checks via
+  `ExplicitStackOverflowChecks()`.
+
 | Requirement | Q20 status | Verdict |
 |---|---|---|
 | `futex` WAIT/WAKE | libbionic shim, userland waiters list | present |
 | `futex` FUTEX_CMP_REQUEUE (mutex.cc:792) | **returns ENOSYS** (verified disasm) | **must implement** |
-| `sigaltstack` (thread_linux.cc:33, PLOG(FATAL)) | **not exported anywhere on Q20** (QNX libc, linker, libbionic all checked) | **blocker; patch ART or QNX alt-stack equivalent** |
+| `sigaltstack` (thread_linux.cc:33, PLOG(FATAL)) | **not exported anywhere on Q20** (QNX libc, linker, libbionic all checked); guard fault delivery verified broken | **resolved: implicit SO checks disabled on QNX** |
 | `tgkill` (runtime.cc:381, Abort path) | absent; QNX `SignalKill_r(nd,pid,tid,sig,...)` matches semantics | shim in libbionic |
 | `prctl(PR_SET_DUMPABLE)` (ZygoteHooks) | absent; QNX procmgr | shim |
 | `getauxval(AT_RANDOM)` (mem_map.cc:127) | auxv via QNX linker; needs AT_RANDOM/AT_HWCAP | verify linker provides or fake |

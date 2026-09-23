@@ -1,0 +1,21 @@
+From q20-android research: disable ART implicit stack overflow checks on QNX
+--- a/runtime/runtime.cc
++++ b/runtime/runtime.cc
+@@ -926,8 +926,17 @@
+     case kMips64:
+       implicit_null_checks_ = true;
+       // Installing stack protection does not play well with valgrind.
++#if defined(__QNXNTO__)
++      // QNX has no sigaltstack and its kernel cannot deliver a signal once
++      // the SP has crossed into the stack guard region (verified on-device:
++      // runtime/qnx-shims/stackguard-probe.c). Keep implicit SO checks off;
++      // the interpreter falls back to explicit checks via
++      // ExplicitStackOverflowChecks().
++      implicit_so_checks_ = false;
++#else
+       implicit_so_checks_ = (RUNNING_ON_VALGRIND == 0);
++#endif
+       break;
+     default:
+       // Keep the defaults.
+       break;
