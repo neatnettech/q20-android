@@ -27,6 +27,143 @@ NULL. A foreign boot image can never work; the boot image must be generated
 by our own dex2oat so the addresses match our libart.so. Next build target:
 `art/compiler` + `art/dex2oat` for QNX.
 
+## Timeline
+
+### Phase 0: ART runtime (done)
+
+* ART 6.0.1 builds, links, and runs on QNX armle
+* `libjavacore` built from libcore sources, native methods register on-device
+* Marshmallow boot classpath extracted (13 dex files) from the hammerhead
+  factory image
+* Boot image loads on the Q20, GC heap initializes
+* `FUTEX_CMP_REQUEUE` shim implemented and tested on-device (runtime uses
+  pthread mutexes via `ART_USE_FUTEXES=0`, so futex is not the live path)
+
+### Phase 1: dex2oat and the Quick ARM compiler (current)
+
+The compiler chain is the critical engineering frontier. Scope for 6.0.1
+arm32 is the Quick backend only; the optimizing compiler is off by default
+and VIXL is arm64 only.
+
+1. Build compiler infrastructure: `art/compiler` (driver, oat_writer,
+   image_writer, elf_writer, dex layout)
+2. Build the ARM Quick backend: `compiler/dex/quick/arm`
+3. Build a real `libziparchive` from `system/core` plus FileMap (our current
+   zip stubs return failure, and dex2oat must read dex containers)
+4. Get the `dex2oat` executable running on the Q20
+5. Compile one small dex plus the boot dex files in a single dex2oat
+   invocation (dex2oat resolves boot classes from its inputs, so the
+   minimal first target is boot dex + hello.dex together)
+6. Execute the AOT compiled hello.oat under ART
+7. Only then attempt the full boot image
+
+The single dex step turns the problem into `hello.dex -> dex2oat -> Quick
+ARM -> hello.oat -> ART -> Hello World` instead of debugging a giant boot
+image failure over hundreds of classes.
+
+### Phase 2: platform formalization
+
+Stabilize `runtime/art-qnx/` into a platform contract rather than a
+collection of build fixes:
+
+```text
+runtime/art-qnx/
+    ├── compiler/
+    ├── runtime/
+    ├── libjavacore/
+    ├── qnx-shims/
+    └── patches/
+```
+
+The compat layer becomes the formal QNX platform abstraction that later
+Android versions would also target.
+
+### Phase 3: process model and zygote
+
+Before calling zygote done, resolve how processes share runtime state:
+
+* Path A (long term): proper QNX ashmem via `mmap_peer` (QNX peer mapped
+  memory). POSIX `shm_open` fails on BB10, there is no `/dev/shmem` server;
+  the factory runtime used `mmap_peer` / `mem_offset64_peer` for exactly
+  this. The current unlinked temp file does not survive fork sharing.
+* Path B (factory style): skip fork based zygote and preload each app
+  process independently, like the factory runtime did.
+
+Path B unblocks APK execution fastest; Path A stays the long term target.
+
+### Phase 4: security baseline
+
+The security milestone is empirical, not architectural:
+
+> Can an unprivileged APK escape the boundary imposed by QNX?
+
+The stack under test:
+
+```text
+APK
+ ↓
+ART / Android framework
+ ↓
+Android UID/GID + sandbox
+ ↓
+libbionic QNX security glue
+ ↓
+QNX abilities
+ ↓
+Pathtrust
+ ↓
+QNX kernel
+```
+
+Factory primitives that become testable: `defineAppSandbox`,
+`checkAppCapabilities`, capability retention and dropping,
+`dropWriteAndExecSystemCapabilities`, UID/GID mapping, Pathtrust,
+filesystem boundaries. Optional shortcut: link against the factory
+`libbionic.so` binary itself (265 exported sandbox functions, already a QNX
+ARM ELF on the device) so we test the existing boundary instead of
+reimplementing it. Deliberate attack probes: filesystem escape, raw device
+access, process signalling, privileged binder, memory access.
+
+### Phase 5: minimal Android consumer
+
+```text
+ART
+ ↓
+process spawning
+ ↓
+Binder
+ ↓
+minimal framework
+ ↓
+APK
+```
+
+The factory precedent matters here: the Hub does not have to be a native
+QNX application. The factory runtime already shipped
+`QNXAppLauncher.apk` and Hub style apps as Android APKs.
+
+### Phase 6: security hardening
+
+Only once a real APK consumer exists: filesystem isolation, QNX abilities,
+Pathtrust, UID/GID isolation, privileged and unprivileged separation,
+keystore, encrypted storage, minimal service set, no GMS, attack surface
+measurement. Measure actual security properties, not speculative
+infrastructure.
+
+### Phase 7: selective modernization
+
+Do not upgrade for its own sake. Upgrade a component only when a concrete
+reason exists: our QNX platform abstraction can support component X and a
+newer Android gives a specific property that materially improves the
+result. The stanw47 repo already contains an Android 11 binder for QNX plus
+AOSP 11 framework material as the eventual trajectory.
+
+```text
+Android 6   -> prove the QNX Android architecture
+Android 8/9 -> modernize framework and security, selectively
+Android 11  -> selectively backport security fixes
+```
+
 ## Structure
 
 * `art/` `bionic/` `libcore/` `frameworks/` `system/` AOSP 6.0.1 source
