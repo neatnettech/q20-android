@@ -21,10 +21,7 @@ extern "C" {
 /* QNX has no ashmem driver; back the region with a temporary file that is
  * immediately unlinked (same trick ART's own host builds use: files in
  * /tmp). Single-process semantics are enough for ART's GC spaces. */
-int ashmem_create_region(const char* name, size_t size) {
-  (void)name;
-  char tmpl[128];
-  snprintf(tmpl, sizeof(tmpl), "/tmp/ashmem-%d-XXXXXX", static_cast<int>(getpid()));
+static int finish_ashmem(char* tmpl, size_t size) {
   int fd = mkstemp(tmpl);
   if (fd < 0) {
     return -1;
@@ -35,6 +32,24 @@ int ashmem_create_region(const char* name, size_t size) {
     return -1;
   }
   return fd;
+}
+
+int ashmem_create_region(const char* name, size_t size) {
+  (void)name;
+  const char* data_dir = getenv("ANDROID_DATA");
+  if (data_dir != nullptr && data_dir[0] != '\0') {
+    // QNX /tmp is RAM backed; big GC regions must live on flash.
+    char tmpl[256];
+    snprintf(tmpl, sizeof(tmpl), "%s/tmp/ashmem-%d-XXXXXX", data_dir,
+             static_cast<int>(getpid()));
+    int fd = finish_ashmem(tmpl, size);
+    if (fd >= 0) {
+      return fd;
+    }
+  }
+  char tmpl[128];
+  snprintf(tmpl, sizeof(tmpl), "/tmp/ashmem-%d-XXXXXX", static_cast<int>(getpid()));
+  return finish_ashmem(tmpl, size);
 }
 
 /* ---- dl_iterate_phdr for QNX ---- */

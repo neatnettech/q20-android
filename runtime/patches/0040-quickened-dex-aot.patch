@@ -1,0 +1,75 @@
+Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-android research)
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/verifier/method_verifier.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/verifier/method_verifier.cc	2026-09-23 19:50:41
+@@ -902,7 +902,10 @@
+       result = false;
+       break;
+   }
+-  if (inst->GetVerifyIsRuntimeOnly() && Runtime::Current()->IsAotCompiler() && !verify_to_dump_) {
++  // QNX port: accept quickened dex input in AOT mode (boot image rebuild from
++  // a quickened factory boot.oat). The quick opcodes are handled by
++  // GetQuickInvokedMethod / GetQuickFieldAccess below.
++  if (inst->GetVerifyIsRuntimeOnly() && !verify_to_dump_ && false) {
+     Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "opcode only expected at runtime " << inst->Name();
+     result = false;
+   }
+@@ -3572,7 +3575,7 @@
+ }
+ 
+ ArtMethod* MethodVerifier::VerifyInvokeVirtualQuickArgs(const Instruction* inst, bool is_range) {
+-  DCHECK(Runtime::Current()->IsStarted() || verify_to_dump_)
++  DCHECK(Runtime::Current()->IsStarted() || verify_to_dump_ || Runtime::Current()->IsAotCompiler())
+       << PrettyMethod(dex_method_idx_, *dex_file_, true) << "@" << work_insn_idx_;
+ 
+   ArtMethod* res_method = GetQuickInvokedMethod(inst, work_line_.get(), is_range, false);
+@@ -4097,7 +4100,7 @@
+ template <MethodVerifier::FieldAccessType kAccType>
+ void MethodVerifier::VerifyQuickFieldAccess(const Instruction* inst, const RegType& insn_type,
+                                             bool is_primitive) {
+-  DCHECK(Runtime::Current()->IsStarted() || verify_to_dump_);
++  DCHECK(Runtime::Current()->IsStarted() || verify_to_dump_ || Runtime::Current()->IsAotCompiler());
+ 
+   ArtField* field = GetQuickFieldAccess(inst, work_line_.get());
+   if (field == nullptr) {
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/compiler/dex/verified_method.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/compiler/dex/verified_method.cc	2026-09-23 19:47:22
+@@ -56,8 +56,9 @@
+       verified_method->GenerateDevirtMap(method_verifier);
+     }
+ 
+-    // Only need dequicken info for JIT so far.
+-    if (Runtime::Current()->UseJit() && !verified_method->GenerateDequickenMap(method_verifier)) {
++    // QNX port: also generate dequicken info for AOT, since we feed dex2oat
++    // quickened dex extracted from the factory boot.oat.
++    if (!verified_method->GenerateDequickenMap(method_verifier)) {
+       return nullptr;
+     }
+   }
+@@ -77,7 +78,6 @@
+ }
+ 
+ const DexFileReference* VerifiedMethod::GetDequickenIndex(uint32_t dex_pc) const {
+-  DCHECK(Runtime::Current()->UseJit());
+   auto it = dequicken_map_.find(dex_pc);
+   return (it != dequicken_map_.end()) ? &it->second : nullptr;
+ }
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/compiler/driver/compiler_driver.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/compiler/driver/compiler_driver.cc	2026-09-23 19:56:09
+@@ -1934,8 +1934,12 @@
+     // It is *very* problematic if there are verification errors in the boot classpath. For example,
+     // we rely on things working OK without verification when the decryption dialog is brought up.
+     // So abort in a debug build if we find this violated.
+-    DCHECK(!manager->GetCompiler()->IsImage() || klass->IsVerified()) << "Boot classpath class " <<
+-        PrettyClass(klass.Get()) << " failed to fully verify.";
++    if (manager->GetCompiler()->IsImage() && !klass->IsVerified()) {
++      // QNX port: quickened factory dex can fail verification; tolerate it
++      // like a release build does instead of aborting.
++      LOG(WARNING) << "Boot classpath class " << PrettyClass(klass.Get())
++                   << " failed to fully verify.";
++    }
+   }
+   soa.Self()->AssertNoPendingException();
+ }

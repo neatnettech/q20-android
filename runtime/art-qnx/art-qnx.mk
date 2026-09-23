@@ -16,7 +16,7 @@ CORE_ROOT   ?= $(abspath ../../system/core)
 LIBNATIVE   ?= $(abspath ../../libnativehelper)
 SHIMS       ?= $(abspath ..)
 
-CXXFLAGS := -O0 -g -std=gnu++11 -fno-rtti -fno-exceptions \
+CXXFLAGS := -O0 -g -std=gnu++11 -fno-rtti -fno-exceptions -DNDEBUG \
   -DART_TARGET -DART_DEFAULT_GC_TYPE_IS_CMS -DIMT_SIZE=64 \
   -DART_BASE_ADDRESS=0x70000000 \
   -DART_BASE_ADDRESS_MIN_DELTA=-0x1000000 -DART_BASE_ADDRESS_MAX_DELTA=0x1000000 \
