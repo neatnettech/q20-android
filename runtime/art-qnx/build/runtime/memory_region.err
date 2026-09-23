@@ -1,0 +1,5 @@
+In file included from /workspace/project/art/runtime/memory_region.h:24,
+                 from /workspace/project/art/runtime/memory_region.cc:17:
+/workspace/project/art/runtime/base/bit_utils.h:260:86: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  260 |     : public std::iterator<std::forward_iterator_tag, uint32_t, ptrdiff_t, void, void> {
+      |                                                                                      ^

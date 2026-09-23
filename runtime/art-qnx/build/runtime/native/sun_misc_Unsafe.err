@@ -1,0 +1,365 @@
+In file included from /workspace/project/art/runtime/gc/accounting/card_table-inl.h:20,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:19:
+/workspace/project/art/runtime/atomic.h:297:23: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+  297 | typedef Atomic<int32_t> AtomicInteger;
+      |                       ^
+/workspace/project/art/runtime/atomic.h:302:36: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  302 | static_assert(sizeof(Atomic<int64_t>) == sizeof(int64_t), "Weird Atomic<int64> size");
+      |                                    ^
+In file included from /workspace/project/art/runtime/gc/accounting/card_table-inl.h:21,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:19:
+/workspace/project/art/runtime/base/bit_utils.h:260:86: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  260 |     : public std::iterator<std::forward_iterator_tag, uint32_t, ptrdiff_t, void, void> {
+      |                                                                                      ^
+In file included from /workspace/project/art/runtime/gc/accounting/card_table.h:22,
+                 from /workspace/project/art/runtime/gc/accounting/card_table-inl.h:23,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:19:
+/workspace/project/art/runtime/base/mutex.h:178:20: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  178 |     Atomic<uint64_t> wait_time;
+      |                    ^
+In file included from /workspace/project/art/runtime/mem_map.h:29,
+                 from /workspace/project/art/runtime/gc/accounting/card_table-inl.h:24,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:19:
+/workspace/project/art/runtime/base/allocator.h:85:23: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   85 | extern Atomic<uint64_t> g_total_bytes_used[kAllocatorTagCount];
+      |                       ^
+In file included from /workspace/project/art/runtime/mirror/array.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:21:
+/workspace/project/art/runtime/mirror/object.h:43:31: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   43 | typedef PrimitiveArray<uint8_t> BooleanArray;
+      |                               ^
+/workspace/project/art/runtime/mirror/object.h:44:30: warning: ignoring attributes on template argument 'std::int8_t' {aka 'signed char'} [-Wignored-attributes]
+   44 | typedef PrimitiveArray<int8_t> ByteArray;
+      |                              ^
+/workspace/project/art/runtime/mirror/object.h:45:32: warning: ignoring attributes on template argument 'std::uint16_t' {aka 'short unsigned int'} [-Wignored-attributes]
+   45 | typedef PrimitiveArray<uint16_t> CharArray;
+      |                                ^
+/workspace/project/art/runtime/mirror/object.h:48:31: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+   48 | typedef PrimitiveArray<int32_t> IntArray;
+      |                               ^
+/workspace/project/art/runtime/mirror/object.h:49:31: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+   49 | typedef PrimitiveArray<int64_t> LongArray;
+      |                               ^
+/workspace/project/art/runtime/mirror/object.h:50:31: warning: ignoring attributes on template argument 'std::int16_t' {aka 'short int'} [-Wignored-attributes]
+   50 | typedef PrimitiveArray<int16_t> ShortArray;
+      |                               ^
+/workspace/project/art/runtime/mirror/object.h:512:25: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  512 |   static Atomic<uint32_t> hash_code_seed;
+      |                         ^
+In file included from /workspace/project/art/runtime/dex_file.h:33,
+                 from /workspace/project/art/runtime/mirror/class.h:21,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:20,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/utf.h:36:34: warning: ignoring attributes on template argument 'std::uint16_t' {aka 'short unsigned int'} [-Wignored-attributes]
+   36 |   typedef PrimitiveArray<uint16_t> CharArray;
+      |                                  ^
+In file included from /workspace/project/art/runtime/mirror/class.h:21,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:20,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/dex_file.h:732:56: warning: ignoring attributes on template argument 'std::uint16_t' {aka 'short unsigned int'} [-Wignored-attributes]
+  732 |                              const std::vector<uint16_t>& signature_type_idxs) const {
+      |                                                        ^
+/workspace/project/art/runtime/dex_file.h:738:43: warning: ignoring attributes on template argument 'std::uint16_t' {aka 'short unsigned int'} [-Wignored-attributes]
+  738 |                       std::vector<uint16_t>* param_type_idxs) const;
+      |                                           ^
+/workspace/project/art/runtime/dex_file.h:1021:26: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+ 1021 |   mutable Atomic<uint32_t> find_class_def_misses_;
+      |                          ^
+In file included from /workspace/project/art/runtime/mirror/class.h:32,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:20,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/utils.h:290:39: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  290 | void Push32(std::vector<uint8_t, Alloc>* buf, int32_t data) {
+      |                                       ^
+/workspace/project/art/runtime/utils.h:297:61: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  297 | void EncodeUnsignedLeb128(uint32_t data, std::vector<uint8_t>* buf);
+      |                                                             ^
+/workspace/project/art/runtime/utils.h:298:58: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  298 | void EncodeSignedLeb128(int32_t data, std::vector<uint8_t>* buf);
+      |                                                          ^
+In file included from /workspace/project/art/runtime/art_field-inl.h:23,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/class_linker.h:746:18: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  746 |   Atomic<uint32_t> failed_dex_cache_class_lookups_;
+      |                  ^
+In file included from /workspace/project/art/runtime/gc/collector/garbage_collector.h:20,
+                 from /workspace/project/art/runtime/gc/collector/concurrent_copying.h:21,
+                 from /workspace/project/art/runtime/read_barrier-inl.h:22,
+                 from /workspace/project/art/runtime/gc_root-inl.h:24,
+                 from /workspace/project/art/runtime/art_field-inl.h:24,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/base/histogram.h:38:25: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   38 |     std::vector<uint64_t> freq_;
+      |                         ^
+/workspace/project/art/runtime/base/histogram.h:108:23: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  108 |   std::vector<uint32_t> frequency_;
+      |                       ^
+In file included from /workspace/project/art/runtime/gc/collector/garbage_collector.h:22,
+                 from /workspace/project/art/runtime/gc/collector/concurrent_copying.h:21,
+                 from /workspace/project/art/runtime/read_barrier-inl.h:22,
+                 from /workspace/project/art/runtime/gc_root-inl.h:24,
+                 from /workspace/project/art/runtime/art_field-inl.h:24,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/base/timing_logger.h:51:45: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   51 |     bool operator()(const Histogram<uint64_t>* a, const Histogram<uint64_t>* b) const {
+      |                                             ^
+/workspace/project/art/runtime/base/timing_logger.h:51:75: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   51 |     bool operator()(const Histogram<uint64_t>* a, const Histogram<uint64_t>* b) const {
+      |                                                                           ^
+/workspace/project/art/runtime/base/timing_logger.h:67:30: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   67 |   std::set<Histogram<uint64_t>*, HistogramComparator> histograms_ GUARDED_BY(lock_);
+      |                              ^
+In file included from /workspace/project/art/runtime/gc/collector/concurrent_copying.h:21,
+                 from /workspace/project/art/runtime/read_barrier-inl.h:22,
+                 from /workspace/project/art/runtime/gc_root-inl.h:24,
+                 from /workspace/project/art/runtime/art_field-inl.h:24,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/gc/collector/garbage_collector.h:57:29: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   57 |   const std::vector<uint64_t>& GetPauseTimes() const {
+      |                             ^
+/workspace/project/art/runtime/gc/collector/garbage_collector.h:110:23: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  110 |   std::vector<uint64_t> pause_times_;
+      |                       ^
+/workspace/project/art/runtime/gc/collector/garbage_collector.h:187:21: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  187 |   Histogram<uint64_t> pause_histogram_ GUARDED_BY(pause_histogram_lock_);
+      |                     ^
+In file included from /workspace/project/art/runtime/gc/accounting/read_barrier_table.h:22,
+                 from /workspace/project/art/runtime/gc/collector/concurrent_copying.h:27,
+                 from /workspace/project/art/runtime/read_barrier-inl.h:22,
+                 from /workspace/project/art/runtime/gc_root-inl.h:24,
+                 from /workspace/project/art/runtime/art_field-inl.h:24,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/gc/space/space.h:334:18: warning: ignoring attributes on template argument 'std::uint8_t*' {aka 'unsigned char*'} [-Wignored-attributes]
+  334 |   Atomic<uint8_t*> end_;
+      |                  ^
+In file included from /workspace/project/art/runtime/read_barrier-inl.h:22,
+                 from /workspace/project/art/runtime/gc_root-inl.h:24,
+                 from /workspace/project/art/runtime/art_field-inl.h:24,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/gc/collector/concurrent_copying.h:265:33: warning: ignoring attributes on template argument 'std::uint8_t*' {aka 'unsigned char*'} [-Wignored-attributes]
+  265 |   std::multimap<size_t, uint8_t*> skipped_blocks_map_ GUARDED_BY(skipped_blocks_lock_);
+      |                                 ^
+In file included from /workspace/project/art/runtime/read_barrier-inl.h:23,
+                 from /workspace/project/art/runtime/gc_root-inl.h:24,
+                 from /workspace/project/art/runtime/art_field-inl.h:24,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/gc/heap.h:1198:21: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1198 |   Histogram<uint64_t> gc_count_rate_histogram_ GUARDED_BY(gc_complete_lock_);
+      |                     ^
+/workspace/project/art/runtime/gc/heap.h:1200:21: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1200 |   Histogram<uint64_t> blocking_gc_count_rate_histogram_ GUARDED_BY(gc_complete_lock_);
+      |                     ^
+/workspace/project/art/runtime/gc/heap.h:1205:18: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1205 |   Atomic<uint64_t> seen_backtrace_count_;
+      |                  ^
+/workspace/project/art/runtime/gc/heap.h:1206:18: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1206 |   Atomic<uint64_t> unique_backtrace_count_;
+      |                  ^
+/workspace/project/art/runtime/gc/heap.h:1208:30: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1208 |   std::unordered_set<uint64_t> seen_backtraces_ GUARDED_BY(backtrace_lock_);
+      |                              ^
+In file included from /workspace/project/art/runtime/mirror/reference.h:25,
+                 from /workspace/project/art/runtime/read_barrier-inl.h:25,
+                 from /workspace/project/art/runtime/gc_root-inl.h:24,
+                 from /workspace/project/art/runtime/art_field-inl.h:24,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/thread.h:61:33: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+   61 |   typedef PrimitiveArray<int32_t> IntArray;
+      |                                 ^
+In file included from /workspace/project/art/runtime/read_barrier-inl.h:26,
+                 from /workspace/project/art/runtime/gc_root-inl.h:24,
+                 from /workspace/project/art/runtime/art_field-inl.h:24,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/runtime.h:61:32: warning: ignoring attributes on template argument 'std::int8_t' {aka 'signed char'} [-Wignored-attributes]
+   61 |   typedef PrimitiveArray<int8_t> ByteArray;
+      |                                ^
+/workspace/project/art/runtime/runtime.h:89:61: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+   89 | typedef SafeMap<MethodReference, SafeMap<uint32_t, std::set<uint32_t>>,
+      |                                                             ^~~~~~~~
+/workspace/project/art/runtime/runtime.h:89:69: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+   89 | typedef SafeMap<MethodReference, SafeMap<uint32_t, std::set<uint32_t>>,
+      |                                                                     ^~
+In file included from /workspace/project/art/runtime/stack_map.h:20,
+                 from /workspace/project/art/runtime/art_method.h:30,
+                 from /workspace/project/art/runtime/mirror/dex_cache.h:22,
+                 from /workspace/project/art/runtime/art_field-inl.h:27,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/base/bit_vector.h:49:83: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+   49 |       std::iterator<std::forward_iterator_tag, uint32_t, ptrdiff_t, void, uint32_t> {
+      |                                                                                   ^
+/workspace/project/art/runtime/base/bit_vector.h:49:83: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+In file included from /workspace/project/art/runtime/jdwp/jdwp.h:22,
+                 from /workspace/project/art/runtime/debugger.h:32,
+                 from /workspace/project/art/runtime/gc/heap-inl.h:23,
+                 from /workspace/project/art/runtime/mirror/array-inl.h:27,
+                 from /workspace/project/art/runtime/mirror/object-inl.h:25,
+                 from /workspace/project/art/runtime/art_field-inl.h:28,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:35:49: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   35 | static inline void Append1BE(std::vector<uint8_t>& bytes, uint8_t value) {
+      |                                                 ^
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:39:49: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   39 | static inline void Append2BE(std::vector<uint8_t>& bytes, uint16_t value) {
+      |                                                 ^
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:44:49: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   44 | static inline void Append4BE(std::vector<uint8_t>& bytes, uint32_t value) {
+      |                                                 ^
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:51:49: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   51 | static inline void Append8BE(std::vector<uint8_t>& bytes, uint64_t value) {
+      |                                                 ^
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:62:53: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   62 | static inline void AppendUtf16BE(std::vector<uint8_t>& bytes, const uint16_t* chars, size_t char_count) {
+      |                                                     ^
+In file included from /workspace/project/art/runtime/debugger.h:32,
+                 from /workspace/project/art/runtime/gc/heap-inl.h:23,
+                 from /workspace/project/art/runtime/mirror/array-inl.h:27,
+                 from /workspace/project/art/runtime/mirror/object-inl.h:25,
+                 from /workspace/project/art/runtime/art_field-inl.h:28,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/jdwp/jdwp.h:383:17: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  383 |   Atomic<int64_t> last_activity_time_ms_;
+      |                 ^
+In file included from /workspace/project/art/runtime/gc/heap-inl.h:23,
+                 from /workspace/project/art/runtime/mirror/array-inl.h:27,
+                 from /workspace/project/art/runtime/mirror/object-inl.h:25,
+                 from /workspace/project/art/runtime/art_field-inl.h:28,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/debugger.h:77:29: warning: ignoring attributes on template argument 'std::uint64_t []' {aka 'long long unsigned int []'} [-Wignored-attributes]
+   77 |   std::unique_ptr<uint64_t[]> arg_values;   // will be null if arg_count_ == 0. We take ownership
+      |                             ^
+/workspace/project/art/runtime/debugger.h:116:26: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  116 |   const std::set<uint32_t>& GetDexPcs() const {
+      |                          ^
+/workspace/project/art/runtime/debugger.h:140:20: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  140 |   std::set<uint32_t> dex_pcs_;
+      |                    ^
+/workspace/project/art/runtime/debugger.h:215:35: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+  215 |     std::multimap<int32_t, jobject> objects_;
+      |                                   ^
+/workspace/project/art/runtime/debugger.h:293:55: warning: ignoring attributes on template argument 'art::JDWP::RefTypeId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  293 |   static void GetClassList(std::vector<JDWP::RefTypeId>* classes)
+      |                                                       ^
+/workspace/project/art/runtime/debugger.h:298:93: warning: ignoring attributes on template argument 'art::JDWP::RefTypeId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  298 |   static void FindLoadedClassBySignature(const char* descriptor, std::vector<JDWP::RefTypeId>* ids)
+      |                                                                                             ^
+/workspace/project/art/runtime/debugger.h:353:69: warning: ignoring attributes on template argument 'art::JDWP::ObjectId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  353 |                                           std::vector<JDWP::ObjectId>* monitors,
+      |                                                                     ^
+/workspace/project/art/runtime/debugger.h:354:63: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  354 |                                           std::vector<uint32_t>* stack_depths)
+      |                                                               ^
+/workspace/project/art/runtime/debugger.h:365:77: warning: ignoring attributes on template argument 'art::JDWP::RefTypeId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  365 |   static JDWP::JdwpError GetInstanceCounts(const std::vector<JDWP::RefTypeId>& class_ids,
+      |                                                                             ^
+/workspace/project/art/runtime/debugger.h:366:64: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  366 |                                            std::vector<uint64_t>* counts)
+      |                                                                ^
+/workspace/project/art/runtime/debugger.h:369:65: warning: ignoring attributes on template argument 'art::JDWP::ObjectId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  369 |                                       std::vector<JDWP::ObjectId>* instances)
+      |                                                                 ^
+/workspace/project/art/runtime/debugger.h:372:72: warning: ignoring attributes on template argument 'art::JDWP::ObjectId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  372 |                                              std::vector<JDWP::ObjectId>* referring_objects)
+      |                                                                        ^
+/workspace/project/art/runtime/debugger.h:410:58: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  410 |                                       std::vector<uint8_t>* bytecodes)
+      |                                                          ^
+/workspace/project/art/runtime/debugger.h:470:82: warning: ignoring attributes on template argument 'art::JDWP::ObjectId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  470 |   static void GetThreads(mirror::Object* thread_group, std::vector<JDWP::ObjectId>* thread_ids)
+      |                                                                                  ^
+/workspace/project/art/runtime/debugger.h:667:68: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  667 |   static void DdmSendChunk(uint32_t type, const std::vector<uint8_t>& bytes)
+      |                                                                    ^
+In file included from /workspace/project/art/runtime/gc/heap-inl.h:29,
+                 from /workspace/project/art/runtime/mirror/array-inl.h:27,
+                 from /workspace/project/art/runtime/mirror/object-inl.h:25,
+                 from /workspace/project/art/runtime/art_field-inl.h:28,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/gc/space/region_space-inl.h: In member function 'art::mirror::Object* art::gc::space::RegionSpace::Region::Alloc(std::size_t, std::size_t*, std::size_t*, std::size_t*)':
+/workspace/project/art/runtime/gc/space/region_space-inl.h:119:18: warning: ignoring attributes on template argument 'std::uint8_t*' {aka 'unsigned char*'} [-Wignored-attributes]
+  119 |   Atomic<uint8_t*>* atomic_top = reinterpret_cast<Atomic<uint8_t*>*>(&top_);
+      |                  ^
+/workspace/project/art/runtime/gc/space/region_space-inl.h:119:66: warning: ignoring attributes on template argument 'std::uint8_t*' {aka 'unsigned char*'} [-Wignored-attributes]
+  119 |   Atomic<uint8_t*>* atomic_top = reinterpret_cast<Atomic<uint8_t*>*>(&top_);
+      |                                                                  ^
+/workspace/project/art/runtime/gc/space/region_space-inl.h:129:35: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  129 |   reinterpret_cast<Atomic<uint64_t>*>(&objects_allocated_)->FetchAndAddSequentiallyConsistent(1);
+      |                                   ^
+In file included from /workspace/project/art/runtime/thread-inl.h:27,
+                 from /workspace/project/art/runtime/gc/heap-inl.h:33,
+                 from /workspace/project/art/runtime/mirror/array-inl.h:27,
+                 from /workspace/project/art/runtime/mirror/object-inl.h:25,
+                 from /workspace/project/art/runtime/art_field-inl.h:28,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/jni_env_ext.h: At global scope:
+/workspace/project/art/runtime/jni_env_ext.h:78:23: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+   78 |   std::vector<uint32_t> stacked_local_ref_cookies;
+      |                       ^
+In file included from /workspace/project/art/runtime/art_field-inl.h:28,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:22,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/mirror/object-inl.h: In member function 'bool art::mirror::Object::CasFieldWeakSequentiallyConsistent64(art::MemberOffset, std::int64_t, std::int64_t)':
+/workspace/project/art/runtime/mirror/object-inl.h:755:17: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  755 |   Atomic<int64_t>* atomic_addr = reinterpret_cast<Atomic<int64_t>*>(raw_addr);
+      |                 ^
+/workspace/project/art/runtime/mirror/object-inl.h:755:65: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  755 |   Atomic<int64_t>* atomic_addr = reinterpret_cast<Atomic<int64_t>*>(raw_addr);
+      |                                                                 ^
+/workspace/project/art/runtime/mirror/object-inl.h: In member function 'bool art::mirror::Object::CasFieldStrongSequentiallyConsistent64(art::MemberOffset, std::int64_t, std::int64_t)':
+/workspace/project/art/runtime/mirror/object-inl.h:772:17: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  772 |   Atomic<int64_t>* atomic_addr = reinterpret_cast<Atomic<int64_t>*>(raw_addr);
+      |                 ^
+/workspace/project/art/runtime/mirror/object-inl.h:772:65: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  772 |   Atomic<int64_t>* atomic_addr = reinterpret_cast<Atomic<int64_t>*>(raw_addr);
+      |                                                                 ^
+/workspace/project/art/runtime/mirror/object-inl.h: In member function 'bool art::mirror::Object::CasFieldWeakSequentiallyConsistentObjectWithoutWriteBarrier(art::MemberOffset, art::mirror::Object*, art::mirror::Object*)':
+/workspace/project/art/runtime/mirror/object-inl.h:894:18: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  894 |   Atomic<uint32_t>* atomic_addr = reinterpret_cast<Atomic<uint32_t>*>(raw_addr);
+      |                  ^
+/workspace/project/art/runtime/mirror/object-inl.h:894:67: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  894 |   Atomic<uint32_t>* atomic_addr = reinterpret_cast<Atomic<uint32_t>*>(raw_addr);
+      |                                                                   ^
+/workspace/project/art/runtime/mirror/object-inl.h: In member function 'bool art::mirror::Object::CasFieldStrongSequentiallyConsistentObjectWithoutWriteBarrier(art::MemberOffset, art::mirror::Object*, art::mirror::Object*)':
+/workspace/project/art/runtime/mirror/object-inl.h:933:18: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  933 |   Atomic<uint32_t>* atomic_addr = reinterpret_cast<Atomic<uint32_t>*>(raw_addr);
+      |                  ^
+/workspace/project/art/runtime/mirror/object-inl.h:933:67: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  933 |   Atomic<uint32_t>* atomic_addr = reinterpret_cast<Atomic<uint32_t>*>(raw_addr);
+      |                                                                   ^
+In file included from /workspace/project/art/runtime/dex_file-inl.h:24,
+                 from /workspace/project/art/runtime/art_method-inl.h:25,
+                 from /workspace/project/art/runtime/mirror/class-inl.h:24,
+                 from /workspace/project/art/runtime/native/sun_misc_Unsafe.cc:22:
+/workspace/project/art/runtime/leb128.h: At global scope:
+/workspace/project/art/runtime/leb128.h:131:71: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  131 | static inline void EncodeUnsignedLeb128(std::vector<uint8_t, Allocator>* dest, uint32_t value) {
+      |                                                                       ^
+/workspace/project/art/runtime/leb128.h:169:69: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  169 | static inline void EncodeSignedLeb128(std::vector<uint8_t, Allocator>* dest, int32_t value) {
+      |                                                                     ^
+/workspace/project/art/runtime/leb128.h:184:45: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  184 |   explicit Leb128Encoder(std::vector<uint8_t>* data) : data_(data) {
+      |                                             ^
+/workspace/project/art/runtime/leb128.h:214:28: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  214 |   const std::vector<uint8_t>& GetData() const {
+      |                            ^
+/workspace/project/art/runtime/leb128.h:219:22: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  219 |   std::vector<uint8_t>* const data_;
+      |                      ^
+/workspace/project/art/runtime/leb128.h:226:63: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  226 | class Leb128EncodingVector FINAL : private std::vector<uint8_t>, public Leb128Encoder {
+      |                                                               ^

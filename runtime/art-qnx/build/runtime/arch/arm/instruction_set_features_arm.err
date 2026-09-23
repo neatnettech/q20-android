@@ -1,0 +1,24 @@
+In file included from /workspace/project/art/runtime/base/mutex.h:26,
+                 from /workspace/project/art/runtime/utils.h:30,
+                 from /workspace/project/art/runtime/arch/arm/instruction_set_features_arm.cc:28:
+/workspace/project/art/runtime/atomic.h:297:23: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+  297 | typedef Atomic<int32_t> AtomicInteger;
+      |                       ^
+/workspace/project/art/runtime/atomic.h:302:36: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  302 | static_assert(sizeof(Atomic<int64_t>) == sizeof(int64_t), "Weird Atomic<int64> size");
+      |                                    ^
+In file included from /workspace/project/art/runtime/utils.h:30,
+                 from /workspace/project/art/runtime/arch/arm/instruction_set_features_arm.cc:28:
+/workspace/project/art/runtime/base/mutex.h:178:20: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  178 |     Atomic<uint64_t> wait_time;
+      |                    ^
+In file included from /workspace/project/art/runtime/arch/arm/instruction_set_features_arm.cc:28:
+/workspace/project/art/runtime/utils.h:290:39: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  290 | void Push32(std::vector<uint8_t, Alloc>* buf, int32_t data) {
+      |                                       ^
+/workspace/project/art/runtime/utils.h:297:61: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  297 | void EncodeUnsignedLeb128(uint32_t data, std::vector<uint8_t>* buf);
+      |                                                             ^
+/workspace/project/art/runtime/utils.h:298:58: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  298 | void EncodeSignedLeb128(int32_t data, std::vector<uint8_t>* buf);
+      |                                                          ^

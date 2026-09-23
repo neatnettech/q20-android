@@ -1,0 +1,90 @@
+In file included from /workspace/project/art/runtime/base/mutex.h:26,
+                 from /workspace/project/art/runtime/gc_root.h:21,
+                 from /workspace/project/art/runtime/debugger.h:31,
+                 from /workspace/project/art/runtime/jdwp/jdwp_priv.h:22,
+                 from /workspace/project/art/runtime/jdwp/jdwp_socket.cc:31:
+/workspace/project/art/runtime/atomic.h:297:23: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+  297 | typedef Atomic<int32_t> AtomicInteger;
+      |                       ^
+/workspace/project/art/runtime/atomic.h:302:36: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  302 | static_assert(sizeof(Atomic<int64_t>) == sizeof(int64_t), "Weird Atomic<int64> size");
+      |                                    ^
+In file included from /workspace/project/art/runtime/gc_root.h:21,
+                 from /workspace/project/art/runtime/debugger.h:31,
+                 from /workspace/project/art/runtime/jdwp/jdwp_priv.h:22,
+                 from /workspace/project/art/runtime/jdwp/jdwp_socket.cc:31:
+/workspace/project/art/runtime/base/mutex.h:178:20: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  178 |     Atomic<uint64_t> wait_time;
+      |                    ^
+In file included from /workspace/project/art/runtime/jdwp/jdwp.h:22,
+                 from /workspace/project/art/runtime/debugger.h:32,
+                 from /workspace/project/art/runtime/jdwp/jdwp_priv.h:22,
+                 from /workspace/project/art/runtime/jdwp/jdwp_socket.cc:31:
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:35:49: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   35 | static inline void Append1BE(std::vector<uint8_t>& bytes, uint8_t value) {
+      |                                                 ^
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:39:49: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   39 | static inline void Append2BE(std::vector<uint8_t>& bytes, uint16_t value) {
+      |                                                 ^
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:44:49: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   44 | static inline void Append4BE(std::vector<uint8_t>& bytes, uint32_t value) {
+      |                                                 ^
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:51:49: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   51 | static inline void Append8BE(std::vector<uint8_t>& bytes, uint64_t value) {
+      |                                                 ^
+/workspace/project/art/runtime/jdwp/jdwp_bits.h:62:53: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   62 | static inline void AppendUtf16BE(std::vector<uint8_t>& bytes, const uint16_t* chars, size_t char_count) {
+      |                                                     ^
+In file included from /workspace/project/art/runtime/debugger.h:32,
+                 from /workspace/project/art/runtime/jdwp/jdwp_priv.h:22,
+                 from /workspace/project/art/runtime/jdwp/jdwp_socket.cc:31:
+/workspace/project/art/runtime/jdwp/jdwp.h:383:17: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  383 |   Atomic<int64_t> last_activity_time_ms_;
+      |                 ^
+In file included from /workspace/project/art/runtime/jdwp/jdwp_priv.h:22,
+                 from /workspace/project/art/runtime/jdwp/jdwp_socket.cc:31:
+/workspace/project/art/runtime/debugger.h:77:29: warning: ignoring attributes on template argument 'std::uint64_t []' {aka 'long long unsigned int []'} [-Wignored-attributes]
+   77 |   std::unique_ptr<uint64_t[]> arg_values;   // will be null if arg_count_ == 0. We take ownership
+      |                             ^
+/workspace/project/art/runtime/debugger.h:116:26: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  116 |   const std::set<uint32_t>& GetDexPcs() const {
+      |                          ^
+/workspace/project/art/runtime/debugger.h:140:20: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  140 |   std::set<uint32_t> dex_pcs_;
+      |                    ^
+/workspace/project/art/runtime/debugger.h:215:35: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+  215 |     std::multimap<int32_t, jobject> objects_;
+      |                                   ^
+/workspace/project/art/runtime/debugger.h:293:55: warning: ignoring attributes on template argument 'art::JDWP::RefTypeId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  293 |   static void GetClassList(std::vector<JDWP::RefTypeId>* classes)
+      |                                                       ^
+/workspace/project/art/runtime/debugger.h:298:93: warning: ignoring attributes on template argument 'art::JDWP::RefTypeId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  298 |   static void FindLoadedClassBySignature(const char* descriptor, std::vector<JDWP::RefTypeId>* ids)
+      |                                                                                             ^
+/workspace/project/art/runtime/debugger.h:353:69: warning: ignoring attributes on template argument 'art::JDWP::ObjectId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  353 |                                           std::vector<JDWP::ObjectId>* monitors,
+      |                                                                     ^
+/workspace/project/art/runtime/debugger.h:354:63: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  354 |                                           std::vector<uint32_t>* stack_depths)
+      |                                                               ^
+/workspace/project/art/runtime/debugger.h:365:77: warning: ignoring attributes on template argument 'art::JDWP::RefTypeId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  365 |   static JDWP::JdwpError GetInstanceCounts(const std::vector<JDWP::RefTypeId>& class_ids,
+      |                                                                             ^
+/workspace/project/art/runtime/debugger.h:366:64: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  366 |                                            std::vector<uint64_t>* counts)
+      |                                                                ^
+/workspace/project/art/runtime/debugger.h:369:65: warning: ignoring attributes on template argument 'art::JDWP::ObjectId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  369 |                                       std::vector<JDWP::ObjectId>* instances)
+      |                                                                 ^
+/workspace/project/art/runtime/debugger.h:372:72: warning: ignoring attributes on template argument 'art::JDWP::ObjectId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  372 |                                              std::vector<JDWP::ObjectId>* referring_objects)
+      |                                                                        ^
+/workspace/project/art/runtime/debugger.h:410:58: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  410 |                                       std::vector<uint8_t>* bytecodes)
+      |                                                          ^
+/workspace/project/art/runtime/debugger.h:470:82: warning: ignoring attributes on template argument 'art::JDWP::ObjectId' {aka 'long long unsigned int'} [-Wignored-attributes]
+  470 |   static void GetThreads(mirror::Object* thread_group, std::vector<JDWP::ObjectId>* thread_ids)
+      |                                                                                  ^
+/workspace/project/art/runtime/debugger.h:667:68: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  667 |   static void DdmSendChunk(uint32_t type, const std::vector<uint8_t>& bytes)
+      |                                                                    ^

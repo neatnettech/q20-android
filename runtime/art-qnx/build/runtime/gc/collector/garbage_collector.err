@@ -1,0 +1,336 @@
+In file included from /workspace/project/art/runtime/gc/collector/garbage_collector.h:20,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:19:
+/workspace/project/art/runtime/base/histogram.h:38:25: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   38 |     std::vector<uint64_t> freq_;
+      |                         ^
+/workspace/project/art/runtime/base/histogram.h:108:23: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  108 |   std::vector<uint32_t> frequency_;
+      |                       ^
+In file included from /workspace/project/art/runtime/base/mutex.h:26,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.h:21,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:19:
+/workspace/project/art/runtime/atomic.h:297:23: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+  297 | typedef Atomic<int32_t> AtomicInteger;
+      |                       ^
+/workspace/project/art/runtime/atomic.h:302:36: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  302 | static_assert(sizeof(Atomic<int64_t>) == sizeof(int64_t), "Weird Atomic<int64> size");
+      |                                    ^
+In file included from /workspace/project/art/runtime/gc/collector/garbage_collector.h:21,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:19:
+/workspace/project/art/runtime/base/mutex.h:178:20: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  178 |     Atomic<uint64_t> wait_time;
+      |                    ^
+In file included from /workspace/project/art/runtime/gc/collector/garbage_collector.h:22,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:19:
+/workspace/project/art/runtime/base/timing_logger.h:51:45: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   51 |     bool operator()(const Histogram<uint64_t>* a, const Histogram<uint64_t>* b) const {
+      |                                             ^
+/workspace/project/art/runtime/base/timing_logger.h:51:75: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   51 |     bool operator()(const Histogram<uint64_t>* a, const Histogram<uint64_t>* b) const {
+      |                                                                           ^
+/workspace/project/art/runtime/base/timing_logger.h:67:30: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   67 |   std::set<Histogram<uint64_t>*, HistogramComparator> histograms_ GUARDED_BY(lock_);
+      |                              ^
+In file included from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:19:
+/workspace/project/art/runtime/gc/collector/garbage_collector.h:57:29: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   57 |   const std::vector<uint64_t>& GetPauseTimes() const {
+      |                             ^
+/workspace/project/art/runtime/gc/collector/garbage_collector.h:110:23: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  110 |   std::vector<uint64_t> pause_times_;
+      |                       ^
+/workspace/project/art/runtime/gc/collector/garbage_collector.h:187:21: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  187 |   Histogram<uint64_t> pause_histogram_ GUARDED_BY(pause_histogram_lock_);
+      |                     ^
+In file included from /workspace/project/system/core/include/cutils/trace.h:21,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:22:
+/workspace/project/runtime/art-qnx/compat/stdatomic.h:26:34: warning: ignoring attributes on template argument 'std::int_least32_t' {aka 'int'} [-Wignored-attributes]
+   26 | typedef std::atomic<int_least32_t> atomic_int_least32_t;
+      |                                  ^
+/workspace/project/runtime/art-qnx/compat/stdatomic.h:27:35: warning: ignoring attributes on template argument 'std::uint_least32_t' {aka 'unsigned int'} [-Wignored-attributes]
+   27 | typedef std::atomic<uint_least32_t> atomic_uint_least32_t;
+      |                                   ^
+In file included from /workspace/project/art/runtime/base/histogram-inl.h:27,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:25:
+/workspace/project/art/runtime/base/bit_utils.h:260:86: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  260 |     : public std::iterator<std::forward_iterator_tag, uint32_t, ptrdiff_t, void, void> {
+      |                                                                                      ^
+In file included from /workspace/project/art/runtime/safe_map.h:23,
+                 from /workspace/project/art/runtime/instrumentation.h:28,
+                 from /workspace/project/art/runtime/runtime.h:32,
+                 from /workspace/project/art/runtime/base/mutex-inl.h:26,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:27:
+/workspace/project/art/runtime/base/allocator.h:85:23: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+   85 | extern Atomic<uint64_t> g_total_bytes_used[kAllocatorTagCount];
+      |                       ^
+In file included from /workspace/project/art/runtime/base/mutex-inl.h:26,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:27:
+/workspace/project/art/runtime/runtime.h:61:32: warning: ignoring attributes on template argument 'std::int8_t' {aka 'signed char'} [-Wignored-attributes]
+   61 |   typedef PrimitiveArray<int8_t> ByteArray;
+      |                                ^
+/workspace/project/art/runtime/runtime.h:89:61: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+   89 | typedef SafeMap<MethodReference, SafeMap<uint32_t, std::set<uint32_t>>,
+      |                                                             ^~~~~~~~
+/workspace/project/art/runtime/runtime.h:89:69: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+   89 | typedef SafeMap<MethodReference, SafeMap<uint32_t, std::set<uint32_t>>,
+      |                                                                     ^~
+In file included from /workspace/project/art/runtime/dex_file.h:33,
+                 from /workspace/project/art/runtime/entrypoints/interpreter/interpreter_entrypoints.h:21,
+                 from /workspace/project/art/runtime/thread.h:33,
+                 from /workspace/project/art/runtime/base/mutex-inl.h:27,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:27:
+/workspace/project/art/runtime/utf.h:36:34: warning: ignoring attributes on template argument 'std::uint16_t' {aka 'short unsigned int'} [-Wignored-attributes]
+   36 |   typedef PrimitiveArray<uint16_t> CharArray;
+      |                                  ^
+In file included from /workspace/project/art/runtime/entrypoints/interpreter/interpreter_entrypoints.h:21,
+                 from /workspace/project/art/runtime/thread.h:33,
+                 from /workspace/project/art/runtime/base/mutex-inl.h:27,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:27:
+/workspace/project/art/runtime/dex_file.h:732:56: warning: ignoring attributes on template argument 'std::uint16_t' {aka 'short unsigned int'} [-Wignored-attributes]
+  732 |                              const std::vector<uint16_t>& signature_type_idxs) const {
+      |                                                        ^
+/workspace/project/art/runtime/dex_file.h:738:43: warning: ignoring attributes on template argument 'std::uint16_t' {aka 'short unsigned int'} [-Wignored-attributes]
+  738 |                       std::vector<uint16_t>* param_type_idxs) const;
+      |                                           ^
+/workspace/project/art/runtime/dex_file.h:1021:26: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+ 1021 |   mutable Atomic<uint32_t> find_class_def_misses_;
+      |                          ^
+In file included from /workspace/project/art/runtime/base/mutex-inl.h:27,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:27:
+/workspace/project/art/runtime/thread.h:61:33: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+   61 |   typedef PrimitiveArray<int32_t> IntArray;
+      |                                 ^
+In file included from /workspace/project/art/runtime/base/mutex-inl.h:28,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:27:
+/workspace/project/art/runtime/utils.h:290:39: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  290 | void Push32(std::vector<uint8_t, Alloc>* buf, int32_t data) {
+      |                                       ^
+/workspace/project/art/runtime/utils.h:297:61: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  297 | void EncodeUnsignedLeb128(uint32_t data, std::vector<uint8_t>* buf);
+      |                                                             ^
+/workspace/project/art/runtime/utils.h:298:58: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+  298 | void EncodeSignedLeb128(int32_t data, std::vector<uint8_t>* buf);
+      |                                                          ^
+In file included from /workspace/project/art/runtime/image.h:23,
+                 from /workspace/project/art/runtime/gc/space/space.h:29,
+                 from /workspace/project/art/runtime/gc/space/malloc_space.h:20,
+                 from /workspace/project/art/runtime/gc/space/dlmalloc_space.h:20,
+                 from /workspace/project/art/runtime/gc/space/large_object_space.h:21,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:30:
+/workspace/project/art/runtime/mirror/object.h:43:31: warning: ignoring attributes on template argument 'std::uint8_t' {aka 'unsigned char'} [-Wignored-attributes]
+   43 | typedef PrimitiveArray<uint8_t> BooleanArray;
+      |                               ^
+/workspace/project/art/runtime/mirror/object.h:44:30: warning: ignoring attributes on template argument 'std::int8_t' {aka 'signed char'} [-Wignored-attributes]
+   44 | typedef PrimitiveArray<int8_t> ByteArray;
+      |                              ^
+/workspace/project/art/runtime/mirror/object.h:45:32: warning: ignoring attributes on template argument 'std::uint16_t' {aka 'short unsigned int'} [-Wignored-attributes]
+   45 | typedef PrimitiveArray<uint16_t> CharArray;
+      |                                ^
+/workspace/project/art/runtime/mirror/object.h:48:31: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+   48 | typedef PrimitiveArray<int32_t> IntArray;
+      |                               ^
+/workspace/project/art/runtime/mirror/object.h:49:31: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+   49 | typedef PrimitiveArray<int64_t> LongArray;
+      |                               ^
+/workspace/project/art/runtime/mirror/object.h:50:31: warning: ignoring attributes on template argument 'std::int16_t' {aka 'short int'} [-Wignored-attributes]
+   50 | typedef PrimitiveArray<int16_t> ShortArray;
+      |                               ^
+/workspace/project/art/runtime/mirror/object.h:512:25: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  512 |   static Atomic<uint32_t> hash_code_seed;
+      |                         ^
+In file included from /workspace/project/art/runtime/gc/space/malloc_space.h:20,
+                 from /workspace/project/art/runtime/gc/space/dlmalloc_space.h:20,
+                 from /workspace/project/art/runtime/gc/space/large_object_space.h:21,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:30:
+/workspace/project/art/runtime/gc/space/space.h:334:18: warning: ignoring attributes on template argument 'std::uint8_t*' {aka 'unsigned char*'} [-Wignored-attributes]
+  334 |   Atomic<uint8_t*> end_;
+      |                  ^
+In file included from /workspace/project/art/runtime/gc/space/space-inl.h:24,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:31:
+/workspace/project/art/runtime/gc/space/image_space.h:143:25: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+  143 |   static Atomic<uint32_t> bitmap_index_;
+      |                         ^
+In file included from /workspace/project/art/runtime/thread-inl.h:26,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:32:
+/workspace/project/art/runtime/gc/heap.h:1198:21: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1198 |   Histogram<uint64_t> gc_count_rate_histogram_ GUARDED_BY(gc_complete_lock_);
+      |                     ^
+/workspace/project/art/runtime/gc/heap.h:1200:21: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1200 |   Histogram<uint64_t> blocking_gc_count_rate_histogram_ GUARDED_BY(gc_complete_lock_);
+      |                     ^
+/workspace/project/art/runtime/gc/heap.h:1205:18: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1205 |   Atomic<uint64_t> seen_backtrace_count_;
+      |                  ^
+/workspace/project/art/runtime/gc/heap.h:1206:18: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1206 |   Atomic<uint64_t> unique_backtrace_count_;
+      |                  ^
+/workspace/project/art/runtime/gc/heap.h:1208:30: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+ 1208 |   std::unordered_set<uint64_t> seen_backtraces_ GUARDED_BY(backtrace_lock_);
+      |                              ^
+In file included from /workspace/project/art/runtime/thread-inl.h:27,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:32:
+/workspace/project/art/runtime/jni_env_ext.h:78:23: warning: ignoring attributes on template argument 'std::uint32_t' {aka 'unsigned int'} [-Wignored-attributes]
+   78 |   std::vector<uint32_t> stacked_local_ref_cookies;
+      |                       ^
+In file included from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:33:
+/workspace/project/art/runtime/thread_list.h:187:21: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  187 |   Histogram<uint64_t> suspend_all_historam_ GUARDED_BY(Locks::mutator_lock_);
+      |                     ^
+/workspace/project/art/runtime/gc/collector/garbage_collector.cc: In member function 'void art::gc::collector::GarbageCollector::DumpPerformanceInfo(std::ostream&)':
+/workspace/project/art/runtime/gc/collector/garbage_collector.cc:206:25: warning: ignoring attributes on template argument 'std::uint64_t' {aka 'long long unsigned int'} [-Wignored-attributes]
+  206 |       Histogram<uint64_t>::CumulativeData cumulative_data;
+      |                         ^
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/vector:67,
+                 from /workspace/project/art/runtime/base/histogram.h:19,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.h:20,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:19:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_vector.h: In member function 'void std::vector<_Tp, _Alloc>::push_back(const value_type&) [with _Tp = long long unsigned int; _Alloc = std::allocator<long long unsigned int>]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_vector.h:1195:4: note: parameter passing for argument of type '__gnu_cxx::__normal_iterator<long long unsigned int*, std::vector<long long unsigned int> >' changed in GCC 7.1
+ 1195 |    _M_realloc_insert(end(), __x);
+      |    ^~~~~~~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/vector:72,
+                 from /workspace/project/art/runtime/base/histogram.h:19,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.h:20,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:19:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/vector.tcc: In member function 'void std::vector<_Tp, _Alloc>::_M_realloc_insert(std::vector<_Tp, _Alloc>::iterator, _Args&& ...) [with _Args = {const long long unsigned int&}; _Tp = long long unsigned int; _Alloc = std::allocator<long long unsigned int>]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/vector.tcc:426:7: note: parameter passing for argument of type 'std::vector<long long unsigned int>::iterator' {aka '__gnu_cxx::__normal_iterator<long long unsigned int*, std::vector<long long unsigned int> >'} changed in GCC 7.1
+  426 |       vector<_Tp, _Alloc>::
+      |       ^~~~~~~~~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/memory:65,
+                 from /workspace/project/runtime/art-qnx/compat/art_qnx_compat.h:14,
+                 from <command-line>:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h: In function '_ForwardIterator std::__uninitialized_move_if_noexcept_a(_InputIterator, _InputIterator, _ForwardIterator, _Allocator&) [with _InputIterator = long long unsigned int*; _ForwardIterator = long long unsigned int*; _Allocator = std::allocator<long long unsigned int>]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:329:2: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+  328 |       return std::__uninitialized_copy_a
+      |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  329 |  (_GLIBCXX_MAKE_MOVE_IF_NOEXCEPT_ITERATOR(__first),
+      |  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  330 |   _GLIBCXX_MAKE_MOVE_IF_NOEXCEPT_ITERATOR(__last), __result, __alloc);
+      |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/vector:72,
+                 from /workspace/project/art/runtime/base/histogram.h:19,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.h:20,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:19:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/vector.tcc: In member function 'void std::vector<_Tp, _Alloc>::emplace_back(_Args&& ...) [with _Args = {double}; _Tp = double; _Alloc = std::allocator<double>]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/vector.tcc:121:4: note: parameter passing for argument of type '__gnu_cxx::__normal_iterator<double*, std::vector<double> >' changed in GCC 7.1
+  121 |    _M_realloc_insert(end(), std::forward<_Args>(__args)...);
+      |    ^~~~~~~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/memory:65,
+                 from /workspace/project/runtime/art-qnx/compat/art_qnx_compat.h:14,
+                 from <command-line>:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h: In function '_ForwardIterator std::__uninitialized_copy_a(_InputIterator, _InputIterator, _ForwardIterator, std::allocator<_Tp>&) [with _InputIterator = std::move_iterator<long long unsigned int*>; _ForwardIterator = long long unsigned int*; _Tp = long long unsigned int]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:305:5: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+  305 |     __uninitialized_copy_a(_InputIterator __first, _InputIterator __last,
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:305:5: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:307:37: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+  307 |     { return std::uninitialized_copy(__first, __last, __result); }
+      |              ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/vector:72,
+                 from /workspace/project/art/runtime/base/histogram.h:19,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.h:20,
+                 from /workspace/project/art/runtime/gc/collector/garbage_collector.cc:19:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/vector.tcc: In member function 'void std::vector<_Tp, _Alloc>::_M_realloc_insert(std::vector<_Tp, _Alloc>::iterator, _Args&& ...) [with _Args = {double}; _Tp = double; _Alloc = std::allocator<double>]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/vector.tcc:426:7: note: parameter passing for argument of type 'std::vector<double>::iterator' {aka '__gnu_cxx::__normal_iterator<double*, std::vector<double> >'} changed in GCC 7.1
+  426 |       vector<_Tp, _Alloc>::
+      |       ^~~~~~~~~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/memory:65,
+                 from /workspace/project/runtime/art-qnx/compat/art_qnx_compat.h:14,
+                 from <command-line>:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h: In function '_ForwardIterator std::uninitialized_copy(_InputIterator, _InputIterator, _ForwardIterator) [with _InputIterator = std::move_iterator<long long unsigned int*>; _ForwardIterator = long long unsigned int*]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:115:5: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+  115 |     uninitialized_copy(_InputIterator __first, _InputIterator __last,
+      |     ^~~~~~~~~~~~~~~~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:115:5: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:140:15: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+  137 |       return std::__uninitialized_copy<__is_trivial(_ValueType1)
+      |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  138 |            && __is_trivial(_ValueType2)
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  139 |            && __assignable>::
+      |            ~~~~~~~~~~~~~~~~~~
+  140 |  __uninit_copy(__first, __last, __result);
+      |  ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h: In function '_ForwardIterator std::__uninitialized_move_if_noexcept_a(_InputIterator, _InputIterator, _ForwardIterator, _Allocator&) [with _InputIterator = double*; _ForwardIterator = double*; _Allocator = std::allocator<double>]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:329:2: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+  328 |       return std::__uninitialized_copy_a
+      |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  329 |  (_GLIBCXX_MAKE_MOVE_IF_NOEXCEPT_ITERATOR(__first),
+      |  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  330 |   _GLIBCXX_MAKE_MOVE_IF_NOEXCEPT_ITERATOR(__last), __result, __alloc);
+      |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h: In static member function 'static _ForwardIterator std::__uninitialized_copy<true>::__uninit_copy(_InputIterator, _InputIterator, _ForwardIterator) [with _InputIterator = std::move_iterator<long long unsigned int*>; _ForwardIterator = long long unsigned int*]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:99:9: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+   99 |         __uninit_copy(_InputIterator __first, _InputIterator __last,
+      |         ^~~~~~~~~~~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:99:9: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:101:27: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+  101 |         { return std::copy(__first, __last, __result); }
+      |                  ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h: In function '_ForwardIterator std::__uninitialized_copy_a(_InputIterator, _InputIterator, _ForwardIterator, std::allocator<_Tp>&) [with _InputIterator = std::move_iterator<double*>; _ForwardIterator = double*; _Tp = double]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:305:5: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+  305 |     __uninitialized_copy_a(_InputIterator __first, _InputIterator __last,
+      |     ^~~~~~~~~~~~~~~~~~~~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:305:5: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:307:37: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+  307 |     { return std::uninitialized_copy(__first, __last, __result); }
+      |              ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/algorithm:61,
+                 from /workspace/project/runtime/art-qnx/compat/art_qnx_compat.h:10,
+                 from <command-line>:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_algobase.h: In function '_OI std::copy(_II, _II, _OI) [with _II = std::move_iterator<long long unsigned int*>; _OI = long long unsigned int*]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_algobase.h:465:5: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+  465 |     copy(_II __first, _II __last, _OI __result)
+      |     ^~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_algobase.h:465:5: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/memory:65,
+                 from /workspace/project/runtime/art-qnx/compat/art_qnx_compat.h:14,
+                 from <command-line>:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h: In function '_ForwardIterator std::uninitialized_copy(_InputIterator, _InputIterator, _ForwardIterator) [with _InputIterator = std::move_iterator<double*>; _ForwardIterator = double*]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:115:5: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+  115 |     uninitialized_copy(_InputIterator __first, _InputIterator __last,
+      |     ^~~~~~~~~~~~~~~~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:115:5: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:140:15: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+  137 |       return std::__uninitialized_copy<__is_trivial(_ValueType1)
+      |              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  138 |            && __is_trivial(_ValueType2)
+      |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  139 |            && __assignable>::
+      |            ~~~~~~~~~~~~~~~~~~
+  140 |  __uninit_copy(__first, __last, __result);
+      |  ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_algobase.h:67,
+                 from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/algorithm:61,
+                 from /workspace/project/runtime/art-qnx/compat/art_qnx_compat.h:10,
+                 from <command-line>:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_iterator.h: In function 'decltype (std::__miter_base(__it.base())) std::__miter_base(std::move_iterator<_IteratorL>) [with _Iterator = long long unsigned int*]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_iterator.h:1262:5: note: parameter passing for argument of type 'std::move_iterator<long long unsigned int*>' changed in GCC 7.1
+ 1262 |     __miter_base(move_iterator<_Iterator> __it)
+      |     ^~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/memory:65,
+                 from /workspace/project/runtime/art-qnx/compat/art_qnx_compat.h:14,
+                 from <command-line>:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h: In static member function 'static _ForwardIterator std::__uninitialized_copy<true>::__uninit_copy(_InputIterator, _InputIterator, _ForwardIterator) [with _InputIterator = std::move_iterator<double*>; _ForwardIterator = double*]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:99:9: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+   99 |         __uninit_copy(_InputIterator __first, _InputIterator __last,
+      |         ^~~~~~~~~~~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:99:9: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_uninitialized.h:101:27: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+  101 |         { return std::copy(__first, __last, __result); }
+      |                  ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/algorithm:61,
+                 from /workspace/project/runtime/art-qnx/compat/art_qnx_compat.h:10,
+                 from <command-line>:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_algobase.h: In function '_OI std::copy(_II, _II, _OI) [with _II = std::move_iterator<double*>; _OI = double*]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_algobase.h:465:5: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+  465 |     copy(_II __first, _II __last, _OI __result)
+      |     ^~~~
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_algobase.h:465:5: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+In file included from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_algobase.h:67,
+                 from /workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/algorithm:61,
+                 from /workspace/project/runtime/art-qnx/compat/art_qnx_compat.h:10,
+                 from <command-line>:
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_iterator.h: In function 'decltype (std::__miter_base(__it.base())) std::__miter_base(std::move_iterator<_IteratorL>) [with _Iterator = double*]':
+/workspace/project/toolchains/playbook-gcc9/qnx650/include/libstdc++/9.3.0/bits/stl_iterator.h:1262:5: note: parameter passing for argument of type 'std::move_iterator<double*>' changed in GCC 7.1
+ 1262 |     __miter_base(move_iterator<_Iterator> __it)
+      |     ^~~~~~~~~~~~

@@ -1,0 +1,359 @@
+QNX port of ART 6.0.1_r81 runtime (q20-android research)
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/runtime.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/runtime.cc	2026-09-23 06:46:02
+@@ -382,6 +382,9 @@
+   syscall(__NR_tgkill, getpid(), GetTid(), SIGABRT);
+   // TODO: LLVM installs it's own SIGABRT handler so exit to be safe... Can we disable that in LLVM?
+   // If not, we could use sigaction(3) before calling tgkill(2) and lose this call to exit(3).
++  exit(1);
++#elif defined(__QNXNTO__)
++  qnx_tgkill(getpid(), GetTid(), SIGABRT);
+   exit(1);
+ #else
+   abort();
+@@ -927,7 +930,16 @@
+     case kMips64:
+       implicit_null_checks_ = true;
+       // Installing stack protection does not play well with valgrind.
++#if defined(__QNXNTO__)
++      // QNX has no sigaltstack and its kernel cannot deliver a signal once
++      // the SP has crossed into the stack guard region (verified on-device:
++      // runtime/qnx-shims/stackguard-probe.c). Keep implicit SO checks off;
++      // the interpreter falls back to explicit checks via
++      // ExplicitStackOverflowChecks().
++      implicit_so_checks_ = false;
++#else
+       implicit_so_checks_ = (RUNNING_ON_VALGRIND == 0);
++#endif
+       break;
+     default:
+       // Keep the defaults.
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/base/mutex.h	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/base/mutex.h	2026-09-23 06:36:53
+@@ -28,7 +28,7 @@
+ #include "base/macros.h"
+ #include "globals.h"
+ 
+-#if defined(__APPLE__)
++#if defined(__APPLE__) || defined(__QNXNTO__)
+ #define ART_USE_FUTEXES 0
+ #else
+ #define ART_USE_FUTEXES 1
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/utils.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/utils.cc	2026-09-23 07:04:20
+@@ -61,7 +61,7 @@
+   uint64_t owner;
+   CHECK_PTHREAD_CALL(pthread_threadid_np, (nullptr, &owner), __FUNCTION__);  // Requires Mac OS 10.6
+   return owner;
+-#elif defined(__BIONIC__)
++#elif defined(__BIONIC__) || defined(__QNXNTO__)
+   return gettid();
+ #else
+   return syscall(__NR_gettid);
+@@ -79,7 +79,13 @@
+ }
+ 
+ void GetThreadStack(pthread_t thread, void** stack_base, size_t* stack_size, size_t* guard_size) {
+-#if defined(__APPLE__)
++#if defined(__QNXNTO__)
++  // QNX has no pthread_getattr_np; querying another thread's stack is not
++  // portable here. Diagnostics only in our build (implicit SO checks off).
++  *stack_base = nullptr;
++  *stack_size = 0;
++  *guard_size = 0;
++#elif defined(__APPLE__)
+   *stack_size = pthread_get_stacksize_np(thread);
+   void* stack_addr = pthread_get_stackaddr_np(thread);
+ 
+@@ -966,7 +972,7 @@
+   } else {
+     s = thread_name + len - 15;
+   }
+-#if defined(__linux__)
++#if defined(__linux__) || defined(__QNXNTO__)
+   // pthread_setname_np fails rather than truncating long strings.
+   char buf[16];       // MAX_TASK_COMM_LEN=16 is hard-coded in the kernel.
+   strncpy(buf, s, sizeof(buf)-1);
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/fault_handler.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/fault_handler.cc	2026-09-23 07:04:25
+@@ -98,7 +98,7 @@
+   action->sa_sigaction = art_fault_handler;
+   sigemptyset(&action->sa_mask);
+   action->sa_flags = SA_SIGINFO | SA_ONSTACK;
+-#if !defined(__APPLE__) && !defined(__mips__)
++#if !defined(__APPLE__) && !defined(__mips__) && !defined(__QNXNTO__)
+   action->sa_restorer = nullptr;
+ #endif
+ }
+@@ -217,7 +217,7 @@
+   }
+ 
+   action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+-#if !defined(__APPLE__) && !defined(__mips__)
++#if !defined(__APPLE__) && !defined(__mips__) && !defined(__QNXNTO__)
+   action.sa_restorer = nullptr;
+ #endif
+ 
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/oat_file_assistant.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/oat_file_assistant.cc	2026-09-23 07:13:26
+@@ -583,6 +583,17 @@
+ 
+ #ifdef __linux__
+   if (sendfile(dst.get(), src.get(), nullptr, stat_src.st_size) == -1) {
++#elif defined(__QNXNTO__)
++  char buf[4096];
++  ssize_t n;
++  bool failed = false;
++  while ((n = read(src.get(), buf, sizeof(buf))) > 0) {
++    if (write(dst.get(), buf, n) != n) {
++      failed = true;
++      break;
++    }
++  }
++  if (failed) {
+ #else
+   off_t len;
+   if (sendfile(dst.get(), src.get(), 0, &len, nullptr, 0) == -1) {
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/native_bridge_art_interface.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/native_bridge_art_interface.cc	2026-09-23 06:50:33
+@@ -112,7 +112,7 @@
+ 
+ void PreInitializeNativeBridge(std::string dir) {
+   VLOG(startup) << "Runtime::Pre-initialize native bridge";
+-#ifndef __APPLE__  // Mac OS does not support CLONE_NEWNS.
++#if !defined(__APPLE__) && !defined(__QNXNTO__)  // Mac OS and QNX do not support CLONE_NEWNS.
+   if (unshare(CLONE_NEWNS) == -1) {
+     LOG(WARNING) << "Could not create mount namespace.";
+   }
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/monitor_pool.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/monitor_pool.cc	2026-09-23 07:04:16
+@@ -27,6 +27,8 @@
+   class Object;
+ }  // namespace mirror
+ 
++#ifdef __LP64__
++
+ MonitorPool::MonitorPool()
+     : num_chunks_(0), capacity_(0), first_free_(nullptr) {
+   AllocateChunk();  // Get our first chunk.
+@@ -137,4 +139,6 @@
+   }
+ }
+ 
++#endif  // __LP64__
++
+ }  // namespace art
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/elf.h	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/elf.h	2026-09-23 07:01:29
+@@ -21,6 +21,14 @@
+ #ifndef ART_RUNTIME_ELF_H_
+ #define ART_RUNTIME_ELF_H_
+ // END android-changed
++
++// QNX: <sys/link.h> already dragged in <sys/elf.h> (guard __ELF_H_INCLUDED,
++// different from ours), so redefining the same enums here is a conflict.
++// QNX's elf.h carries the standard Elf32 types and constants; skip our copy.
++#if defined(__QNXNTO__)
++#include <sys/elf.h>
++#include <sys/elf_dyn.h>
++#else
+ 
+ // BEGIN android-changed
+ #include <stdint.h>
+@@ -1852,6 +1860,8 @@
+   VER_NEED_CURRENT = 1
+ };
+ 
++#endif  // defined(__QNXNTO__)
++
+ struct ElfTypes32 {
+   typedef Elf32_Addr Addr;
+   typedef Elf32_Off Off;
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/arch/arm/fault_handler_arm.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/arch/arm/fault_handler_arm.cc	2026-09-23 07:38:08
+@@ -54,13 +54,22 @@
+   // require switching modes in the stub - incurring an unwanted relocation.
+ 
+   struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
++#if defined(__QNXNTO__)
++  struct sigcontext sc_local;
++  struct sigcontext *sc = &sc_local;
++  qnx_fill_sigcontext(sc, uc);
++#else
+   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
++#endif
+   Thread* self = Thread::Current();
+   CHECK(self != nullptr);  // This will cause a SIGABRT if self is null.
+ 
+   sc->arm_r0 = reinterpret_cast<uintptr_t>(*self->GetNestedSignalState());
+   sc->arm_r1 = 1;
+   sc->arm_pc = reinterpret_cast<uintptr_t>(longjmp);
++#if defined(__QNXNTO__)
++  qnx_apply_sigcontext(uc, sc);
++#endif
+   VLOG(signals) << "longjmp address: " << reinterpret_cast<void*>(sc->arm_pc);
+ }
+ 
+@@ -68,7 +77,13 @@
+                                              ArtMethod** out_method,
+                                              uintptr_t* out_return_pc, uintptr_t* out_sp) {
+   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
++#if defined(__QNXNTO__)
++  struct sigcontext sc_local;
++  struct sigcontext *sc = &sc_local;
++  qnx_fill_sigcontext(sc, uc);
++#else
+   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
++#endif
+   *out_sp = static_cast<uintptr_t>(sc->arm_sp);
+   VLOG(signals) << "sp: " << *out_sp;
+   if (*out_sp == 0) {
+@@ -117,12 +132,21 @@
+ 
+   // Need to work out the size of the instruction that caused the exception.
+   struct ucontext *uc = reinterpret_cast<struct ucontext*>(context);
++#if defined(__QNXNTO__)
++  struct sigcontext sc_local;
++  struct sigcontext *sc = &sc_local;
++  qnx_fill_sigcontext(sc, uc);
++#else
+   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
++#endif
+   uint8_t* ptr = reinterpret_cast<uint8_t*>(sc->arm_pc);
+ 
+   uint32_t instr_size = GetInstructionSize(ptr);
+   sc->arm_lr = (sc->arm_pc + instr_size) | 1;      // LR needs to point to gc map location
+   sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_throw_null_pointer_exception);
++#if defined(__QNXNTO__)
++  qnx_apply_sigcontext(uc, sc);
++#endif
+   VLOG(signals) << "Generating null pointer exception";
+   return true;
+ }
+@@ -143,7 +167,13 @@
+   uint16_t checkinst2 = 0x6800;
+ 
+   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
++#if defined(__QNXNTO__)
++  struct sigcontext sc_local;
++  struct sigcontext *sc = &sc_local;
++  qnx_fill_sigcontext(sc, uc);
++#else
+   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
++#endif
+   uint8_t* ptr2 = reinterpret_cast<uint8_t*>(sc->arm_pc);
+   uint8_t* ptr1 = ptr2 - 4;
+   VLOG(signals) << "checking suspend";
+@@ -181,6 +211,9 @@
+     VLOG(signals) << "arm pc: " << std::hex << sc->arm_pc;
+     sc->arm_lr = sc->arm_pc + 3;      // +2 + 1 (for thumb)
+     sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_implicit_suspend);
++#if defined(__QNXNTO__)
++    qnx_apply_sigcontext(uc, sc);
++#endif
+ 
+     // Now remove the suspend trigger that caused this fault.
+     Thread::Current()->RemoveSuspendTrigger();
+@@ -208,7 +241,13 @@
+ bool StackOverflowHandler::Action(int sig ATTRIBUTE_UNUSED, siginfo_t* info ATTRIBUTE_UNUSED,
+                                   void* context) {
+   struct ucontext* uc = reinterpret_cast<struct ucontext*>(context);
++#if defined(__QNXNTO__)
++  struct sigcontext sc_local;
++  struct sigcontext *sc = &sc_local;
++  qnx_fill_sigcontext(sc, uc);
++#else
+   struct sigcontext *sc = reinterpret_cast<struct sigcontext*>(&uc->uc_mcontext);
++#endif
+   VLOG(signals) << "stack overflow handler with sp at " << std::hex << &uc;
+   VLOG(signals) << "sigcontext: " << std::hex << sc;
+ 
+@@ -235,6 +274,9 @@
+   // caused this fault.  This will be inserted into a callee save frame by
+   // the function to which this handler returns (art_quick_throw_stack_overflow).
+   sc->arm_pc = reinterpret_cast<uintptr_t>(art_quick_throw_stack_overflow);
++#if defined(__QNXNTO__)
++  qnx_apply_sigcontext(uc, sc);
++#endif
+ 
+   // The kernel will now return to the address in sc->arm_pc.
+   return true;
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/arch/arm/instruction_set_features_arm.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/arch/arm/instruction_set_features_arm.cc	2026-09-23 07:21:10
+@@ -190,9 +190,18 @@
+                                    void* data) {
+ #if defined(__arm__)
+   struct ucontext *uc = (struct ucontext *)data;
++#if defined(__QNXNTO__)
++  struct sigcontext sc_local;
++  struct sigcontext *sc = &sc_local;
++  qnx_fill_sigcontext(sc, uc);
++#else
+   struct sigcontext *sc = &uc->uc_mcontext;
++#endif
+   sc->arm_r0 = 0;     // Set R0 to #0 to signal error.
+   sc->arm_pc += 4;    // Skip offending instruction.
++#if defined(__QNXNTO__)
++  qnx_apply_sigcontext(uc, sc);
++#endif
+ #else
+   UNUSED(data);
+ #endif
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/gc/space/image_space.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/gc/space/image_space.cc	2026-09-23 07:38:16
+@@ -102,11 +102,24 @@
+     if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+       continue;
+     }
+-    // We only want to delete regular files and symbolic links.
+-    if (de->d_type != DT_REG && de->d_type != DT_LNK) {
+-      if (de->d_type != DT_DIR) {
++#if defined(__QNXNTO__)
++    // QNX dirent has no d_type; stat the entry instead.
++    std::string entry_path = cache_dir_path + "/" + name;
++    struct stat st;
++    if (stat(entry_path.c_str(), &st) != 0) {
++      continue;
++    }
++    unsigned char d_type =
++        S_ISREG(st.st_mode) ? DT_REG : (S_ISLNK(st.st_mode) ? DT_LNK
++                                        : (S_ISDIR(st.st_mode) ? DT_DIR : DT_UNKNOWN));
++#else
++    unsigned char d_type = de->d_type;
++#endif
++    // We only want to delete regular files and symbolic links.
++    if (d_type != DT_REG && d_type != DT_LNK) {
++      if (d_type != DT_DIR) {
+         // We do expect some directories (namely the <isa> for pruning the base dalvik-cache).
+-        LOG(WARNING) << "Unexpected file type of " << std::hex << de->d_type << " encountered.";
++        LOG(WARNING) << "Unexpected file type of " << std::hex << d_type << " encountered.";
+       }
+       continue;
+     }
+
+--- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/jdwp/jdwp_adb.cc	2026-09-23 07:47:04
++++ /Users/piotrpestka/github/q20-android/art/runtime/jdwp/jdwp_adb.cc	2026-09-23 07:40:49
+@@ -137,7 +137,12 @@
+   char dummy = '!';
+   union {
+     cmsghdr cm;
++#if defined(__QNXNTO__)
++    // QNX CMSG_SPACE is not a constant expression (align via function call).
++    char buffer[sizeof(cmsghdr) + sizeof(int) + 16];
++#else
+     char buffer[CMSG_SPACE(sizeof(int))];
++#endif
+   } cm_un;
+ 
+   iovec iov;

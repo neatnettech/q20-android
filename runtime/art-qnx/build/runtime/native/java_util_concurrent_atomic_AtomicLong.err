@@ -1,0 +1,7 @@
+In file included from /workspace/project/art/runtime/native/java_util_concurrent_atomic_AtomicLong.cc:19:
+/workspace/project/art/runtime/atomic.h:297:23: warning: ignoring attributes on template argument 'std::int32_t' {aka 'int'} [-Wignored-attributes]
+  297 | typedef Atomic<int32_t> AtomicInteger;
+      |                       ^
+/workspace/project/art/runtime/atomic.h:302:36: warning: ignoring attributes on template argument 'std::int64_t' {aka 'long long int'} [-Wignored-attributes]
+  302 | static_assert(sizeof(Atomic<int64_t>) == sizeof(int64_t), "Weird Atomic<int64> size");
+      |                                    ^
