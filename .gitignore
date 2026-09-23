@@ -14,3 +14,5 @@ bbnix/
 
 # device photos (personal hardware)
 internals/
+libnativehelper/
+runtime/art-qnx/build/
