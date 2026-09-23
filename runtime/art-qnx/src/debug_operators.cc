@@ -23,6 +23,17 @@
 #include "gc/space/space.h"
 #include "gc_root.h"
 #include "image.h"
+#include "../compiler/image_writer.h"
+#include "../compiler/dex/compiler_enums.h"
+#include "../compiler/dex/mir_field_info.h"
+#include "../compiler/dex/global_value_numbering.h"
+#include "../compiler/dex/pass_me.h"
+#include "../compiler/dex/quick/resource_mask.h"
+#include "../compiler/dex/quick/dex_file_method_inliner.h"
+#include "../compiler/dex/quick/arm/arm_lir.h"
+#include "../compiler/driver/compiler_driver.h"
+#include "../compiler/driver/compiler_options.h"
+#include "../compiler/utils/arm/assembler_arm.h"
 #include "indirect_reference_table.h"
 #include "instrumentation.h"
 #include "invoke_type.h"
@@ -94,6 +105,98 @@ std::ostream& operator<<(std::ostream& os, const VRegKind& rhs) {
 std::ostream& operator<<(std::ostream& os, const LockWord::LockState& rhs) {
   return os << "LockState[" << static_cast<uint32_t>(rhs) << "]";
 }
+
+std::ostream& operator<<(std::ostream& os, const ImageWriter::Bin& rhs) {
+  return os << "Bin[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const BBType& rhs) {
+  return os << "BBType[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const BlockListType& rhs) {
+  return os << "BlockListType[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const SelectInstructionKind& rhs) {
+  return os << "SelectInstructionKind[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const DexMemAccessType& rhs) {
+  return os << "DexMemAccessType[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const RegLocationType& rhs) {
+  return os << "RegLocationType[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const OpSize& rhs) {
+  return os << "OpSize[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const DataFlowAnalysisMode& rhs) {
+  return os << "DataFlowAnalysisMode[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const GlobalValueNumbering::Mode& rhs) {
+  return os << "GVNMode[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const ResourceMask::ResourceBit& rhs) {
+  return os << "ResourceBit[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const InlineMethodOpcode& rhs) {
+  return os << "InlineMethodOpcode[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const ArmOpcode& rhs) {
+  return os << "ArmOpcode[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const ArmEncodingKind& rhs) {
+  return os << "ArmEncodingKind[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const OpKind& rhs) {
+  return os << "OpKind[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const ConditionCode& rhs) {
+  return os << "ConditionCode[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const DividePattern& rhs) {
+  return os << "DividePattern[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const DexToDexCompilationLevel& rhs) {
+  return os << "DexToDexCompilationLevel[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const RegisterClass& rhs) {
+  return os << "RegisterClass[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const MemBarrierKind& rhs) {
+  return os << "MemBarrierKind[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const CompilerOptions::CompilerFilter& rhs) {
+  return os << "CompilerFilter[" << static_cast<int>(rhs) << "]";
+}
+
+namespace arm {
+
+std::ostream& operator<<(std::ostream& os, const Opcode& rhs) {
+  return os << "Opcode[" << static_cast<int>(rhs) << "]";
+}
+
+std::ostream& operator<<(std::ostream& os, const Shift& rhs) {
+  return os << "Shift[" << static_cast<int>(rhs) << "]";
+}
+
+}  // namespace arm
 
 std::ostream& operator<<(std::ostream& os, const StackedShadowFrameType& rhs) {
   return os << "StackedShadowFrameType[" << static_cast<int>(rhs) << "]";

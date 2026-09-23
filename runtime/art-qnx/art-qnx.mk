@@ -30,7 +30,7 @@ CXXFLAGS := -O0 -g -std=gnu++11 -fno-rtti -fno-exceptions \
   -I$(SHIMS)/qnx-shims
 
 # header shims shadow missing linux-style headers
-CXXFLAGS += -I$(abspath compat)
+CXXFLAGS += -I$(abspath compat) -I$(ART_ROOT)/compiler
 
 # arm32 only: drop the other architecture trees and the per-OS files
 # (shell grep; make filter-out cannot match these patterns here). The QNX
@@ -139,6 +139,34 @@ build/javacore/sendfile.o: src/sendfile_qnx.c
 build/javacore/gcc_frame_stubs.o: src/gcc_frame_stubs.cc
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+
+# ---- ART compiler (Quick backend, arm32 only) ----
+COMPILER_SRCS := $(filter-out %_test.cc,$(shell find $(ART_ROOT)/compiler -name "*.cc" \
+                  | grep -v "/optimizing/" | grep -v "/jit/" \
+                  | grep -v "/quick/arm64/" | grep -v "/quick/mips/" \
+                  | grep -v "/quick/x86/" | grep -v "/quick/x86_64/" \
+                  | grep -v "/portable/" | grep -v "/arm64/" | grep -v "/mips/" \
+                  | grep -v "/mips64/" | grep -v "/x86/" | grep -v "/x86_64/" \
+                  | grep -v "/linker/x86/" | grep -v "/linker/x86_64/" \
+                  | grep -v "/trampolines/.*_test" \
+                  | grep -v "common_compiler_test"))
+COMPILER_OBJS := $(patsubst $(ART_ROOT)/%,build/%,$(COMPILER_SRCS:.cc=.o))
+
+# dex2oat executable
+DEX2OAT_OBJS := build/dex2oat/dex2oat.o
+dex2oat: $(DEX2OAT_OBJS) libart.so $(COMPILER_OBJS)
+	$(CXX) -o $@ $(DEX2OAT_OBJS) $(COMPILER_OBJS) -L. -lart \
+	  2>&1 | grep -vE "DWARF error" | head -30
+
+build/dex2oat/dex2oat.o: $(ART_ROOT)/dex2oat/dex2oat.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+# compiler objects (same flags as runtime)
+build/compiler/%.o: $(ART_ROOT)/compiler/%.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $(patsubst %.o,%.err,$@) || { echo "FAILED: $<"; tail -12 $(patsubst %.o,%.err,$@); }
 
 # dalvikvm executable: ART launcher, dlopens libart.so via JniInvocation
 dalvikvm: build/src/dalvikvm.o build/src/jni_invocation.o libart.so

@@ -31,3 +31,4 @@ runtime/hello/hello.dex
 runtime/art6-deploy/
 zlib/
 runtime/qnx-shims/oatdlopen-probe
+runtime/art-qnx/dex2oat

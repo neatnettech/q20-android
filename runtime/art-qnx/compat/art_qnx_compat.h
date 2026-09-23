@@ -166,6 +166,16 @@ struct ip_mreqn {
   int imr_ifindex;
 };
 
+/* BSD type QNX lacks */
+#ifndef __QNX_U_INT32_T
+#define __QNX_U_INT32_T
+typedef unsigned int u_int32_t;
+#endif
+/* ELF OSABI constant QNX elf.h lacks */
+#ifndef ELFOSABI_LINUX
+#define ELFOSABI_LINUX 3
+#endif
+
 /* QNX has no ucred (peer credentials) */
 struct ucred {
   int pid;
@@ -283,6 +293,21 @@ using std::snprintf;
 /* QNX declares these in the global namespace only */
 using ::strdup;
 using ::strcasecmp;
+/* QNX libc has no strndup/strnlen */
+static inline size_t strnlen(const char* s, size_t maxlen) {
+  size_t i = 0;
+  while (i < maxlen && s[i] != '\0') i++;
+  return i;
+}
+static inline char* strndup(const char* s, size_t n) {
+  size_t len = strnlen(s, n);
+  char* p = (char*)malloc(len + 1);
+  if (p != nullptr) {
+    memcpy(p, s, len);
+    p[len] = '\0';
+  }
+  return p;
+}
 using ::strncasecmp;
 using ::strtoll;
 using ::strtoull;
