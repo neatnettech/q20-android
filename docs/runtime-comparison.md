@@ -177,6 +177,11 @@ following matter for ART:
 
 ### ART 6 hard requirements (verified by grep over art/)
 
+On-device verification (2026-09-23, Q20 CLASSICROW via dev-mode SSH):
+`runtime/qnx-shims/q20-probe.c` cross-compiled with the PlayBook GCC 9.3
+toolchain, uploaded, executed. Futex shim self-check PASS on-device.
+dlsym probe of the device libc:
+
 | Requirement | Q20 status | Verdict |
 |---|---|---|
 | `futex` WAIT/WAKE | libbionic shim, userland waiters list | present |
@@ -190,6 +195,13 @@ following matter for ART:
 | `mremap` | not used by ART 6 (verified) | not needed |
 | `getrlimit/setrlimit` | QNX libc | present |
 | `personality()` (dex2oat.cc:1937) | absent | dex2oat only, guardable |
+
+Device libc dlsym probe results (q20-probe, all confirmed live):
+present: clock_gettime, clock_getres, clock_nanosleep, gettid,
+pthread_getname_np/setname_np, dl_iterate_phdr, dladdr, posix_madvise,
+inotify_init/add_watch/rm_watch, sched_getparam/setscheduler, timer_create,
+signal, sigaction, mmap, munmap, mem_offset64, shm_open, posix_fallocate.
+missing: sigaltstack, futex, tgkill, prctl, timerfd_create, madvise.
 
 ### Framework-level gaps (later milestones, not ART blockers)
 
