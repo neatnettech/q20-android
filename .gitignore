@@ -28,3 +28,6 @@ runtime/bootclasspath/ext.jar
 runtime/hello/hello.jar
 runtime/hello/classes.dex
 runtime/hello/hello.dex
+runtime/art6-deploy/
+zlib/
+runtime/qnx-shims/oatdlopen-probe
