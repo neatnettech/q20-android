@@ -16,3 +16,7 @@ bbnix/
 internals/
 libnativehelper/
 runtime/art-qnx/build/
+runtime/art-qnx/libart.so
+runtime/qnx-shims/q20-probe
+runtime/qnx-shims/stackguard-probe
+runtime/qnx-shims/nullfault-probe

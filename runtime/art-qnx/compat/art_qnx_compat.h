@@ -8,6 +8,10 @@
 #define ART_QNX_COMPAT_H
 
 #include <algorithm>
+<<<<<<< HEAD
+=======
+#include <cstdarg>
+>>>>>>> 6e0a8006 (Complete ART 6.0.1 QNX port: full runtime compiles and links as libart.so)
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -17,9 +21,35 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+<<<<<<< HEAD
 extern "C" int qnx_tgkill(int tgid, int tid, int sig);
 extern "C" ssize_t sendfile(int out_fd, int in_fd, off_t *offset, size_t count);
 
+=======
+/* QNX libc lacks asprintf */
+static inline int qnx_asprintf(char **strp, const char *fmt, ...)
+{
+    va_list ap, ap2;
+    int n;
+    va_start(ap, fmt);
+    va_copy(ap2, ap);
+    n = vsnprintf(NULL, 0, fmt, ap);
+    va_end(ap);
+    *strp = (char *)malloc(n + 1);
+    vsnprintf(*strp, n + 1, fmt, ap2);
+    va_end(ap2);
+    return n;
+}
+#define asprintf qnx_asprintf
+
+extern "C" int qnx_tgkill(int tgid, int tid, int sig);
+extern "C" ssize_t sendfile(int out_fd, int in_fd, off_t *offset, size_t count);
+
+/* QNX signal.h has no sighandler_t typedef */
+typedef void (*qnx_sighandler_t)(int);
+#define sighandler_t qnx_sighandler_t
+
+>>>>>>> 6e0a8006 (Complete ART 6.0.1 QNX port: full runtime compiles and links as libart.so)
 #ifdef __QNXNTO__
 #include "qnx_sigcontext.h"
 #endif
