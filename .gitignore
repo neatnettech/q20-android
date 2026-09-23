@@ -20,3 +20,11 @@ runtime/art-qnx/libart.so
 runtime/qnx-shims/q20-probe
 runtime/qnx-shims/stackguard-probe
 runtime/qnx-shims/nullfault-probe
+runtime/art-qnx/dalvikvm
+runtime/art-qnx/libjavacore.so
+runtime/bootclasspath/boot.oat
+runtime/bootclasspath/dexes/
+runtime/bootclasspath/ext.jar
+runtime/hello/hello.jar
+runtime/hello/classes.dex
+runtime/hello/hello.dex

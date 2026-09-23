@@ -48,4 +48,14 @@ int __android_log_write(int prio, const char* tag, const char* text) {
   return 0;
 }
 
+void __android_log_assert(const char* cond, const char* tag, const char* fmt, ...) {
+  fprintf(stderr, "%s: assertion failed: %s: ", tag != nullptr ? tag : "?", cond);
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  va_end(ap);
+  fprintf(stderr, "\n");
+  abort();
+}
+
 }  // extern "C"

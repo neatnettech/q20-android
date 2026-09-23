@@ -32,21 +32,6 @@ CXXFLAGS := -O0 -g -std=gnu++11 -fno-rtti -fno-exceptions \
 # header shims shadow missing linux-style headers
 CXXFLAGS += -I$(abspath compat)
 
-<<<<<<< HEAD
-# arm32 only: drop the other architecture trees (shell grep; make
-# filter-out cannot match multi-% middle patterns here)
-RUNTIME_SRCS := $(filter-out %_test.cc,$(shell find $(ART_ROOT)/runtime -name "*.cc" \
-                | grep -v "/arch/arm64/" | grep -v "/arch/mips/" \
-                | grep -v "/arch/mips64/" | grep -v "/arch/x86/" \
-                | grep -v "/arch/x86_64/"))
-# exclude per-OS files; the QNX variants (os_qnx.cc, thread_qnx.cc,
-# monitor_qnx.cc) will replace them
-RUNTIME_SRCS := $(filter-out %/runtime_android.cc %/runtime_linux.cc \
-                %/thread_linux.cc %/monitor_android.cc %/monitor_linux.cc, \
-                $(RUNTIME_SRCS))
-
-RUNTIME_OBJS := $(patsubst $(ART_ROOT)/%.cc,build/%.o,$(RUNTIME_SRCS))
-=======
 # arm32 only: drop the other architecture trees and the per-OS files
 # (shell grep; make filter-out cannot match these patterns here). The QNX
 # variants (os_qnx.cc, thread_qnx.cc) replace the excluded ones.
@@ -60,6 +45,7 @@ RUNTIME_SRCS := $(filter-out %_test.cc,$(shell find $(ART_ROOT)/runtime -name "*
                 | grep -v "/monitor_android.cc" | grep -v "/monitor_linux.cc"))
 # our own QNX replacements
 RUNTIME_SRCS += $(abspath src/os_qnx.cc) $(abspath src/thread_qnx.cc) \
+                $(abspath src/alloc_debug.cc) \
                 $(abspath src/debug_operators.cc) $(abspath src/zip_stubs.cc) \
                 $(abspath src/native_bridge_stubs.cc) $(abspath src/atrace_stubs.cc) \
                 $(abspath src/log_stubs.cc) $(abspath src/backtrace_stubs.cc) \
@@ -93,7 +79,8 @@ ARM_ASM := $(abspath $(ART_ROOT)/runtime/arch/arm/asm_support_arm.S) \
            $(abspath $(ART_ROOT)/runtime/arch/arm/instruction_set_features_assembly_tests.S)
 ARM_ASM_OBJS := $(patsubst $(ART_ROOT)/%,build/%,$(ARM_ASM:.S=.o))
 
-SRC_OBJS := build/src/os_qnx.o build/src/thread_qnx.o build/src/debug_operators.o \
+SRC_OBJS := build/src/os_qnx.o build/src/thread_qnx.o build/src/alloc_debug.o \
+            build/src/debug_operators.o \
             build/src/zip_stubs.o build/src/native_bridge_stubs.o \
             build/src/atrace_stubs.o build/src/log_stubs.o \
             build/src/backtrace_stubs.o build/src/arch_features_stubs.o \
@@ -107,6 +94,65 @@ all: $(RUNTIME_OBJS) $(ARM_ASM_OBJS) $(ZLIB_OBJS) $(SUPPORT_OBJS) $(SHIM_PROCS)
 # link attempt: surfaces undefined symbols
 libart.so: $(RUNTIME_OBJS) $(ARM_ASM_OBJS) $(ZLIB_OBJS) $(SUPPORT_OBJS) $(SHIM_PROCS)
 	$(CXX) -shared -o $@ $^ -Wl,--no-undefined 2>&1 | grep -vE "DWARF error" | head -60
+
+# libjavacore subset (native methods needed for runtime boot + hello world)
+LIBCORE_NATIVE ?= $(abspath ../../libcore/luni/src/main/native)
+JAVACORE_SRCS := android_system_OsConstants.cpp java_io_File.cpp \
+                 java_io_FileDescriptor.cpp java_lang_System.cpp \
+                 libcore_io_Memory.cpp libcore_io_Posix.cpp \
+                 AsynchronousCloseMonitor.cpp ExecStrings.cpp JniException.cpp \
+                 NetworkUtilities.cpp canonicalize_path.cpp readlink.cpp \
+                 valueOf.cpp libcore_io_AsynchronousCloseMonitor.cpp
+JAVACORE_OBJS := $(patsubst %.cpp,build/javacore/%.o,$(JAVACORE_SRCS))
+JAVACORE_OBJS += build/javacore/register.o
+JAVACORE_OBJS += build/javacore/JNIHelp.o \
+                 build/javacore/toStringArray.o build/javacore/fallocate.o \
+                 build/javacore/sendfile.o build/javacore/gcc_frame_stubs.o
+
+libjavacore.so: $(JAVACORE_OBJS)
+	$(CXX) -shared -o $@ $^ 2>&1 | grep -vE "DWARF error" | head -20
+
+build/javacore/%.o: $(LIBCORE_NATIVE)/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -Wno-error=format -I$(LIBCORE_NATIVE) -I$(abspath ../../libcore/include) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+build/javacore/register.o: src/libjavacore_register.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -I$(LIBCORE_NATIVE) -I$(abspath ../../libcore/include) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+build/javacore/JNIHelp.o: $(LIBNATIVE)/JNIHelp.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+build/javacore/toStringArray.o: $(LIBNATIVE)/toStringArray.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+build/javacore/fallocate.o: src/fallocate.c
+	@mkdir -p $(dir $@)
+	$(CC) -O2 -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+build/javacore/sendfile.o: src/sendfile_qnx.c
+	@mkdir -p $(dir $@)
+	$(CC) -O2 -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+build/javacore/gcc_frame_stubs.o: src/gcc_frame_stubs.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+# dalvikvm executable: ART launcher, dlopens libart.so via JniInvocation
+dalvikvm: build/src/dalvikvm.o build/src/jni_invocation.o libart.so
+	$(CXX) -o $@ build/src/dalvikvm.o build/src/jni_invocation.o \
+	  -L. -lart -Wl,-rpath,/proc/boot:/usr/lib \
+	  2>&1 | grep -vE "DWARF error" | head -20
+
+build/src/dalvikvm.o: $(ART_ROOT)/dalvikvm/dalvikvm.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
+
+build/src/jni_invocation.o: $(LIBNATIVE)/JniInvocation.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; }
 
 build/zlib/%.o: $(ZLIB_ROOT)/src/%.c
 	@mkdir -p $(dir $@)
@@ -124,23 +170,15 @@ build/support/%.o: $(LIBNATIVE)/%.cpp
 build/support/%.o: $(CORE_ROOT)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) -O2 -I$(CORE_ROOT)/include -c $< -o $@ 2> $(patsubst %.o,%.err,$@) || { echo "FAILED: $<"; tail -12 $(patsubst %.o,%.err,$@); }
->>>>>>> 6e0a8006 (Complete ART 6.0.1 QNX port: full runtime compiles and links as libart.so)
 
 check:
 	@mkdir -p build
 	$(CXX) $(CXXFLAGS) -c $(ART_ROOT)/runtime/base/mutex.cc -o build/mutex_check.o
 
-<<<<<<< HEAD
-all: $(RUNTIME_OBJS)
-
-=======
->>>>>>> 6e0a8006 (Complete ART 6.0.1 QNX port: full runtime compiles and links as libart.so)
 build/%.o: $(ART_ROOT)/%.cc
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $(patsubst %.o,%.err,$@) || { echo "FAILED: $<"; tail -12 $(patsubst %.o,%.err,$@); }
 
-<<<<<<< HEAD
-=======
 build/src/%.o: src/%.cc
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $(patsubst %.o,%.err,$@) || { echo "FAILED: $<"; tail -12 $(patsubst %.o,%.err,$@); }
@@ -153,17 +191,13 @@ build/%.o: $(ART_ROOT)/%.S
 	  $(filter -I%,$(CXXFLAGS)) $(filter -D%,$(CXXFLAGS)) \
 	  -c $< -o $@ 2> $(patsubst %.o,%.err,$@) || { echo "FAILED: $<"; tail -12 $(patsubst %.o,%.err,$@); }
 
->>>>>>> 6e0a8006 (Complete ART 6.0.1 QNX port: full runtime compiles and links as libart.so)
 patches:
 	cd $(ART_ROOT) && for p in $(SHIMS)/patches/*.patch; do patch -p1 -N < $$p || true; done
 
 clean:
 	rm -rf build
-<<<<<<< HEAD
-=======
 
 $(SHIM_PROCS): $(SHIM_PROCS_SRC)
 	@mkdir -p $(dir $@)
 	$(CC) -O2 -I$(SHIMS)/qnx-shims -c $< -o $@
 
->>>>>>> 6e0a8006 (Complete ART 6.0.1 QNX port: full runtime compiles and links as libart.so)

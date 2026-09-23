@@ -14,9 +14,13 @@ namespace art {
 
 // Minimal crash handler; full register/backtrace dumps are future work.
 static void HandleUnexpectedSignal(int signal_number, siginfo_t* info, void* raw_context) {
-  (void)info;
-  (void)raw_context;
-  fprintf(stderr, "art: fatal signal %d\n", signal_number);
+  struct sigcontext sc;
+  qnx_fill_sigcontext(&sc, raw_context);
+  fprintf(stderr, "art: fatal signal %d fault=%p code=%d pc=%p lr=%p\n", signal_number,
+          info != nullptr ? info->si_addr : nullptr,
+          info != nullptr ? info->si_code : 0,
+          reinterpret_cast<void*>(sc.arm_pc),
+          reinterpret_cast<void*>(sc.arm_lr));
   fflush(stderr);
   _exit(128 + signal_number);
 }
