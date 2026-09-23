@@ -16,7 +16,9 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
 | libjavacore built from libcore sources, native methods registered on-device | done |
 | Marshmallow boot classpath extracted from the hammerhead factory image | done |
 | Boot image (boot.art + boot.oat) loads on the Q20, GC heap initializes | done |
-| Hello DEX execution | blocked on boot image build (dex2oat) |
+| dex2oat built and running on the Q20, hello.dex compiled to hello.oat on-device | done |
+| Boot image build from the 13 extracted dex files | in progress (SIGSEGV in compile phase, see docs/bringup-log.md) |
+| Hello DEX execution | blocked on boot image build |
 | Q20 device SSH access | done (dev mode, re-enable after each reboot) |
 
 ## What blocks Hello World
@@ -41,6 +43,12 @@ by our own dex2oat so the addresses match our libart.so. Next build target:
 
 ### Phase 1: dex2oat and the Quick ARM compiler (current)
 
+* `dex2oat` builds and runs on the Q20: hello.dex compiled to hello.oat
+  on-device
+* Quickened factory dex accepted by the verifier and compiler (patch 0040),
+  boot image build is deep into framework compilation
+* Blocked: SIGSEGV in the parallel compile phase
+
 The compiler chain is the critical engineering frontier. Scope for 6.0.1
 arm32 is the Quick backend only; the optimizing compiler is off by default
 and VIXL is arm64 only.
@@ -50,12 +58,12 @@ and VIXL is arm64 only.
 2. Build the ARM Quick backend: `compiler/dex/quick/arm`
 3. Build a real `libziparchive` from `system/core` plus FileMap (our current
    zip stubs return failure, and dex2oat must read dex containers)
-4. Get the `dex2oat` executable running on the Q20
+4. Get the `dex2oat` executable running on the Q20 (done, on-device
+   hello.dex -> hello.oat works)
 5. Compile one small dex plus the boot dex files in a single dex2oat
-   invocation (dex2oat resolves boot classes from its inputs, so the
-   minimal first target is boot dex + hello.dex together)
+   invocation (done as the full boot image build now)
 6. Execute the AOT compiled hello.oat under ART
-7. Only then attempt the full boot image
+7. Full boot image build from the quickened factory dex (in progress)
 
 The single dex step turns the problem into `hello.dex -> dex2oat -> Quick
 ARM -> hello.oat -> ART -> Hello World` instead of debugging a giant boot

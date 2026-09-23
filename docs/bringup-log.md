@@ -50,3 +50,49 @@ match.
 The device password and SSH keys used during bring-up live only in local
 temporary files outside this repository. Nothing device-identifying is
 committed.
+
+## dex2oat on QNX (2026-09-23)
+
+Built `dex2oat` (Quick backend only) and got it running on the Q20. The
+first on-device compilation succeeded: `hello.dex` -> `hello.oat` (17.7KB),
+proving the whole chain (runtime + driver + Quick ARM backend + oat writer)
+works on QNX.
+
+Fixes that fell out:
+
+* `BacktraceMap` was a null stub; dex2oat needs it for `ContainedWithinExistingMap`.
+  Real implementation now parses `/proc/self/mappings` (CSV, one line per
+  page, header first), merging consecutive pages with the same protection
+  and name. Linux `/proc/<pid>/maps` kept as fallback.
+* ashmem shim moved from `/tmp` (RAM backed on QNX, 512MB regions fail) to
+  `ANDROID_DATA/tmp` on flash.
+* Heap caps: 256MB works, 512MB anonymous mmap fails on QNX.
+* `--compiler-backend=Quick` is mandatory (6.0 dex2oat defaults to the
+  optimizing backend, which is not built).
+* `BacktraceMap` constructor/destructor/ParseLine live in the stub now.
+
+## Boot image build from quickened factory dex
+
+The dex extracted from the factory boot.oat is quickened (invoke/iget
+`-quick` opcodes). AOSP never feeds quickened dex to dex2oat, so three
+changes were needed (patch 0040):
+
+1. Verifier: accept quick opcodes in AOT mode instead of failing with
+   "opcode only expected at runtime" (the verifier has full quick opcode
+   handling via GetQuickInvokedMethod / GetQuickFieldAccess).
+2. `VerifiedMethod`: generate the dequicken map for AOT, not only JIT, and
+   drop the UseJit DCHECK in GetDequickenIndex.
+3. Boot classpath verification failures are warnings now, not fatal DCHECKs
+   (AOSP builds boot images with release dex2oat; our debug DCHECKs fired
+   on icu classes).
+
+Also: `-DNDEBUG` for release semantics like AOSP's own boot image builds,
+and `framework.dex:classes2.dex` renamed to `framework2.dex` because the
+colon splits the boot classpath (multidex jar support still needs a real
+zip archive).
+
+State: boot image build (13 dex files, base 0x70000000) gets through
+verification of core-libart and deep into framework/telephony classes. A
+SIGSEGV appears during the parallel compile phase (after verifying
+SIMRecords.handleMessage). `-j1` run started to separate a race from a
+deterministic crash; device dropped off USB before the run finished.
