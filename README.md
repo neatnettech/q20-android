@@ -17,7 +17,7 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
 | Marshmallow boot classpath extracted from the hammerhead factory image | done |
 | Boot image (boot.art + boot.oat) loads on the Q20, GC heap initializes | done |
 | dex2oat built and running on the Q20, hello.dex compiled to hello.oat on-device | done |
-| Boot image build from the 13 extracted dex files | in progress (SIGSEGV in compile phase, see docs/bringup-log.md) |
+| Boot image build from the 13 extracted dex files | in progress (SIGSEGV: GC marking sees null class pointer, see docs/bringup-log.md) |
 | Hello DEX execution | blocked on boot image build |
 | Q20 device SSH access | done (dev mode, re-enable after each reboot) |
 
@@ -47,7 +47,8 @@ by our own dex2oat so the addresses match our libart.so. Next build target:
   on-device
 * Quickened factory dex accepted by the verifier and compiler (patch 0040),
   boot image build is deep into framework compilation
-* Blocked: SIGSEGV in the parallel compile phase
+* Blocked: SIGSEGV in the compile phase, GC marking an object with a null
+  class pointer (details in docs/bringup-log.md)
 
 The compiler chain is the critical engineering frontier. Scope for 6.0.1
 arm32 is the Quick backend only; the optimizing compiler is off by default

@@ -1,0 +1,71 @@
+Boot image build SIGSEGV diagnostics and verifier/GC hardening (q20-android research)
+
+--- ./recon_reg_type.cc	2026-09-25 16:22:53
++++ /Users/piotrpestka/github/q20-android/art/runtime/verifier/reg_type.cc	2026-09-25 15:35:50
+@@ -729,7 +729,16 @@
+     mirror::Class* common_elem = ClassJoin(s_ct, t_ct);
+     ClassLinker* class_linker = Runtime::Current()->GetClassLinker();
+     mirror::Class* array_class = class_linker->FindArrayClass(Thread::Current(), &common_elem);
+-    DCHECK(array_class != nullptr);
++    if (UNLIKELY(array_class == nullptr)) {
++      // QNX port: tolerate a failed array class resolution; the common
++      // superclass of all array types is java.lang.Object.
++      Thread* self = Thread::Current();
++      if (self->IsExceptionPending()) {
++        LOG(WARNING) << "FindArrayClass failed in ClassJoin, clearing exception";
++        self->ClearException();
++      }
++      return s->GetSuperClass();
++    }
+     return array_class;
+   } else {
+     size_t s_depth = s->Depth();
+
+--- ./recon_reg_type_cache.cc	2026-09-25 16:22:53
++++ /Users/piotrpestka/github/q20-android/art/runtime/verifier/reg_type_cache.cc	2026-09-25 15:35:50
+@@ -558,6 +558,10 @@
+     return FromDescriptor(loader, component.c_str(), false);
+   } else {
+     mirror::Class* klass = array.GetClass()->GetComponentType();
++    if (UNLIKELY(klass == nullptr)) {
++      // QNX port: treat a missing component class as unresolved.
++      return Conflict();
++    }
+     std::string temp;
+     if (klass->IsErroneous()) {
+       // Arrays may have erroneous component types, use unresolved in that case.
+
+--- ./recon_mark_sweep-inl.h	2026-09-25 16:22:53
++++ /Users/piotrpestka/github/q20-android/art/runtime/gc/collector/mark_sweep-inl.h	2026-09-25 16:01:46
+@@ -32,6 +32,10 @@
+ inline void MarkSweep::ScanObjectVisit(mirror::Object* obj, const MarkVisitor& visitor,
+                                        const ReferenceVisitor& ref_visitor) {
+   DCHECK(IsMarked(obj)) << "Scanning unmarked object " << obj << "\n" << heap_->DumpSpaces();
++  if (UNLIKELY(obj->GetClass<kVerifyNone>() == nullptr)) {
++    LOG(FATAL) << "QNX GC: scanning object " << static_cast<void*>(obj)
++               << " with null class";
++  }
+   obj->VisitReferences<false>(visitor, ref_visitor);
+   if (kCountScannedTypes) {
+     mirror::Class* klass = obj->GetClass<kVerifyNone>();
+
+--- ./recon_dex_to_dex_compiler.cc	2026-09-25 16:22:53
++++ /Users/piotrpestka/github/q20-android/art/compiler/dex/dex_to_dex_compiler.cc	2026-09-25 15:16:26
+@@ -92,6 +92,7 @@
+ 
+ void DexCompiler::Compile() {
+   DCHECK_GE(dex_to_dex_compilation_level_, kRequired);
++  LOG(INFO) << "DexToDex compiling " << PrettyMethod(unit_.GetDexMethodIndex(), GetDexFile(), true);
+   const DexFile::CodeItem* code_item = unit_.GetCodeItem();
+   const uint16_t* insns = code_item->insns_;
+   const uint32_t insns_size = code_item->insns_size_in_code_units_;
+@@ -258,6 +259,9 @@
+   }
+   uint32_t method_idx = is_range ? inst->VRegB_3rc() : inst->VRegB_35c();
+   MethodReference target_method(&GetDexFile(), method_idx);
++  LOG(INFO) << "Quickening invoke at dex_pc 0x" << std::hex << dex_pc
++             << " in " << PrettyMethod(unit_.GetDexMethodIndex(), GetDexFile(), true)
++             << " target " << PrettyMethod(method_idx, GetDexFile(), true);
+   InvokeType invoke_type = kVirtual;
+   InvokeType original_invoke_type = invoke_type;
+   int vtable_idx;

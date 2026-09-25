@@ -96,3 +96,56 @@ verification of core-libart and deep into framework/telephony classes. A
 SIGSEGV appears during the parallel compile phase (after verifying
 SIMRecords.handleMessage). `-j1` run started to separate a race from a
 deterministic crash; device dropped off USB before the run finished.
+
+## SIGSEGV in the boot image build (2026-09-25)
+
+The boot image build (13 dex files, -j1, -Xmx256m) crashes with SIGSEGV
+during framework compilation. The crash point drifts across methods
+(SIMRecords.handleMessage, org.apache.http.util.VersionInfo.toString,
+xalan classes), always in the same code.
+
+### Crash signature
+
+* `pc` = dex2oat + 0x8998e = `ObjectReference<false, Class>::UnCompress`
+  reading `[r3]` with r3 = 0xc
+* `lr` = dex2oat + 0x878a3 = `AsMirrorPtr` frame
+* Call chain: `IsArrayClass` -> `GetComponentType` -> `AsMirrorPtr` ->
+  `UnCompress` on a NULL Class pointer (component_type_ sits at offset 0xc)
+* Stack scan shows MarkSweep GC frames below the crash (RunPhases,
+  MarkingPhase, ScanObject, ProcessMarkStack): a GC runs mid-compile and
+  marks an object whose class pointer is NULL
+* r0-r3 = 0xc constant across every run; pc/lr offsets identical across
+  runs and ASLR
+
+### Instrumentation added (patch 0050)
+
+* Fault handler now dumps registers, library mappings, a stack scan, and
+  dladdr-resolved frames (runtime_qnx.cc)
+* Null guards in `RegTypeCache::GetComponentType` and `ClassJoin`
+  (FindArrayClass failure) with warning logs: never fired
+* `ScanObjectVisit` LOG(FATAL) on null-class objects: never fired before
+  the crash
+* Per-method verifier LOG(INFO): crash follows verification, not a
+  specific method
+* DexToDex pass logging: the dex-to-dex quickening never runs, so the
+  crash is not in that pass
+
+### Current hypothesis
+
+Heap corruption during GC marking: an array object on the GC heap has a
+NULL class pointer. Suspects, in order:
+
+1. The QNX ashmem shim (flash-file-backed region): GC main space uses it;
+   QNX mmap semantics for unlinked files may differ (MAP_SHARED
+   re-mapping, COW behavior)
+2. The imageless boot build heap layout (no image space, malloc space +
+   ashmem main space + non-moving space)
+3. A class linker allocation path writing an object's class field
+   without the write barrier during compilation
+
+### Ideas to pursue next
+
+* Enable QNX core dumps and inspect the heap with the toolchain gdb
+* GC bisect: `-Xgc:noconcurrent`, smaller heaps, `-XX:HeapGrowthLimit`
+* Test the ashmem shim with plain mmap instead of file-backed ashmem
+* Check the CMS card table / remembered set against QNX mmap behavior
