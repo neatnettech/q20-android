@@ -17,7 +17,7 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
 | Marshmallow boot classpath extracted from the hammerhead factory image | done |
 | Boot image (boot.art + boot.oat) loads on the Q20, GC heap initializes | done |
 | dex2oat built and running on the Q20, hello.dex compiled to hello.oat on-device | done |
-| Boot image build from the 13 extracted dex files | in progress (SIGSEGV: GC marking sees null class pointer, see docs/bringup-log.md) |
+| Boot image build from the 13 extracted dex files | in progress (GC marks a zeroed object at main space + 0xf90, see docs/bringup-log.md) |
 | Hello DEX execution | blocked on boot image build |
 | Q20 device SSH access | done (dev mode, re-enable after each reboot) |
 

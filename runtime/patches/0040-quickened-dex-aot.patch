@@ -57,7 +57,7 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
  }
 
 --- ./compiler_driver.cc	2026-09-25 16:22:28
-+++ /Users/piotrpestka/github/q20-android/art/compiler/driver/compiler_driver.cc	2026-09-23 19:56:09
++++ /Users/piotrpestka/github/q20-android/art/compiler/driver/compiler_driver.cc	2026-09-26 11:09:37
 @@ -1934,8 +1934,12 @@
      // It is *very* problematic if there are verification errors in the boot classpath. For example,
      // we rely on things working OK without verification when the decryption dialog is brought up.
@@ -73,3 +73,22 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
    }
    soa.Self()->AssertNoPendingException();
  }
+@@ -2116,10 +2120,18 @@
+     CHECK(dex_file != nullptr);
+     InitializeClasses(class_loader, *dex_file, dex_files, thread_pool, timings);
+   }
++#if !defined(__QNXNTO__)
+   if (IsImage()) {
+     // Prune garbage objects created during aborted transactions.
+     Runtime::Current()->GetHeap()->CollectGarbage(true);
++  }
++#else
++  // QNX port: skip the prune GC; the first full GC crashes during
++  // marking (see docs/bringup-log.md). Re-enable when the GC bug is fixed.
++  if (IsImage()) {
++    LOG(WARNING) << "QNX: skipping post-initialize prune GC";
+   }
++#endif
+ }
+ 
+ void CompilerDriver::Compile(jobject class_loader, const std::vector<const DexFile*>& dex_files,

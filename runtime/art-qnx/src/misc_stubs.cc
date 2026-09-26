@@ -22,15 +22,10 @@ extern "C" {
  * immediately unlinked (same trick ART's own host builds use: files in
  * /tmp). Single-process semantics are enough for ART's GC spaces. */
 static int finish_ashmem(char* tmpl, size_t size) {
-  int fd = mkstemp(tmpl);
-  if (fd < 0) {
-    return -1;
-  }
-  unlink(tmpl);
-  if (ftruncate(fd, static_cast<off_t>(size)) != 0) {
-    close(fd);
-    return -1;
-  }
+  (void)size;
+  // QNX GC bug experiment: back the region with /dev/zero (true anonymous
+  // zeroed pages, no file semantics) instead of a flash temp file.
+  int fd = open("/dev/zero", O_RDWR);
   return fd;
 }
 

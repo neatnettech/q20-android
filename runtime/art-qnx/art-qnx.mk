@@ -157,6 +157,7 @@ COMPILER_OBJS := $(patsubst $(ART_ROOT)/%,build/%,$(COMPILER_SRCS:.cc=.o))
 DEX2OAT_OBJS := build/dex2oat/dex2oat.o
 dex2oat: $(DEX2OAT_OBJS) libart.so $(COMPILER_OBJS)
 	$(CXX) -o $@ $(DEX2OAT_OBJS) $(COMPILER_OBJS) -L. -lart \
+	  -Wl,-z,stack-size=0x800000 \
 	  2>&1 | grep -vE "DWARF error" | head -30
 
 build/dex2oat/dex2oat.o: $(ART_ROOT)/dex2oat/dex2oat.cc

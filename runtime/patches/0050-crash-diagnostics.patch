@@ -1,4 +1,4 @@
-Boot image build SIGSEGV diagnostics and verifier/GC hardening (q20-android research)
+Boot image build SIGSEGV diagnostics and GC workarounds (q20-android research)
 
 --- ./recon_reg_type.cc	2026-09-25 16:22:53
 +++ /Users/piotrpestka/github/q20-android/art/runtime/verifier/reg_type.cc	2026-09-25 15:35:50
@@ -35,15 +35,20 @@ Boot image build SIGSEGV diagnostics and verifier/GC hardening (q20-android rese
      if (klass->IsErroneous()) {
        // Arrays may have erroneous component types, use unresolved in that case.
 
---- ./recon_mark_sweep-inl.h	2026-09-25 16:22:53
-+++ /Users/piotrpestka/github/q20-android/art/runtime/gc/collector/mark_sweep-inl.h	2026-09-25 16:01:46
-@@ -32,6 +32,10 @@
+--- ./recon_mark_sweep-inl.h	2026-09-26 14:03:00
++++ /Users/piotrpestka/github/q20-android/art/runtime/gc/collector/mark_sweep-inl.h	2026-09-26 12:55:45
+@@ -32,6 +32,15 @@
  inline void MarkSweep::ScanObjectVisit(mirror::Object* obj, const MarkVisitor& visitor,
                                         const ReferenceVisitor& ref_visitor) {
    DCHECK(IsMarked(obj)) << "Scanning unmarked object " << obj << "\n" << heap_->DumpSpaces();
 +  if (UNLIKELY(obj->GetClass<kVerifyNone>() == nullptr)) {
++    const uint32_t* words = reinterpret_cast<const uint32_t*>(obj);
 +    LOG(FATAL) << "QNX GC: scanning object " << static_cast<void*>(obj)
-+               << " with null class";
++               << " with null class, words: "
++               << std::hex << words[0] << " " << words[1] << " " << words[2] << " "
++               << words[3] << " " << words[4] << " " << words[5] << " " << words[6]
++               << " " << words[7] << std::dec << "\n"
++               << heap_->DumpSpaces();
 +  }
    obj->VisitReferences<false>(visitor, ref_visitor);
    if (kCountScannedTypes) {
@@ -69,3 +74,65 @@ Boot image build SIGSEGV diagnostics and verifier/GC hardening (q20-android rese
    InvokeType invoke_type = kVirtual;
    InvokeType original_invoke_type = invoke_type;
    int vtable_idx;
+
+--- ./recon_heap.h	2026-09-26 14:03:00
++++ /Users/piotrpestka/github/q20-android/art/runtime/gc/heap.h	2026-09-26 11:45:25
+@@ -117,7 +117,14 @@
+ };
+ 
+ // If true, use rosalloc/RosAllocSpace instead of dlmalloc/DlMallocSpace
++#ifdef __QNXNTO__
++// QNX port: rosalloc thread-local run management misbehaves under QNX and
++// corrupts the heap before the first GC (see docs/bringup-log.md). Use
++// dlmalloc until the rosalloc bug is root-caused.
++static constexpr bool kUseRosAlloc = false;
++#else
+ static constexpr bool kUseRosAlloc = true;
++#endif
+ 
+ // If true, use thread-local allocation stack.
+ static constexpr bool kUseThreadLocalAllocationStack = true;
+
+--- ./recon_heap.cc	2026-09-26 14:03:00
++++ /Users/piotrpestka/github/q20-android/art/runtime/gc/heap.cc	2026-09-26 10:24:14
+@@ -2369,6 +2369,8 @@
+ 
+ collector::GcType Heap::CollectGarbageInternal(collector::GcType gc_type, GcCause gc_cause,
+                                                bool clear_soft_references) {
++  LOG(INFO) << "QNX GC start cause=" << static_cast<int>(gc_cause)
++            << " type=" << static_cast<int>(gc_type);
+   Thread* self = Thread::Current();
+   Runtime* runtime = Runtime::Current();
+   // If the heap can't run the GC, silently fail and return that no GC was run.
+
+--- ./recon_mark_sweep.cc	2026-09-26 14:03:00
++++ /Users/piotrpestka/github/q20-android/art/runtime/gc/collector/mark_sweep.cc	2026-09-26 12:44:28
+@@ -514,6 +514,11 @@
+ // Used to mark objects when processing the mark stack. If an object is null, it is not marked.
+ inline void MarkSweep::MarkObject(Object* obj, Object* holder, MemberOffset offset) {
+   if (obj != nullptr) {
++    if (UNLIKELY(obj->GetClass<kVerifyNone>() == nullptr)) {
++      LOG(WARNING) << "QNX GC: marking null-class object " << static_cast<void*>(obj)
++                   << " holder " << static_cast<void*>(holder)
++                   << " offset " << offset.Uint32Value();
++    }
+     MarkObjectNonNull(obj, holder, offset);
+   } else if (kCountMarkedObjects) {
+     ++mark_null_count_;
+
+--- ./recon_java_lang_Runtime.cc	2026-09-26 14:03:00
++++ /Users/piotrpestka/github/q20-android/art/runtime/native/java_lang_Runtime.cc	2026-09-26 13:22:45
+@@ -43,7 +43,13 @@
+       LOG(INFO) << "Explicit GC skipped.";
+       return;
+   }
++#ifdef __QNXNTO__
++  // QNX port: the first full GC crashes while marking (see
++  // docs/bringup-log.md). Skip explicit GCs until the GC bug is fixed.
++  LOG(INFO) << "Explicit GC skipped on QNX.";
++#else
+   Runtime::Current()->GetHeap()->CollectGarbage(false);
++#endif
+ }
+ 
+ NO_RETURN static void Runtime_nativeExit(JNIEnv*, jclass, jint status) {

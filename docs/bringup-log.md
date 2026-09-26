@@ -149,3 +149,29 @@ NULL class pointer. Suspects, in order:
 * GC bisect: `-Xgc:noconcurrent`, smaller heaps, `-XX:HeapGrowthLimit`
 * Test the ashmem shim with plain mmap instead of file-backed ashmem
 * Check the CMS card table / remembered set against QNX mmap behavior
+
+## GC crash: zeroed object at main space + 0xf90 (2026-09-26)
+
+The first GC during the boot image build crashes marking an all-zero
+object near the start of the main heap space. Every run, both RosAlloc and
+dlmalloc allocators: object address = main_space_begin + 0xf90, content
+`0 0 0 0 0 0 0 0` (never written), yet present on the allocation stack.
+
+Findings:
+
+* Fault handler secondary crashes (stack scan past guard pages) masked the
+  real signature at first; the kernel report (Process ... terminated ...
+  ip= ref=) is the authoritative one
+* The zeroed object is reached from the allocation stack, not from a
+  parent scan (MarkObject holder log never fires for it)
+* Instrumenting allocations shifts the crash (order-dependent corruption)
+* Skipping the post-initialize prune GC and System.gc gets further, but
+  other GC triggers (heap pressure) still crash
+
+Workarounds in the tree (patch 0050): prune GC and explicit GC skipped on
+QNX, RosAlloc replaced by dlmalloc. The root cause is still open; prime
+suspects are the per-thread allocation stack bookkeeping and the GC root
+visiting of dex caches on QNX.
+
+Next steps: trace the allocation stack source of the bogus entry, enable
+QNX core dumps for gdb inspection, or bisect with the earliest possible GC.
