@@ -182,6 +182,8 @@ Android 11  -> selectively backport security fixes
 * `q20-runtime/` complete factory Android 4.3 runtime unpacked from the
   signed `sys.android` and `sys.android.shell` BARs for OS 10.3.3.3216
   (gitignored), see credits below
+* `q20-reborn/` future hardware design track: security first new phone
+  hardware (QCS8550 candidate, Rev A/B board strategy), research phase
 * `runtime/art-qnx/` the QNX port: compat headers, stub/replacement sources,
   build scaffold (`art-qnx.mk`), all recorded patches
 * `runtime/patches/` recorded patches against the AOSP tree (gitignored
