@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Prober</string>
+    <string name="counter_fmt">count: %1$d</string>
+    <string name="bump">bump</string>
+    <string name="lifecycle_fmt">lifecycle %1$s</string>
+</resources>
