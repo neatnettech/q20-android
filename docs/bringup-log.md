@@ -522,3 +522,32 @@ BarDeploy auth against 10.3.3. Both are a dedicated session; parked for now.
 Notable for later: the drawing path itself is proven from a bare process
 (CPU-mappable 720x720 window buffer, post succeeds), so once a window gets
 composited via the app-launch route, pixels follow.
+
+### 2026-10-01: both install paths dead: the debug token wall
+
+Tried every device-side install route for the compositing test:
+
+* BAR via Files app: "Unable to open" (no local .bar handler on 10.3.3).
+* BAR via Browser download (correct vnd.rim.bar MIME, served over the USB
+  link): downloads fine, no install prompt; 10.3.3 has no browser .bar
+  install hook.
+* BarDeploy 1.3.0 (PlayBook SDK): "peer not authenticated" against 10.3.3.
+* APK via the factory Android runtime (shared storage = Android /sdcard,
+  confirmed by browser downloads landing there): PackageInstaller runs, user
+  enabled unknown sources and disabled verification, install fails with
+  "unable to install this app" for BOTH our API 18 APK and the factory's own
+  Calculator.apk.
+
+Conclusion: BlackBerry's Android runtime refuses APKs that are not signed
+with a device debug token. Debug tokens cannot be obtained any more (RIM
+servers down; TokenLoader dead per the research repo). The same wall likely
+blocks BAR installs. Combined with the earlier finding that bare processes
+create windows but never composite, the A7 display route is blocked until
+one of: a BB10 NDK deploy tool that authenticates to 10.3.3 AND a token
+bypass, or the device root route from the research repo (btool autoloader
+patch, real uid-0 root achieved on another Classic) to lift the policy.
+
+The productive direction stays headless (A5+). The display work from here is
+research, not plumbing: the factory runtime's window promotion mechanism
+(uid 100181000 app uids, launcher-inherited session) is the reference for
+what our processes must replicate once a bypass exists.
