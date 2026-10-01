@@ -507,3 +507,18 @@ BAR/app registration the factory Android runtime used), not a bare process.
 Next probe for that: package the same drawing code as a dev-mode BAR app and
 launch it through the launcher; if it renders, Android app processes get the
 same treatment and A7 stays open for real.
+
+### A4 follow-up: the app-launch path is blocked at the deploy tool
+
+The SDK ships the full BB10 deploy toolchain (BarDeploy.jar, BarPackager.jar,
+BarSigner.jar, DebugTokenRequest.jar), but BarDeploy 1.3.0 (PlayBook era)
+rejects the 10.3.3 device at authentication with "peer not authenticated",
+while the newer qconndoor protocol used by Connect.jar (which pushes SSH keys
+successfully) has no install commands. Debug tokens are unobtainable (RIM
+servers dead). Options for getting the app-launch context: a BB10 NDK
+(host_10_3_1_12) blackberry-deploy from a mirror, or protocol RE of the
+BarDeploy auth against 10.3.3. Both are a dedicated session; parked for now.
+
+Notable for later: the drawing path itself is proven from a bare process
+(CPU-mappable 720x720 window buffer, post succeeds), so once a window gets
+composited via the app-launch route, pixels follow.
