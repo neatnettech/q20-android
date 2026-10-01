@@ -346,3 +346,8 @@ static inline int madvise(void *addr, size_t len, int advice)
 }
 
 #endif /* ART_QNX_COMPAT_H */
+
+/* POSIX path separator for libutils String8 (undefined in M's public headers) */
+#ifndef OS_PATH_SEPARATOR
+#define OS_PATH_SEPARATOR '/'
+#endif

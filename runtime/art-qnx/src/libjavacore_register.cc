@@ -19,6 +19,13 @@ extern void register_java_lang_System(JNIEnv*);
 extern void register_libcore_io_Memory(JNIEnv*);
 extern void register_libcore_io_Posix(JNIEnv*);
 extern void register_qnx_icu_stubs(JNIEnv*);
+extern void register_java_lang_Math(JNIEnv*);
+extern void register_java_util_regex_Pattern(JNIEnv*);
+extern void register_java_util_regex_Matcher(JNIEnv*);
+namespace android {
+extern void register_android_util_Log(JNIEnv*);
+extern void register_android_os_SystemClock(JNIEnv*);
+}  // namespace android
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
     JNIEnv* env;
@@ -32,5 +39,10 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     register_libcore_io_Memory(env);
     register_libcore_io_Posix(env);
     register_qnx_icu_stubs(env);
+    register_java_lang_Math(env);
+    register_java_util_regex_Pattern(env);
+    register_java_util_regex_Matcher(env);
+    android::register_android_util_Log(env);
+    android::register_android_os_SystemClock(env);
     return JNI_VERSION_1_6;
 }

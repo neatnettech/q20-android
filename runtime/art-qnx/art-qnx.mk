@@ -118,34 +118,70 @@ libart.so: $(RUNTIME_OBJS) $(ARM_ASM_OBJS) $(ZLIB_OBJS) $(SUPPORT_OBJS) $(ZIP_OB
 
 # libjavacore subset (native methods needed for runtime boot + hello world)
 LIBCORE_NATIVE ?= $(abspath ../../libcore/luni/src/main/native)
+FWJNI ?= $(abspath ../../frameworks/base/core/jni)
+QNX_INC ?= $(abspath ../../toolchains/playbook-gcc9/qnx650/include)
+ICU_LIBS ?= $(abspath ../../toolchains/playbook-gcc9/qnx650/arm-blackberry-qnx8eabi/usr/lib)
 JAVACORE_SRCS := android_system_OsConstants.cpp java_io_File.cpp \
                  java_io_FileDescriptor.cpp java_lang_System.cpp \
                  libcore_io_Memory.cpp libcore_io_Posix.cpp \
                  AsynchronousCloseMonitor.cpp ExecStrings.cpp JniException.cpp \
                  NetworkUtilities.cpp canonicalize_path.cpp readlink.cpp \
-                 valueOf.cpp libcore_io_AsynchronousCloseMonitor.cpp
+                 valueOf.cpp libcore_io_AsynchronousCloseMonitor.cpp \
+                 java_util_regex_Pattern.cpp java_util_regex_Matcher.cpp IcuUtilities.cpp java_lang_Math.cpp
 JAVACORE_OBJS := $(patsubst %.cpp,build/javacore/%.o,$(JAVACORE_SRCS))
 JAVACORE_OBJS += build/javacore/register.o build/javacore/icu_stubs.o
 JAVACORE_OBJS += build/javacore/JNIHelp.o \
                  build/javacore/toStringArray.o build/javacore/fallocate.o \
                  build/javacore/sendfile.o build/javacore/gcc_frame_stubs.o
+JAVACORE_OBJS += build/javacore/loglib_qnx.o build/javacore/android_runtime_stubs.o
+JAVACORE_OBJS += build/javacore/android_util_Log.o build/javacore/android_os_SystemClock.o
+JAVACORE_OBJS += build/javacore/String8.o build/javacore/SharedBuffer.o \
+                 build/javacore/SystemClock.o build/javacore/Unicode.o \
+                 build/javacore/String16.o build/javacore/Timers.o \
+                 build/javacore/Static.o
+
+# framework/libcore JNI needs the QNX ICU (static: the device ships .49, the
+# sysroot .46)
+JAVACORE_EXTRA_LIBS := $(ICU_LIBS)/libicui18nS.a $(ICU_LIBS)/libicuucS.a \
+                       $(ICU_LIBS)/libicudataS.a
+
+JCFLAGS := $(CXXFLAGS) -Wno-error=format -I$(LIBCORE_NATIVE) \
+           -I$(abspath ../../libcore/include) -I$(FWJNI) \
+           -I$(abspath compat) -I$(QNX_INC) -I$(QNX_INC)/unicode \
+           -I$(abspath ../../system/core/libcutils/include)
 
 libjavacore.so: $(JAVACORE_OBJS)
 	@mkdir -p build
-	$(CXX) -shared -o $@ $^ > build/link-libjavacore.log 2>&1 \
+	$(CXX) -shared -o $@ $^ $(JAVACORE_EXTRA_LIBS) > build/link-libjavacore.log 2>&1 \
 	  || { grep -vE "DWARF error" build/link-libjavacore.log | head -20; false; }
 
 build/javacore/%.o: $(LIBCORE_NATIVE)/%.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -Wno-error=format -I$(LIBCORE_NATIVE) -I$(abspath ../../libcore/include) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+build/javacore/%.o: $(FWJNI)/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+build/javacore/%.o: $(abspath ../../system/core/libutils)/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
 build/javacore/register.o: src/libjavacore_register.cc
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -I$(LIBCORE_NATIVE) -I$(abspath ../../libcore/include) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
 build/javacore/icu_stubs.o: src/icu_stubs.cc
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -I$(LIBCORE_NATIVE) -I$(abspath ../../libcore/include) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+build/javacore/loglib_qnx.o: src/loglib_qnx.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+build/javacore/android_runtime_stubs.o: src/android_runtime_stubs.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
 build/javacore/JNIHelp.o: $(LIBNATIVE)/JNIHelp.cpp
 	@mkdir -p $(dir $@)

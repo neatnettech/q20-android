@@ -551,3 +551,21 @@ The productive direction stays headless (A5+). The display work from here is
 research, not plumbing: the factory runtime's window promotion mechanism
 (uid 100181000 app uids, launcher-inherited session) is the reference for
 what our processes must replicate once a bypass exists.
+
+### 2026-10-01: A5 framework slice, 6 of 7 headless checks pass on device
+
+The qconn transport (runtime/qnx-shims/qconn_exec.py, file push + shell exec
+over port 8000) replaced SSH as the device harness. libjavacore grew the A5
+native set: java.util.regex (ICU 46 static libs from the sysroot, with three
+libcore patches: strenum.h instead of ustrenum.h, refreshInputText no-op
+since the non-moving GC keeps UTexts valid, U_FORMAT_INEXACT_ERROR removed),
+android.util.Log and android.os.SystemClock (framework JNI files plus a
+libutils subset: String8, String16, Unicode, Timers, Static, SystemClock,
+SharedBuffer), a liblog shim (logs to stderr and $ANDROID_DATA/qnx-android-log.txt),
+an AndroidRuntime stub header, and QNX shims (endian.h, sys/system_properties.h).
+
+On device, the Prober headless self test now reports:
+PASS arithmetic, PASS regex matches, PASS regex replace, PASS SystemClock,
+PASS Log, PASS ICU PluralRules (forLocale + select with real data), and
+FAIL Bundle: BaseBundle needs Parcel, whose natives sit behind libbinder.
+That is the binder milestone, recorded as the next gap.

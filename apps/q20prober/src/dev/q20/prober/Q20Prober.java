@@ -17,15 +17,72 @@ public class Q20Prober extends Activity {
     private int counter;
     private TextView counterText;
 
-    /** Headless entry: pure Java, no framework natives, no window. */
+    /** Headless entry: framework self tests, no window needed. */
     public static void main(String[] args) {
         System.out.println("prober: headless main running");
-        int sum = 0;
-        for (int i = 1; i <= 10; i++) {
-            sum += i;
+        int passed = 0;
+        passed += check("java arithmetic", sum(10) == 55);
+        passed += check("regex Pattern.matches",
+                java.util.regex.Pattern.matches("^a+b$", "aaab"));
+        passed += check("regex replace",
+                "x1x2x".replaceAll("[0-9]", "n").equals("xnxnx"));
+        passed += check("SystemClock", clockTest());
+        passed += check("Log", logTest());
+        passed += check("ICU PluralRules", icuTest());
+        passed += check("Bundle", bundleTest());
+        System.out.println("prober: headless done, passed=" + passed + "/7");
+    }
+
+    static int sum(int n) {
+        int s = 0;
+        for (int i = 1; i <= n; i++) s += i;
+        return s;
+    }
+
+    static boolean bundleTest() {
+        try {
+            android.os.Bundle b = new android.os.Bundle();
+            b.putString("k", "v");
+            b.putInt("n", 7);
+            return "v".equals(b.getString("k")) && b.getInt("n") == 7;
+        } catch (Throwable t) {
+            System.out.println("prober: bundle exception " + t);
+            return false;
         }
-        System.out.println("prober: self test sum=" + sum + " (want 55)");
-        System.out.println("prober: headless main done, ok=" + (sum == 55));
+    }
+
+    static boolean clockTest() {
+        long a = android.os.SystemClock.uptimeMillis();
+        long b = android.os.SystemClock.uptimeMillis();
+        return b >= a && a > 0;
+    }
+
+    static boolean logTest() {
+        android.util.Log.i(TAG, "prober log test");
+        android.util.Log.d(TAG, "prober log test");
+        return true;
+    }
+
+    static boolean icuTest() {
+        // android.icu is hidden API: reach it by reflection.
+        try {
+            Class<?> c = Class.forName("android.icu.text.PluralRules");
+            java.lang.reflect.Method m = c.getDeclaredMethod("forLocale", java.util.Locale.class);
+            Object rules = m.invoke(null, java.util.Locale.ENGLISH);
+            java.lang.reflect.Method s = c.getDeclaredMethod("select", double.class);
+            String sel = (String) s.invoke(rules, 2.0);
+            return rules != null && sel != null && sel.length() > 0;
+        } catch (Throwable t) {
+            Throwable cause = t;
+            while (cause.getCause() != null) cause = cause.getCause();
+            System.out.println("prober: icu exception " + cause);
+            return false;
+        }
+    }
+
+    static int check(String name, boolean ok) {
+        System.out.println("prober check: " + (ok ? "PASS " : "FAIL ") + name);
+        return ok ? 1 : 0;
     }
 
     @Override
