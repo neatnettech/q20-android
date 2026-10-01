@@ -55,7 +55,7 @@ cheap headless check before it needs the display.
 | A2 | Real libziparchive | system/core libziparchive + FileMap built into the runtime; dex2oat reads classes.dex out of the APK on device | done |
 | A3 | Headless app | `dalvikvm -cp q20prober.apk Q20Prober` runs main() self test, prints, exits 0; AOT via a dex2oat pass over the APK as well | done, both modes |
 | A4 | Screen probe | window, group, CPU-mappable 720x720 buffer, post and flush all succeed from an unsigned SSH process, but nothing composites: BB10 draws only registered app windows. A7 needs the app-launch path (dev-mode BAR), not a bare process | done, see docs/bringup-log.md |
-| A5 | Framework slice | app uses android.util.Log, android.os.Bundle/SystemClock, java.util.regex, android.icu.text.PluralRules for real; libandroid_runtime subset + regex natives land |
+| A5 | Framework slice | Log, SystemClock, regex and ICU natives all registered and working on device; Bundle works through the real AOSP Parcel with the binder IPC layer stubbed. Self test passes 7/7 | done |
 | A6 | Activity headless | Activity.onCreate runs against a minimal context, resources resolve via AssetManager, a View tree measures and lays out; no window yet |
 | A7 | Window | the app's first pixels on the Q20 display, driven by A4's route |
 | A8 | Input | button tap increments the counter: touch, key events, dispatch, invalidation, redraw |

@@ -12,7 +12,7 @@ both printing `Hello from ART 6 on QNX! gc ok` and exiting 0. The two bugs
 that blocked M1 and M2 were a dex cache prune hole for erroneous classes
 (quickened dex fails the verifier for two android.icu classes) and a pair of
 QNX thread stack bugs that let the interpreter overflow the finalizer's stack
-at exit. Nothing is committed yet.
+at exit. All of it is committed and merged to main.
 
 ## Milestones
 
@@ -22,14 +22,15 @@ at exit. Nothing is committed yet.
 | M2 | Hello World executes | device prints `Hello from ART 6 on QNX! gc ok` under the core image, both AOT and `-Xint` | done, confirmed on device |
 | M3 | Full boot image | same for the 13 dex boot image, `boot.art` plus `boot.oat` | done, confirmed on device |
 | M3.5 | Quickened verifier | all boot classes verify despite quickened opcodes (patch 0040), proven at runtime by loading android.icu.text.PluralRules | done, confirmed on device |
-| M4 | Land the work | patches 0010 to 0070, stubs, device runner, Dockerfile committed on `fix/gc-card-table`, PR to main, README and bringup log updated with the measured numbers | commit pushed, PR pending |
+| M4 | Land the work | patches 0010 to 0091, stubs, device runner, Dockerfile committed and merged to main | done |
 | M5 | Platform hygiene | release build (`-O2`, stripped), fault handler stack scan bounded, verbose per method verifier logging behind a flag | after M4 |
 | M6 | APK path | replaced by the concrete ladder in `docs/apk-milestones.md`: the Q20 Prober APK, milestones A1 to A10 | start with A1 |
 
-M3 and M4 are the whole job right now, then the A ladder. Everything beyond
-M4 is scoped in the plan file at
-`~/.claude/plans/i-was-looking-into-virtual-jellyfish.md` and in
-`docs/apk-milestones.md`.
+M1 through M4 are done and merged. The facade charter in
+`docs/apk-milestones.md` governs the rest: replace all BlackBerry legacy with
+plain Android, no Google services. The A ladder (A5 done, A6 next) is the
+current work, scoped in `docs/apk-milestones.md` and the plan file at
+`~/.claude/plans/i-was-looking-into-virtual-jellyfish.md`.
 
 ## What fixed M1: erroneous class fields were never pruned
 

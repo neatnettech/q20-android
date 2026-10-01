@@ -248,7 +248,7 @@ are emptied:
 
 So BarDeploy works verbatim under openjdk@17 plus that override. Port 80 also
 answers; `/cgi-bin/discovery.cgi` returns full device info in plaintext with no
-auth (PIN 740424151, platform 10.3.3.3216, DeveloperModeEnabled 1, screen
+auth (PIN [redacted], platform 10.3.3.3216, DeveloperModeEnabled 1, screen
 720x720).
 
 ### What the debug token actually gates
@@ -278,7 +278,7 @@ Honest options, for the owner to choose:
 
 ### Device facts captured
 
-PIN 740424151, author id gYAAgNno2qFNkmnKbfpdH3gCdjA, platform 10.3.3.3216,
+PIN [redacted], author id gYAAgNno2qFNkmnKbfpdH3gCdjA, platform 10.3.3.3216,
 screen 720x720, dev mode on. Ports: 22 ssh, 80 http (discovery.cgi open),
 443 install CGI (reachable now), 4455 dev door, 5555 adbd (crashes on
 screencap), 8443 unknown.
