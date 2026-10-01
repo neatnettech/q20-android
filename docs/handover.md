@@ -173,6 +173,12 @@ M3.
 * QNX thread stacks are far smaller than requested (attached threads observed
   at 128 KB), so the interpreter must stay at -O2; at -O0 its 17 KB frames
   overflow them.
+* The full boot image at `--base=0x70000000` reserves heap through 0x784e5000,
+  overlapping the loaded libraries (libgcc_s at 0x7800c000). All images build
+  at `--base=0x6f000000`, keeping the reserved region below the libraries.
+* Real libziparchive now lives in libart.so (system/core sources + a small
+  madvise shim); dex2oat and dalvikvm read APKs. The zip stubs are deleted.
+* `sh run_core.sh prober` builds and runs the Prober APK headless (A ladder).
 * `PrettyField`, `PrettyClass` and `PrettyMethod` are not safe in error paths:
   they need a dex cache. Log raw pointers first.
 * ashmem is a `/dev/zero` mapping and `MAP_PRIVATE`, so nothing is shared

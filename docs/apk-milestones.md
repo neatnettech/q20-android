@@ -49,12 +49,12 @@ cheap headless check before it needs the display.
 
 ## Milestones
 
-| ID | Goal | Exit criteria |
-|---|---|---|
-| A1 | Host tooling | aapt2 + javac + d8 produce q20prober.apk with classes.dex, resources.arsc, manifest |
-| A2 | Real libziparchive | system/core libziparchive + FileMap built into the runtime; dex2oat reads classes.dex out of the APK on device |
-| A3 | Headless app | `dalvikvm -cp q20prober.apk Q20Prober` runs main() self test, prints, exits 0; AOT via a dex2oat pass over the APK as well |
-| A4 | Screen probe | an unsigned process can (or cannot) create a QNX Screen window and get a surface to draw into; result decides A7's route |
+| ID | Goal | Exit criteria | State |
+|---|---|---|---|
+| A1 | Host tooling | aapt2 + javac + d8 produce q20prober.apk with classes.dex, resources.arsc, manifest | done |
+| A2 | Real libziparchive | system/core libziparchive + FileMap built into the runtime; dex2oat reads classes.dex out of the APK on device | done |
+| A3 | Headless app | `dalvikvm -cp q20prober.apk Q20Prober` runs main() self test, prints, exits 0; AOT via a dex2oat pass over the APK as well | done, both modes |
+| A4 | Screen probe | an unsigned process can (or cannot) create a QNX Screen window and get a surface to draw into; result decides A7's route | next |
 | A5 | Framework slice | app uses android.util.Log, android.os.Bundle/SystemClock, java.util.regex, android.icu.text.PluralRules for real; libandroid_runtime subset + regex natives land |
 | A6 | Activity headless | Activity.onCreate runs against a minimal context, resources resolve via AssetManager, a View tree measures and lays out; no window yet |
 | A7 | Window | the app's first pixels on the Q20 display, driven by A4's route |

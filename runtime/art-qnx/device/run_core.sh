@@ -36,7 +36,7 @@ telephony-common voip-common ims-common apache-xml org.apache.http.legacy.boot c
 # --image-classes and --base are image-only; the standalone hello compile
 # rejects them (dex2oat.cc:152).
 IMAGE_FLAGS="--instruction-set=arm --instruction-set-variant=krait \
-  --compiler-backend=Quick -j1 --base=0x70000000 --android-root=$Q/system \
+  --compiler-backend=Quick -j1 --base=0x6f000000 --android-root=$Q/system \
   --image-classes=$Q/preloaded-classes"
 COMPILE_FLAGS="--instruction-set=arm --instruction-set-variant=krait \
   --compiler-backend=Quick -j1 --android-root=$Q/system"
@@ -99,10 +99,43 @@ run_hello() {
   echo "=== expected on success: Hello from ART 6 on QNX! gc ok (both modes)"
 }
 
+run_prober() {
+  # The Q20 Prober APK (A ladder): compile its classes.dex out of the APK,
+  # then run headless (main) interpreted and AOT. Needs boot.art from boot13.
+  bcp=""
+  for d in $BOOT13_DEX; do bcp="$bcp:$Q/boot/$d.dex"; done
+  bcp=$(echo "$bcp" | sed 's/^://')
+  echo "$bcp" > $Q/out/prober.bcp
+
+  cache=$Q/data/dalvik-cache/arm
+  mkdir -p $cache
+  oat=$cache/$(echo "$Q/q20prober.apk" | sed 's,^/,,; s,/,@,g')@classes.dex
+  rm -f "$oat"
+  echo "=== prober.oat: $oat"
+  $Q/bin/dex2oat $HEAP --dex-file=$Q/q20prober.apk --oat-file="$oat" \
+    --boot-image=$Q/out/boot.art --runtime-arg -Xnorelocate \
+    $COMPILE_FLAGS > $Q/out/prober-dex2oat.log 2>&1
+  echo "dex2oat exit=$? at $(date)"
+  ls -la "$oat" 2>/dev/null
+
+  for mode in aot int; do
+    case $mode in
+      aot) xflags="" ;;
+      int) xflags="-Xint" ;;
+    esac
+    echo "=== prober ($mode) under boot image"
+    $Q/bin/dalvikvm -Xbootclasspath:$bcp -Ximage:$Q/out/boot.art -Xnorelocate \
+      $xflags -cp $Q/q20prober.apk dev.q20.prober.Q20Prober > $Q/out/prober-$mode.log 2>&1
+    echo "dalvikvm exit=$?"
+    grep "prober:" $Q/out/prober-$mode.log
+  done
+}
+
 case ${1:-all} in
   core)   build_image core $CORE_DEX ;;
   boot13) build_image boot $BOOT13_DEX ;;
   hello)  run_hello ;;
+  prober) run_prober ;;
   all)    build_image core $CORE_DEX && run_hello ;;
-  *)      echo "usage: sh run_core.sh [core|boot13|hello|all]"; exit 2 ;;
+  *)      echo "usage: sh run_core.sh [core|boot13|hello|prober|all]"; exit 2 ;;
 esac

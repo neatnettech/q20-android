@@ -47,11 +47,27 @@ RUNTIME_SRCS := $(filter-out %_test.cc,$(shell find $(ART_ROOT)/runtime -name "*
 # our own QNX replacements
 RUNTIME_SRCS += $(abspath src/os_qnx.cc) $(abspath src/thread_qnx.cc) \
                 $(abspath src/alloc_debug.cc) \
-                $(abspath src/debug_operators.cc) $(abspath src/zip_stubs.cc) \
+                $(abspath src/debug_operators.cc) \
                 $(abspath src/native_bridge_stubs.cc) $(abspath src/atrace_stubs.cc) \
                 $(abspath src/log_stubs.cc) $(abspath src/backtrace_stubs.cc) \
                 $(abspath src/arch_features_stubs.cc) $(abspath src/runtime_qnx.cc) \
                 $(abspath src/misc_stubs.cc)
+
+# real libziparchive (APK support), replacing the zip stubs: the C API
+# implementation from system/core plus its FileMap and libbase file deps.
+ZIP_ROOT ?= $(abspath ../../system/core)
+ZIP_SRCS := $(ZIP_ROOT)/libziparchive/zip_archive.cc \
+            $(ZIP_ROOT)/libutils/FileMap.cpp \
+            $(ZIP_ROOT)/base/file.cpp
+ZIP_OBJS := $(patsubst $(ZIP_ROOT)/%.cc,build/zip/%.o,$(filter %.cc,$(ZIP_SRCS))) \
+            $(patsubst $(ZIP_ROOT)/%.cpp,build/zip/%.o,$(filter %.cpp,$(ZIP_SRCS)))
+# no force-included art compat header for system/core code; a small QNX
+# madvise shim instead
+ZIPFLAGS := $(filter-out -include,$(filter-out $(abspath compat/art_qnx_compat.h),$(CXXFLAGS))) \
+            -include $(abspath compat/qnx_zip_compat.h) \
+            -I$(ZIP_ROOT)/libziparchive/include -I$(ZIP_ROOT)/base/include \
+            -I$(ZIP_ROOT)/include -I$(ZIP_ROOT)/liblog/include \
+            -I$(ZIP_ROOT)/libcutils/include
 
 # qnx_shims proc.c (qnx_tgkill)
 SHIM_PROCS := build/support/qnx_shims/proc.o
@@ -82,7 +98,7 @@ ARM_ASM_OBJS := $(patsubst $(ART_ROOT)/%,build/%,$(ARM_ASM:.S=.o))
 
 SRC_OBJS := build/src/os_qnx.o build/src/thread_qnx.o build/src/alloc_debug.o \
             build/src/debug_operators.o \
-            build/src/zip_stubs.o build/src/native_bridge_stubs.o \
+            build/src/native_bridge_stubs.o \
             build/src/atrace_stubs.o build/src/log_stubs.o \
             build/src/backtrace_stubs.o build/src/arch_features_stubs.o \
             build/src/runtime_qnx.o build/src/misc_stubs.o
@@ -92,10 +108,10 @@ RUNTIME_OBJS := $(patsubst $(ART_ROOT)/%.cc,build/%.o,$(filter-out $(abspath src
 
 .PHONY: all stage patches clean check
 
-all: $(RUNTIME_OBJS) $(ARM_ASM_OBJS) $(ZLIB_OBJS) $(SUPPORT_OBJS) $(SHIM_PROCS)
+all: $(RUNTIME_OBJS) $(ARM_ASM_OBJS) $(ZLIB_OBJS) $(SUPPORT_OBJS) $(ZIP_OBJS) $(SHIM_PROCS)
 
 # link attempt: surfaces undefined symbols
-libart.so: $(RUNTIME_OBJS) $(ARM_ASM_OBJS) $(ZLIB_OBJS) $(SUPPORT_OBJS) $(SHIM_PROCS)
+libart.so: $(RUNTIME_OBJS) $(ARM_ASM_OBJS) $(ZLIB_OBJS) $(SUPPORT_OBJS) $(ZIP_OBJS) $(SHIM_PROCS)
 	@mkdir -p build
 	$(CXX) -shared -o $@ $^ -Wl,--no-undefined > build/link-libart.log 2>&1 \
 	  || { grep -vE "DWARF error" build/link-libart.log | head -60; false; }
@@ -207,6 +223,16 @@ build/src/jni_invocation.o: $(LIBNATIVE)/JniInvocation.cpp
 build/zlib/%.o: $(ZLIB_ROOT)/src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) -O2 -I$(ZLIB_ROOT) -c $< -o $@ 2> $(patsubst %.o,%.err,$@) || { echo "FAILED: $<"; tail -12 $(patsubst %.o,%.err,$@); false; }
+
+# system/core sources for libziparchive (no art compat header, no -DNDEBUG
+# surprises; they compile standalone)
+build/zip/%.o: $(ZIP_ROOT)/%.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(ZIPFLAGS) -c $< -o $@ 2> $(patsubst %.o,%.err,$@) || { echo "FAILED: $<"; tail -12 $(patsubst %.o,%.err,$@); false; }
+
+build/zip/%.o: $(ZIP_ROOT)/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(ZIPFLAGS) -c $< -o $@ 2> $(patsubst %.o,%.err,$@) || { echo "FAILED: $<"; tail -12 $(patsubst %.o,%.err,$@); false; }
 
 # sigchain (C++, art flags), libnativehelper (C++, art flags), libcutils (C)
 build/support/%.o: $(ART_ROOT)/%.cc

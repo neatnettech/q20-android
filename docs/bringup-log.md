@@ -457,3 +457,27 @@ The next gap on the ICU path is unrelated to quickening: java.util.regex
 needs its libjavacore natives (Pattern.compileImpl etc.), still deferred
 with the other framework natives.
 
+
+### 2026-10-01: A1 to A3, the Prober APK runs on device
+
+The APK ladder (docs/apk-milestones.md) started. A1: the host build works
+(aapt2 + javac + d8, all under gitignored toolchains/android-tools), producing
+q20prober.apk with classes.dex, resources.arsc and a launchable Activity. The
+app has a headless main() self test so early milestones run without a window.
+
+A2: the zip_archive stubs are gone. Real libziparchive (system/core) plus
+FileMap and libbase/file.cpp now compile into libart.so behind a small QNX
+shim (posix_madvise instead of madvise, DEFFILEMODE, O_NOFOLLOW, string.h).
+dex2oat reads classes.dex straight out of the APK on device.
+
+A3: dalvikvm loads the APK from the zip, defines Q20Prober (superclass
+android.app.Activity resolved from the full boot image), verifies and runs
+main() headless, interpreted and AOT (compiled oat, zero runtime verification
+of the app class). Both modes print the self test and exit 0.
+
+One layout fix came out of it: the full boot image at --base=0x70000000
+reserves heap through 0x784e5000, overlapping the loaded libraries
+(libgcc_s at 0x7800c000). All images now build at --base=0x6f000000, which
+keeps the reserved region (image + oat + non-moving space) below the
+libraries. Everything was rebuilt at the new base and stays green.
+
