@@ -38,3 +38,5 @@ runtime/art-qnx/dex2oat
 apps/q20prober/build/
 runtime/qnx-shims/screen-probe
 runtime/qnx-shims/qconnDoor.bin
+frameworks/native/
+external/

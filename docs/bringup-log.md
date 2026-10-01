@@ -569,3 +569,25 @@ PASS arithmetic, PASS regex matches, PASS regex replace, PASS SystemClock,
 PASS Log, PASS ICU PluralRules (forLocale + select with real data), and
 FAIL Bundle: BaseBundle needs Parcel, whose natives sit behind libbinder.
 That is the binder milestone, recorded as the next gap.
+
+### 2026-10-01: A5 complete, 7 of 7 headless checks pass on device
+
+The final A5 gap closed: Bundle now works. libjavacore gained the real AOSP
+userspace binder subset for local Parcel serialization:
+frameworks/native/libs/binder (Parcel.cpp, TextOutput, BufferedTextOutput,
+Debug, Static) plus android_os_Parcel JNI, libutils VectorImpl and RefBase,
+and external/safe-iop. The actual binder IPC layer is stubbed
+(src/binder_jni_stubs.cc: ProcessState, IPCThreadState, javaObjectForIBinder
+and friends return NULL), which is enough because Bundle only uses Parcel as
+a local buffer. The real driver client lands with the system-services stage,
+backed by the resmgr binder driver in the research repo.
+
+Port work behind it: bionic UAPI headers pulled in for linux/binder.h
+(linux/types.h shim, __packed and __u types in art_qnx_compat.h, SIZE_T_MAX),
+a gcc 9 Vector.h fix recorded as patch 0091, the Parcel local ref fix folded
+into patch 0090, and -fpermissive for the javacore build.
+
+On device, the full A5 board now reads: PASS arithmetic, regex matches,
+regex replace, SystemClock, Log, ICU PluralRules, Bundle. The facade charter
+in docs/apk-milestones.md governs from here: replace all BlackBerry legacy
+with plain Android, no Google services.

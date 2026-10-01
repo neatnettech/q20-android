@@ -1,0 +1,29 @@
+system/core Vector.h gcc 9 fix (q20-android)
+
+The legacy const Vector<T>::operator= cannot call VectorImpl's non-const
+operator= under gcc 9 (it was tolerated by the gcc 4.9 era toolchains).
+Drop the const overload, matching the later upstream AOSP fix.
+
+--- a/system/core/include/utils/Vector.h	2026-10-01 19:28:45
++++ b/system/core/include/utils/Vector.h	2026-10-01 19:28:45
+@@ -55,7 +55,6 @@
+     virtual                 ~Vector();
+ 
+     /*! copy operator */
+-            const Vector<TYPE>&     operator = (const Vector<TYPE>& rhs) const;
+             Vector<TYPE>&           operator = (const Vector<TYPE>& rhs);    
+ 
+             const Vector<TYPE>&     operator = (const SortedVector<TYPE>& rhs) const;
+@@ -241,8 +240,10 @@
+ }
+ 
+ template<class TYPE> inline
+-const Vector<TYPE>& Vector<TYPE>::operator = (const Vector<TYPE>& rhs) const {
+-    VectorImpl::operator = (static_cast<const VectorImpl&>(rhs));
++Vector<TYPE>& Vector<TYPE>::operator = (const Vector<TYPE>& rhs) {
++    // q20-android: the const overload cannot call VectorImpl's non-const
++    // operator= under gcc 9; this is the upstream fix from later AOSP.
++    VectorImpl::operator = (rhs);
+     return *this;
+ }
+ 

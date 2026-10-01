@@ -136,19 +136,26 @@ JAVACORE_OBJS += build/javacore/JNIHelp.o \
 JAVACORE_OBJS += build/javacore/loglib_qnx.o build/javacore/android_runtime_stubs.o
 JAVACORE_OBJS += build/javacore/android_util_Log.o build/javacore/android_os_SystemClock.o
 JAVACORE_OBJS += build/javacore/String8.o build/javacore/SharedBuffer.o \
-                 build/javacore/SystemClock.o build/javacore/Unicode.o \
+                 build/javacore/SystemClock.o build/javacore/Unicode.o build/javacore/VectorImpl.o \
                  build/javacore/String16.o build/javacore/Timers.o \
-                 build/javacore/Static.o
+                 build/javacore/Static.o build/javacore/RefBase.o
+JAVACORE_OBJS += build/javacore/Parcel.o \
+                 build/javacore/TextOutput.o build/javacore/BufferedTextOutput.o build/javacore/Debug.o \
+                 build/javacore/android_os_Parcel.o build/javacore/binder_jni_stubs.o build/javacore/binder_Static.o \
+                 build/javacore/safe_iop.o
 
 # framework/libcore JNI needs the QNX ICU (static: the device ships .49, the
 # sysroot .46)
 JAVACORE_EXTRA_LIBS := $(ICU_LIBS)/libicui18nS.a $(ICU_LIBS)/libicuucS.a \
                        $(ICU_LIBS)/libicudataS.a
 
-JCFLAGS := $(CXXFLAGS) -Wno-error=format -I$(LIBCORE_NATIVE) \
+JCFLAGS := $(CXXFLAGS) -fpermissive -Wno-error=format -I$(LIBCORE_NATIVE) \
            -I$(abspath ../../libcore/include) -I$(FWJNI) \
-           -I$(abspath compat) -I$(QNX_INC) -I$(QNX_INC)/unicode \
-           -I$(abspath ../../system/core/libcutils/include)
+           -I$(abspath compat) -I$(abspath ../../external/safe-iop/include) -I$(QNX_INC) -I$(QNX_INC)/unicode \
+           -I$(abspath ../../system/core/libcutils/include) \
+           -I$(abspath ../../frameworks/native/include) \
+           -I$(abspath ../../bionic/libc/kernel/uapi) \
+           -I$(abspath ../../bionic/libc/kernel/uapi/asm-arm)
 
 libjavacore.so: $(JAVACORE_OBJS)
 	@mkdir -p build
@@ -167,6 +174,22 @@ build/javacore/%.o: $(abspath ../../system/core/libutils)/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
+build/javacore/safe_iop.o: $(abspath ../../external/safe-iop)/src/safe_iop.c
+	@mkdir -p $(dir $@)
+	$(CC) -O2 -Du_int32_t=uint32_t -I$(abspath ../../external/safe-iop)/include -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+build/javacore/%.o: $(abspath ../../frameworks/native/libs/binder)/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+build/javacore/binder_Static.o: $(abspath ../../frameworks/native/libs/binder)/Static.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+build/javacore/binder_jni_stubs.o: src/binder_jni_stubs.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
 build/javacore/register.o: src/libjavacore_register.cc
 	@mkdir -p $(dir $@)
 	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
@@ -176,6 +199,10 @@ build/javacore/icu_stubs.o: src/icu_stubs.cc
 	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
 build/javacore/loglib_qnx.o: src/loglib_qnx.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+build/javacore/binder_stubs.o: src/binder_stubs.cc
 	@mkdir -p $(dir $@)
 	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 

@@ -85,3 +85,17 @@ ActivityManager: our own bootstrap calls ActivityThread-ish entry points
 directly. That is the point: measure how much of Android is actually
 reachable without system_server before deciding whether system_server is
 worth building.
+
+## Facade charter (owner decision, 2026-10-01)
+
+The end state is plain Android running the phone, replacing all BlackBerry
+legacy: the factory 4.3 runtime, every BB service that talks to dead
+servers, the installer and the token system. No Google services, ever.
+Whatever has to be reverse engineered will be; whatever connects to a dead
+BB server gets reimplemented on our side. The A ladder below is the facade:
+runtime first, then binder, then Activity machinery, then our own
+surfaceflinger equivalent and input, then a process model of our own.
+
+This means the display question (A7) is solved by becoming the presentation
+layer ourselves, not by passing through BB's app-launch path. The token wall
+is irrelevant to this plan.

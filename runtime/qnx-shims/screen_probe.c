@@ -14,6 +14,18 @@
 
 int main(int argc, char** argv) {
   setbuf(stdout, NULL);
+  // App runs have no terminal: mirror the output into a log file under the
+  // app's HOME so it can be read back over SSH.
+  const char* home = getenv("HOME");
+  if (home != NULL) {
+    char logpath[512];
+    snprintf(logpath, sizeof(logpath), "%s/probe.log", home);
+    FILE* lf = fopen(logpath, "w");
+    if (lf != NULL) {
+      fprintf(lf, "screen-probe started\n");
+      fclose(lf);
+    }
+  }
   screen_context_t ctx = 0;
 
   if (screen_create_context(&ctx, SCREEN_APPLICATION_CONTEXT) != 0) {
@@ -136,7 +148,7 @@ int main(int argc, char** argv) {
     screen_get_window_property_iv(win, SCREEN_PROPERTY_VISIBLE, &pvis);
     P("after post: position=%d,%d visible=%d\n", ppos[0], ppos[1], pvis);
   }
-  P("window visible for 12 seconds, look at the phone\n");
-  sleep(12);
+  P("window visible for 60 seconds, look at the phone\n");
+  sleep(60);
   return 0;
 }
