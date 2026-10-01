@@ -434,3 +434,26 @@ Known follow-ups, none blocking:
   "Not enough memory") when an oat is missing; the precompiled-oat path
   avoids it.
 * `Current thread not detached in Runtime shutdown` warning at exit, cosmetic.
+
+### 2026-10-01: quickened verifier fix, all boot classes verify
+
+Five boot classes failed verification in every build
+(PluralRulesLoader, PluralRules, MeasureFormat, CurrencyFormat,
+TimeUnitFormat), all for the same reason: the factory dexes are quickened,
+and the verifier hit an invoke-virtual-quick whose receiver register type
+has no class (provably null, in PluralRulesLoader.<clinit> at dex_pc 0xDD5:
+`invoke-virtual-quick {v3}, vtable@16`). The original method index is
+unrecoverable from a vtable index without a receiver class, but such an
+invoke throws NPE at runtime and never returns, so the verifier now accepts
+it conservatively (result register left unknown). The same treatment for
+quickened field accesses with a classless object register: a quick get sets
+the destination to Conflict.
+
+Patch 0040 carries the change. Confirmed on hardware: boot13 builds with zero
+verification failures, and at runtime PluralRules loads, verifies, and runs
+its <clinit> under -Xint.
+
+The next gap on the ICU path is unrelated to quickening: java.util.regex
+needs its libjavacore natives (Pattern.compileImpl etc.), still deferred
+with the other framework natives.
+

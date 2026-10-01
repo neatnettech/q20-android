@@ -20,8 +20,9 @@ at exit. Nothing is committed yet.
 |---|---|---|---|
 | M1 | Core boot image builds | `dex2oat` exits 0 and writes `out/arm/core.art` plus `core.oat` from the 4 core dex files | done, confirmed on device |
 | M2 | Hello World executes | device prints `Hello from ART 6 on QNX! gc ok` under the core image, both AOT and `-Xint` | done, confirmed on device |
-| M3 | Full boot image | same for the 13 dex boot image, `boot.art` plus `boot.oat` | next; just run `sh run_core.sh boot13` |
-| M4 | Land the work | patches 0010 to 0070, stubs, device runner, Dockerfile committed on `fix/gc-card-table`, PR to main, README and bringup log updated with the measured numbers | waiting on M3 |
+| M3 | Full boot image | same for the 13 dex boot image, `boot.art` plus `boot.oat` | done, confirmed on device |
+| M3.5 | Quickened verifier | all boot classes verify despite quickened opcodes (patch 0040), proven at runtime by loading android.icu.text.PluralRules | done, confirmed on device |
+| M4 | Land the work | patches 0010 to 0070, stubs, device runner, Dockerfile committed on `fix/gc-card-table`, PR to main, README and bringup log updated with the measured numbers | commit pushed, PR pending |
 | M5 | Platform hygiene | release build (`-O2`, stripped), fault handler stack scan bounded, verbose per method verifier logging behind a flag | after M4 |
 | M6 | APK path begins | real libziparchive, then the privilege and Screen probes that decide whether an unsigned process can own a window | after M4 |
 
@@ -159,9 +160,14 @@ M3.
   port has no patchoat.
 * `DexCache::GetResolvedField()` hides fields of erroneous classes. The prune
   loop must read raw array elements.
-* The factory dexes are quickened; the verifier rejects quickened opcodes
-  (`invoke-virtual-quick`), so two android.icu classes are erroneous and
-  unusable at runtime until the verifier learns quickened opcodes.
+* The factory dexes are quickened. The verifier accepts quickened invokes and
+  field accesses even when the receiver register has no class (patch 0040):
+  such accesses throw NPE at runtime, so they are safe to accept with an
+  unknown result. All boot classes verify now.
+* The next runtime gap is libjavacore natives for java.util.regex
+  (Pattern.compileImpl and friends); PluralRules.<clinit> reaches Pattern
+  compile and dies on the missing native. Same bucket as the crypto, zip and
+  expat natives, deferred to the framework milestone.
 * QNX thread stacks are far smaller than requested (attached threads observed
   at 128 KB), so the interpreter must stay at -O2; at -O0 its 17 KB frames
   overflow them.

@@ -69,7 +69,9 @@ then the quickened verifier follow-up and the fork/execv dex2oat fallback.
 
 * `dex2oat` builds and runs on the Q20: hello.dex compiled to hello.oat
   on-device
-* Quickened factory dex accepted by the compiler (patch 0040)
+* Quickened factory dex accepted by the verifier and compiler (patch 0040):
+  all boot classes verify, including the android.icu classes with quickened
+  invokes on provably null receivers
 * The compile phase SIGSEGV is root caused (card table clearing wiped the
   heap) and fixed by patch 0060, confirmed on hardware
 * Core and full boot images build on device, both exit 0
