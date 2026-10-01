@@ -24,10 +24,12 @@ at exit. Nothing is committed yet.
 | M3.5 | Quickened verifier | all boot classes verify despite quickened opcodes (patch 0040), proven at runtime by loading android.icu.text.PluralRules | done, confirmed on device |
 | M4 | Land the work | patches 0010 to 0070, stubs, device runner, Dockerfile committed on `fix/gc-card-table`, PR to main, README and bringup log updated with the measured numbers | commit pushed, PR pending |
 | M5 | Platform hygiene | release build (`-O2`, stripped), fault handler stack scan bounded, verbose per method verifier logging behind a flag | after M4 |
-| M6 | APK path begins | real libziparchive, then the privilege and Screen probes that decide whether an unsigned process can own a window | after M4 |
+| M6 | APK path | replaced by the concrete ladder in `docs/apk-milestones.md`: the Q20 Prober APK, milestones A1 to A10 | start with A1 |
 
-M3 and M4 are the whole job right now. Everything beyond M4 is scoped in the
-plan file at `~/.claude/plans/i-was-looking-into-virtual-jellyfish.md`.
+M3 and M4 are the whole job right now, then the A ladder. Everything beyond
+M4 is scoped in the plan file at
+`~/.claude/plans/i-was-looking-into-virtual-jellyfish.md` and in
+`docs/apk-milestones.md`.
 
 ## What fixed M1: erroneous class fields were never pruned
 
