@@ -36,3 +36,4 @@ runtime/art-qnx/dex2oat
 # opencode agent state
 .omc/
 apps/q20prober/build/
+runtime/qnx-shims/screen-probe

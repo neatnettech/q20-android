@@ -481,3 +481,29 @@ reserves heap through 0x784e5000, overlapping the loaded libraries
 keeps the reserved region (image + oat + non-moving space) below the
 libraries. Everything was rebuilt at the new base and stays green.
 
+
+### 2026-10-01: A4 Screen probe: windows yes, compositing no (bare process)
+
+The probe (runtime/qnx-shims/screen_probe.c) links against the device's own
+/base/usr/lib/libscreen.so (the 6.5 SDK lib statically linked speaks an
+incompatible protocol and crashes on array properties; the SDK arrays are
+caller-allocated, sized by SCREEN_PROPERTY_DISPLAY_COUNT).
+
+Findings for an unsigned dev-mode SSH process:
+
+* Context, window, window group, and window buffers all create successfully.
+* The window buffer IS CPU-mappable: 720x720 RGBA8888, stride 2944, real
+  pointer, filled and posted, post and flush return success.
+* Display[0] is the INX 720x720 panel, attached and powered on.
+* After post the window reports position=60,60 visible=1, zorder 0x7fffffff.
+* Nothing ever renders to the phone screen.
+
+So the Screen server accepts everything from an unprivileged process but the
+compositor never draws its windows. The likely reason: BB10 composites only
+windows of registered apps (launched through the app framework); a raw SSH
+process is not an app. The A7 route therefore needs the app-launch path (the
+BAR/app registration the factory Android runtime used), not a bare process.
+
+Next probe for that: package the same drawing code as a dev-mode BAR app and
+launch it through the launcher; if it renders, Android app processes get the
+same treatment and A7 stays open for real.

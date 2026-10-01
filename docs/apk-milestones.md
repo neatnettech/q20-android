@@ -35,7 +35,7 @@ cheap headless check before it needs the display.
 | APK parsed and classes.dex loaded on QNX (zip + FileMap) | A2, A3 |
 | Our verifier accepts our own dex, quickened or not | A3 |
 | App dex runs AOT (dex2oat reads the APK) and interpreted | A3 |
-| An unsigned QNX process can own a screen | A4 |
+| An unsigned QNX process can own a screen | A4 (API yes, compositing no for bare processes) |
 | libandroid_runtime JNI registers and runs on QNX | A5 |
 | libcore regex natives (deferred so far) work; ICU classes run | A5 |
 | AssetManager reads our resources.arsc, getString works | A6 |
@@ -54,7 +54,7 @@ cheap headless check before it needs the display.
 | A1 | Host tooling | aapt2 + javac + d8 produce q20prober.apk with classes.dex, resources.arsc, manifest | done |
 | A2 | Real libziparchive | system/core libziparchive + FileMap built into the runtime; dex2oat reads classes.dex out of the APK on device | done |
 | A3 | Headless app | `dalvikvm -cp q20prober.apk Q20Prober` runs main() self test, prints, exits 0; AOT via a dex2oat pass over the APK as well | done, both modes |
-| A4 | Screen probe | an unsigned process can (or cannot) create a QNX Screen window and get a surface to draw into; result decides A7's route | next |
+| A4 | Screen probe | window, group, CPU-mappable 720x720 buffer, post and flush all succeed from an unsigned SSH process, but nothing composites: BB10 draws only registered app windows. A7 needs the app-launch path (dev-mode BAR), not a bare process | done, see docs/bringup-log.md |
 | A5 | Framework slice | app uses android.util.Log, android.os.Bundle/SystemClock, java.util.regex, android.icu.text.PluralRules for real; libandroid_runtime subset + regex natives land |
 | A6 | Activity headless | Activity.onCreate runs against a minimal context, resources resolve via AssetManager, a View tree measures and lays out; no window yet |
 | A7 | Window | the app's first pixels on the Q20 display, driven by A4's route |
