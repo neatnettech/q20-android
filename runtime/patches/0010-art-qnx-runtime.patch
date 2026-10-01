@@ -1,7 +1,7 @@
 QNX port of ART 6.0.1_r81 runtime (q20-android research)
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/runtime.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/runtime.cc	2026-09-23 06:46:02
+--- a/art/runtime/runtime.cc
++++ b/art/runtime/runtime.cc
 @@ -382,6 +382,9 @@
    syscall(__NR_tgkill, getpid(), GetTid(), SIGABRT);
    // TODO: LLVM installs it's own SIGABRT handler so exit to be safe... Can we disable that in LLVM?
@@ -30,8 +30,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
      default:
        // Keep the defaults.
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/base/mutex.h	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/base/mutex.h	2026-09-23 06:36:53
+--- a/art/runtime/base/mutex.h
++++ b/art/runtime/base/mutex.h
 @@ -28,7 +28,7 @@
  #include "base/macros.h"
  #include "globals.h"
@@ -42,8 +42,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
  #else
  #define ART_USE_FUTEXES 1
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/utils.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/utils.cc	2026-09-23 07:04:20
+--- a/art/runtime/utils.cc
++++ b/art/runtime/utils.cc
 @@ -61,7 +61,7 @@
    uint64_t owner;
    CHECK_PTHREAD_CALL(pthread_threadid_np, (nullptr, &owner), __FUNCTION__);  // Requires Mac OS 10.6
@@ -53,22 +53,76 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
    return gettid();
  #else
    return syscall(__NR_gettid);
-@@ -79,7 +79,13 @@
+@@ -79,7 +79,67 @@
  }
  
  void GetThreadStack(pthread_t thread, void** stack_base, size_t* stack_size, size_t* guard_size) {
 -#if defined(__APPLE__)
 +#if defined(__QNXNTO__)
-+  // QNX has no pthread_getattr_np; querying another thread's stack is not
-+  // portable here. Diagnostics only in our build (implicit SO checks off).
++  // QNX has no pthread_getattr_np; parse /proc/self/mappings for the
++  // {stack} pages. Lines look like:
++  //   0x10100000,<flags...>,{stack}
++  // Every thread's stack pages form a contiguous run, so pick the run that
++  // contains a local address: merging runs (first..last_end) would give every
++  // thread the lowest thread's stack base, breaking interpreter overflow
++  // checks on the others (q20-android: the finalizer died on its guard page
++  // because its stack_end pointed at the main thread's stack).
++  (void)thread;
 +  *stack_base = nullptr;
 +  *stack_size = 0;
 +  *guard_size = 0;
++  int probe;
++  const uintptr_t target = reinterpret_cast<uintptr_t>(&probe);
++  FILE* f = fopen("/proc/self/mappings", "r");
++  if (f != nullptr) {
++    char line[512];
++    uintptr_t run_start = 0;
++    uintptr_t run_end = 0;
++    uintptr_t prev = 0;
++    uintptr_t merged_first = 0;
++    uintptr_t merged_last = 0;
++    bool have_merged = false;
++    while (fgets(line, sizeof(line), f) != nullptr) {
++      if (strstr(line, "{stack}") == nullptr) {
++        continue;
++      }
++      uintptr_t addr = 0;
++      if (sscanf(line, "0x%x", &addr) != 1) {
++        continue;
++      }
++      if (addr != prev + kPageSize) {
++        // Run ended: check it before starting the next one.
++        if (run_start != 0 && run_start <= target && target < run_end) {
++          *stack_base = reinterpret_cast<void*>(run_start);
++          *stack_size = static_cast<size_t>(run_end - run_start);
++          fclose(f);
++          return;
++        }
++        run_start = addr;
++      }
++      run_end = addr + kPageSize;
++      prev = addr;
++      if (!have_merged) {
++        merged_first = addr;
++        have_merged = true;
++      }
++      merged_last = run_end;
++    }
++    fclose(f);
++    if (run_start != 0 && run_start <= target && target < run_end) {
++      *stack_base = reinterpret_cast<void*>(run_start);
++      *stack_size = static_cast<size_t>(run_end - run_start);
++    } else if (have_merged) {
++      // Fallback if the probe missed: merged range of all stack pages.
++      *stack_base = reinterpret_cast<void*>(merged_first);
++      *stack_size = static_cast<size_t>(merged_last - merged_first);
++    }
++  }
 +#elif defined(__APPLE__)
    *stack_size = pthread_get_stacksize_np(thread);
    void* stack_addr = pthread_get_stackaddr_np(thread);
  
-@@ -966,7 +972,7 @@
+@@ -966,7 +998,7 @@
    } else {
      s = thread_name + len - 15;
    }
@@ -78,8 +132,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
    char buf[16];       // MAX_TASK_COMM_LEN=16 is hard-coded in the kernel.
    strncpy(buf, s, sizeof(buf)-1);
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/fault_handler.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/fault_handler.cc	2026-09-23 07:04:25
+--- a/art/runtime/fault_handler.cc
++++ b/art/runtime/fault_handler.cc
 @@ -98,7 +98,7 @@
    action->sa_sigaction = art_fault_handler;
    sigemptyset(&action->sa_mask);
@@ -99,8 +153,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
  #endif
  
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/oat_file_assistant.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/oat_file_assistant.cc	2026-09-23 07:13:26
+--- a/art/runtime/oat_file_assistant.cc
++++ b/art/runtime/oat_file_assistant.cc
 @@ -583,6 +583,17 @@
  
  #ifdef __linux__
@@ -120,8 +174,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
    off_t len;
    if (sendfile(dst.get(), src.get(), 0, &len, nullptr, 0) == -1) {
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/native_bridge_art_interface.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/native_bridge_art_interface.cc	2026-09-23 06:50:33
+--- a/art/runtime/native_bridge_art_interface.cc
++++ b/art/runtime/native_bridge_art_interface.cc
 @@ -112,7 +112,7 @@
  
  void PreInitializeNativeBridge(std::string dir) {
@@ -132,8 +186,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
      LOG(WARNING) << "Could not create mount namespace.";
    }
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/monitor_pool.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/monitor_pool.cc	2026-09-23 07:04:16
+--- a/art/runtime/monitor_pool.cc
++++ b/art/runtime/monitor_pool.cc
 @@ -27,6 +27,8 @@
    class Object;
  }  // namespace mirror
@@ -151,8 +205,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
 +
  }  // namespace art
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/elf.h	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/elf.h	2026-09-23 07:01:29
+--- a/art/runtime/elf.h
++++ b/art/runtime/elf.h
 @@ -21,6 +21,14 @@
  #ifndef ART_RUNTIME_ELF_H_
  #define ART_RUNTIME_ELF_H_
@@ -178,8 +232,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
    typedef Elf32_Addr Addr;
    typedef Elf32_Off Off;
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/arch/arm/fault_handler_arm.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/arch/arm/fault_handler_arm.cc	2026-09-23 07:38:08
+--- a/art/runtime/arch/arm/fault_handler_arm.cc
++++ b/art/runtime/arch/arm/fault_handler_arm.cc
 @@ -54,13 +54,22 @@
    // require switching modes in the stub - incurring an unwanted relocation.
  
@@ -288,8 +342,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
    // The kernel will now return to the address in sc->arm_pc.
    return true;
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/arch/arm/instruction_set_features_arm.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/arch/arm/instruction_set_features_arm.cc	2026-09-23 07:21:10
+--- a/art/runtime/arch/arm/instruction_set_features_arm.cc
++++ b/art/runtime/arch/arm/instruction_set_features_arm.cc
 @@ -190,9 +190,18 @@
                                     void* data) {
  #if defined(__arm__)
@@ -310,8 +364,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
    UNUSED(data);
  #endif
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/gc/space/image_space.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/gc/space/image_space.cc	2026-09-23 07:38:16
+--- a/art/runtime/gc/space/image_space.cc
++++ b/art/runtime/gc/space/image_space.cc
 @@ -102,11 +102,24 @@
      if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
        continue;
@@ -342,8 +396,8 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
        continue;
      }
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/runtime/jdwp/jdwp_adb.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/runtime/jdwp/jdwp_adb.cc	2026-09-23 07:40:49
+--- a/art/runtime/jdwp/jdwp_adb.cc
++++ b/art/runtime/jdwp/jdwp_adb.cc
 @@ -137,7 +137,12 @@
    char dummy = '!';
    union {
@@ -357,3 +411,17 @@ QNX port of ART 6.0.1_r81 runtime (q20-android research)
    } cm_un;
  
    iovec iov;
+
+--- a/art/sigchainlib/sigchain.cc
++++ b/art/sigchainlib/sigchain.cc
+@@ -341,7 +341,7 @@
+     tmp.sa_sigaction = sigchainlib_managed_handler_sigaction;
+     sigemptyset(&tmp.sa_mask);
+     tmp.sa_flags = SA_SIGINFO | SA_ONSTACK;
+-#if !defined(__APPLE__) && !defined(__mips__)
++#if !defined(__APPLE__) && !defined(__mips__) && !defined(__QNXNTO__)
+     tmp.sa_restorer = nullptr;
+ #endif
+     user_sigactions[signal].Claim(tmp);
+
+

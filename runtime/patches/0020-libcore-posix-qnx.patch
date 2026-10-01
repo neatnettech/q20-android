@@ -1,6 +1,7 @@
 From q20-android research: QNX fixes for libcore Posix.cpp
---- a/luni/src/main/native/libcore_io_Posix.cpp
-+++ b/luni/src/main/native/libcore_io_Posix.cpp
+
+--- a/libcore/luni/src/main/native/libcore_io_Posix.cpp
++++ b/libcore/luni/src/main/native/libcore_io_Posix.cpp
 @@ -586,6 +586,12 @@
  public:
      Passwd(JNIEnv* env) : mEnv(env), mResult(NULL) {
@@ -23,3 +24,48 @@ From q20-android research: QNX fixes for libcore Posix.cpp
    return TEMP_FAILURE_RETRY(gettid());
  #else
    return syscall(__NR_gettid);
+
+--- a/libcore/luni/src/main/native/IcuUtilities.h
++++ b/libcore/luni/src/main/native/IcuUtilities.h
+@@ -18,7 +18,7 @@
+ #define ICU_UTILITIES_H_included
+ 
+ #include "jni.h"
+-#include "ustrenum.h" // For UStringEnumeration.
++#include "unicode/strenum.h"  // icu::StringEnumeration (ustrenum.h is ICU >= 49; QNX port uses 46)
+ #include "unicode/utypes.h" // For UErrorCode.
+ 
+ extern jobjectArray fromStringEnumeration(JNIEnv* env, UErrorCode& status, const char* provider, icu::StringEnumeration*);
+
+
+--- a/libcore/luni/src/main/native/java_util_regex_Matcher.cpp
++++ b/libcore/luni/src/main/native/java_util_regex_Matcher.cpp
+@@ -57,9 +57,10 @@
+ 
+         if (reset) {
+             mMatcher->reset(mUText);
+-        } else {
+-            mMatcher->refreshInputText(mUText, mStatus);
+         }
++        // q20-android: ICU 46 has no refreshInputText (added in ICU 49), and
++        // the port's GC is non-moving, so the java char[] never relocates and
++        // the existing UText stays valid across calls. Nothing to do here.
+     }
+ 
+     MatcherAccessor(JNIEnv* env, jlong address) {
+
+
+--- a/libcore/luni/src/main/native/IcuUtilities.cpp
++++ b/libcore/luni/src/main/native/IcuUtilities.cpp
+@@ -60,8 +60,8 @@
+     exceptionClass = "java/lang/ArrayIndexOutOfBoundsException";
+   } else if (error == U_UNSUPPORTED_ERROR) {
+     exceptionClass = "java/lang/UnsupportedOperationException";
+-  } else if (error == U_FORMAT_INEXACT_ERROR) {
+-    exceptionClass = "java/lang/ArithmeticException";
++  // q20-android: U_FORMAT_INEXACT_ERROR does not exist in ICU 46; the format
++  // error case is dropped from the mapping (falls through to RuntimeException).
+   }
+   jniThrowExceptionFmt(env, exceptionClass, "%s failed: %s", function, u_errorName(error));
+   return true;
+

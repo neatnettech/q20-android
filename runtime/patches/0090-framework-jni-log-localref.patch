@@ -1,0 +1,35 @@
+Framework JNI fixes for QNX (q20-android)
+
+ART on QNX checks for empty JNI local reference tables at thread exit;
+register_android_util_Log and register_android_os_Parcel leaked the class
+local from FindClassOrDie, which aborted the runtime at shutdown. Delete the
+local ref after use.
+
+--- a/frameworks/base/core/jni/android_util_Log.cpp	2026-10-01 18:09:13
++++ b/frameworks/base/core/jni/android_util_Log.cpp	2026-10-01 18:09:13
+@@ -130,6 +130,7 @@
+     levels.error = env->GetStaticIntField(clazz, GetStaticFieldIDOrDie(env, clazz, "ERROR", "I"));
+     levels.assert = env->GetStaticIntField(clazz, GetStaticFieldIDOrDie(env, clazz, "ASSERT", "I"));
+ 
++    env->DeleteLocalRef(clazz);  // q20-android: keep local ref tables clean
+     return RegisterMethodsOrDie(env, "android/util/Log", gMethods, NELEM(gMethods));
+ }
+ 
+--- a/frameworks/base/core/jni/android_os_Parcel.cpp	2026-10-01 19:28:52
++++ b/frameworks/base/core/jni/android_os_Parcel.cpp	2026-10-01 19:28:52
+@@ -784,12 +784,14 @@
+ int register_android_os_Parcel(JNIEnv* env)
+ {
+     jclass clazz = FindClassOrDie(env, kParcelPathName);
++    // q20-android: keep JNI local ref tables clean for the runtime's exit check
+ 
+     gParcelOffsets.clazz = MakeGlobalRefOrDie(env, clazz);
+     gParcelOffsets.mNativePtr = GetFieldIDOrDie(env, clazz, "mNativePtr", "J");
+     gParcelOffsets.obtain = GetStaticMethodIDOrDie(env, clazz, "obtain", "()Landroid/os/Parcel;");
+     gParcelOffsets.recycle = GetMethodIDOrDie(env, clazz, "recycle", "()V");
+ 
++    env->DeleteLocalRef(clazz);  // q20-android: no leaked local refs
+     return RegisterMethodsOrDie(env, kParcelPathName, gParcelMethods, NELEM(gParcelMethods));
+ }
+ 
+

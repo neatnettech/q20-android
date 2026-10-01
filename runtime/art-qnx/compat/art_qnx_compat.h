@@ -1,3 +1,32 @@
+
+/* the bionic UAPI headers use bare __packed on struct tails */
+#ifndef __packed
+#define __packed __attribute__((__packed__))
+#endif
+
+/* kernel-style fixed width types for the bionic UAPI headers (binder.h) */
+
+#ifndef __u8
+typedef unsigned char __u8;
+#endif
+#ifndef __u16
+typedef unsigned short __u16;
+#endif
+#ifndef __s8
+typedef signed char __s8;
+#endif
+#ifndef __s16
+typedef short __s16;
+#endif
+#ifndef __u32
+typedef unsigned int __u32;
+#endif
+#ifndef __u64
+typedef unsigned long long __u64;
+#endif
+#ifndef __s32
+typedef int __s32;
+#endif
 /*
  * QNX port compatibility header, force-included in every ART TU
  * (-include art_qnx_compat.h). AOSP headers rely on bionic's permissive
@@ -346,3 +375,14 @@ static inline int madvise(void *addr, size_t len, int advice)
 }
 
 #endif /* ART_QNX_COMPAT_H */
+
+/* POSIX path separator for libutils String8 (undefined in M's public headers) */
+#ifndef OS_PATH_SEPARATOR
+#define OS_PATH_SEPARATOR '/'
+#endif
+
+/* kernel-style size max used by libbinder Parcel.cpp (bionic limits.h) */
+#ifndef SIZE_T_MAX
+#include <limits.h>
+#define SIZE_T_MAX ULONG_MAX
+#endif

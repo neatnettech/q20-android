@@ -1,7 +1,19 @@
 Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-android research)
 
---- ./method_verifier.cc	2026-09-25 16:22:28
-+++ /Users/piotrpestka/github/q20-android/art/runtime/verifier/method_verifier.cc	2026-09-25 15:23:28
+The factory boot dexes are quickened (invoke-virtual-quick and the iget/iput
+quick opcodes). The verifier cannot recover the original method or field
+index from a quickened instruction when the receiver register type has no
+class (provably null, unresolved, or conflict): the method index is replaced
+by a vtable index and the field index by an offset. Such an access throws NPE
+at runtime and never completes normally, so accept it conservatively instead
+of rejecting the class: the invoke result is left unknown, and a quick get
+sets the destination register to Conflict. Without this, classes containing
+quickened accesses on a provably null receiver (e.g.
+android.icu.impl.PluralRulesLoader.<clinit> and four android.icu.text format
+classes) fail verification both in dex2oat and at runtime.
+
+--- a/art/runtime/verifier/method_verifier.cc
++++ b/art/runtime/verifier/method_verifier.cc
 @@ -903,7 +903,10 @@
        result = false;
        break;
@@ -14,7 +26,7 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
      Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "opcode only expected at runtime " << inst->Name();
      result = false;
    }
-@@ -3573,7 +3576,7 @@
+@@ -3573,11 +3576,19 @@
  }
  
  ArtMethod* MethodVerifier::VerifyInvokeVirtualQuickArgs(const Instruction* inst, bool is_range) {
@@ -23,7 +35,19 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
        << PrettyMethod(dex_method_idx_, *dex_file_, true) << "@" << work_insn_idx_;
  
    ArtMethod* res_method = GetQuickInvokedMethod(inst, work_line_.get(), is_range, false);
-@@ -4098,7 +4101,7 @@
+   if (res_method == nullptr) {
++    if (!have_pending_hard_failure_) {
++      // The receiver register has no class (null, unresolved, or conflict):
++      // the original method index is unrecoverable from a quickened invoke,
++      // but such an invoke throws NPE at runtime and never returns normally
++      // (q20-android: the boot dexes are quickened and we must verify them).
++      // Accept conservatively; the caller leaves the result register unknown.
++      return nullptr;
++    }
+     Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Cannot infer method from " << inst->Name();
+     return nullptr;
+   }
+@@ -4098,10 +4109,20 @@
  template <MethodVerifier::FieldAccessType kAccType>
  void MethodVerifier::VerifyQuickFieldAccess(const Instruction* inst, const RegType& insn_type,
                                              bool is_primitive) {
@@ -32,9 +56,23 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
  
    ArtField* field = GetQuickFieldAccess(inst, work_line_.get());
    if (field == nullptr) {
++    if (!have_pending_hard_failure_) {
++      // The object register has no class (null, unresolved, or conflict): the
++      // field offset is unrecoverable from a quickened access, and the access
++      // throws NPE at runtime (q20-android: verifying quickened boot dexes).
++      // Accept conservatively.
++      if (kAccType == FieldAccessType::kAccGet) {
++        work_line_->SetRegisterType(this, inst->VRegA_22c(), reg_types_.Conflict());
++      }
++      return;
++    }
+     Fail(VERIFY_ERROR_BAD_CLASS_HARD) << "Cannot infer field from " << inst->Name();
+     return;
+   }
 
---- ./verified_method.cc	2026-09-25 16:22:28
-+++ /Users/piotrpestka/github/q20-android/art/compiler/dex/verified_method.cc	2026-09-23 19:47:22
+
+--- a/art/compiler/dex/verified_method.cc
++++ b/art/compiler/dex/verified_method.cc
 @@ -56,8 +56,9 @@
        verified_method->GenerateDevirtMap(method_verifier);
      }
@@ -56,8 +94,8 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
    return (it != dequicken_map_.end()) ? &it->second : nullptr;
  }
 
---- ./compiler_driver.cc	2026-09-25 16:22:28
-+++ /Users/piotrpestka/github/q20-android/art/compiler/driver/compiler_driver.cc	2026-09-26 11:09:37
+--- a/art/compiler/driver/compiler_driver.cc
++++ b/art/compiler/driver/compiler_driver.cc
 @@ -1934,8 +1934,12 @@
      // It is *very* problematic if there are verification errors in the boot classpath. For example,
      // we rely on things working OK without verification when the decryption dialog is brought up.
@@ -73,22 +111,3 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
    }
    soa.Self()->AssertNoPendingException();
  }
-@@ -2116,10 +2120,18 @@
-     CHECK(dex_file != nullptr);
-     InitializeClasses(class_loader, *dex_file, dex_files, thread_pool, timings);
-   }
-+#if !defined(__QNXNTO__)
-   if (IsImage()) {
-     // Prune garbage objects created during aborted transactions.
-     Runtime::Current()->GetHeap()->CollectGarbage(true);
-+  }
-+#else
-+  // QNX port: skip the prune GC; the first full GC crashes during
-+  // marking (see docs/bringup-log.md). Re-enable when the GC bug is fixed.
-+  if (IsImage()) {
-+    LOG(WARNING) << "QNX: skipping post-initialize prune GC";
-   }
-+#endif
- }
- 
- void CompilerDriver::Compile(jobject class_loader, const std::vector<const DexFile*>& dex_files,

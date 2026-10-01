@@ -32,3 +32,11 @@ runtime/art6-deploy/
 zlib/
 runtime/qnx-shims/oatdlopen-probe
 runtime/art-qnx/dex2oat
+
+# opencode agent state
+.omc/
+apps/q20prober/build/
+runtime/qnx-shims/screen-probe
+runtime/qnx-shims/qconnDoor.bin
+frameworks/native/
+external/

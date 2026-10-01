@@ -1,6 +1,9 @@
 services:
   aosp6:
-    image: q20-aosp6:trusty
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: q20-aosp6:24.04
     platform: linux/amd64
     volumes:
       - .:/workspace/project
