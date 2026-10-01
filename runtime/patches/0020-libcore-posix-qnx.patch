@@ -1,6 +1,7 @@
 From q20-android research: QNX fixes for libcore Posix.cpp
---- a/luni/src/main/native/libcore_io_Posix.cpp
-+++ b/luni/src/main/native/libcore_io_Posix.cpp
+
+--- a/libcore/luni/src/main/native/libcore_io_Posix.cpp
++++ b/libcore/luni/src/main/native/libcore_io_Posix.cpp
 @@ -586,6 +586,12 @@
  public:
      Passwd(JNIEnv* env) : mEnv(env), mResult(NULL) {

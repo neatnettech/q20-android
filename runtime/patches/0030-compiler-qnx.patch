@@ -1,7 +1,7 @@
 QNX port of the ART 6.0.1 Quick compiler (q20-android research)
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/compiler/utils/assembler.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/compiler/utils/assembler.cc	2026-09-23 17:53:53
+--- a/art/compiler/utils/assembler.cc
++++ b/art/compiler/utils/assembler.cc
 @@ -21,11 +21,13 @@
  
  #include "arm/assembler_arm32.h"
@@ -33,8 +33,8 @@ QNX port of the ART 6.0.1 Quick compiler (q20-android research)
        LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
        return nullptr;
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/compiler/trampolines/trampoline_compiler.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/compiler/trampolines/trampoline_compiler.cc	2026-09-23 17:57:44
+--- a/art/compiler/trampolines/trampoline_compiler.cc
++++ b/art/compiler/trampolines/trampoline_compiler.cc
 @@ -18,11 +18,13 @@
  
  #include "jni_env_ext.h"
@@ -135,8 +135,8 @@ QNX port of the ART 6.0.1 Quick compiler (q20-android research)
        LOG(FATAL) << "Unexpected InstructionSet: " << isa;
        UNREACHABLE();
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/compiler/dex/quick/quick_compiler.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/compiler/dex/quick/quick_compiler.cc	2026-09-23 18:03:53
+--- a/art/compiler/dex/quick/quick_compiler.cc
++++ b/art/compiler/dex/quick/quick_compiler.cc
 @@ -804,6 +804,7 @@
      case kThumb2:
        mir_to_lir = ArmCodeGenerator(cu, cu->mir_graph.get(), &cu->arena);
@@ -154,8 +154,8 @@ QNX port of the ART 6.0.1 Quick compiler (q20-android research)
        LOG(FATAL) << "Unexpected instruction set: " << cu->instruction_set;
    }
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/compiler/jni/quick/calling_convention.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/compiler/jni/quick/calling_convention.cc	2026-09-23 18:08:03
+--- a/art/compiler/jni/quick/calling_convention.cc
++++ b/art/compiler/jni/quick/calling_convention.cc
 @@ -34,6 +34,7 @@
      case kArm:
      case kThumb2:
@@ -189,8 +189,8 @@ QNX port of the ART 6.0.1 Quick compiler (q20-android research)
        LOG(FATAL) << "Unknown InstructionSet: " << instruction_set;
        return nullptr;
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/compiler/linker/relative_patcher.cc	2026-09-23 07:47:04
-+++ /Users/piotrpestka/github/q20-android/art/compiler/linker/relative_patcher.cc	2026-09-23 17:58:30
+--- a/art/compiler/linker/relative_patcher.cc
++++ b/art/compiler/linker/relative_patcher.cc
 @@ -65,17 +65,19 @@
    };
  
@@ -215,8 +215,8 @@ QNX port of the ART 6.0.1 Quick compiler (q20-android research)
        return std::unique_ptr<RelativePatcher>(new RelativePatcherNone);
    }
 
---- /var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/art-pristine/compiler/compiler.cc	2026-09-23 07:47:03
-+++ /Users/piotrpestka/github/q20-android/art/compiler/compiler.cc	2026-09-23 18:07:22
+--- a/art/compiler/compiler.cc
++++ b/art/compiler/compiler.cc
 @@ -30,7 +30,12 @@
        return CreateQuickCompiler(driver);
  

@@ -1,0 +1,6 @@
+#!/bin/sh
+# q20put <local-file> <remote-path>. scp does not work against this sshd.
+# For whole trees: tar -C dir -cf - . | q20ssh 'cd dest && tar -xf -'
+[ $# -eq 2 ] || { echo "usage: q20put <local> <remote>"; exit 2; }
+here=$(cd "$(dirname "$0")" && pwd)
+cat "$1" | "$here/q20ssh" "cat > $2"

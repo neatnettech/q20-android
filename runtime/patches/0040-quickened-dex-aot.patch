@@ -1,7 +1,7 @@
 Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-android research)
 
---- ./method_verifier.cc	2026-09-25 16:22:28
-+++ /Users/piotrpestka/github/q20-android/art/runtime/verifier/method_verifier.cc	2026-09-25 15:23:28
+--- a/art/runtime/verifier/method_verifier.cc
++++ b/art/runtime/verifier/method_verifier.cc
 @@ -903,7 +903,10 @@
        result = false;
        break;
@@ -33,8 +33,8 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
    ArtField* field = GetQuickFieldAccess(inst, work_line_.get());
    if (field == nullptr) {
 
---- ./verified_method.cc	2026-09-25 16:22:28
-+++ /Users/piotrpestka/github/q20-android/art/compiler/dex/verified_method.cc	2026-09-23 19:47:22
+--- a/art/compiler/dex/verified_method.cc
++++ b/art/compiler/dex/verified_method.cc
 @@ -56,8 +56,9 @@
        verified_method->GenerateDevirtMap(method_verifier);
      }
@@ -56,8 +56,8 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
    return (it != dequicken_map_.end()) ? &it->second : nullptr;
  }
 
---- ./compiler_driver.cc	2026-09-25 16:22:28
-+++ /Users/piotrpestka/github/q20-android/art/compiler/driver/compiler_driver.cc	2026-09-26 11:09:37
+--- a/art/compiler/driver/compiler_driver.cc
++++ b/art/compiler/driver/compiler_driver.cc
 @@ -1934,8 +1934,12 @@
      // It is *very* problematic if there are verification errors in the boot classpath. For example,
      // we rely on things working OK without verification when the decryption dialog is brought up.
@@ -73,22 +73,3 @@ Accept quickened dex input in dex2oat for the QNX boot image rebuild (q20-androi
    }
    soa.Self()->AssertNoPendingException();
  }
-@@ -2116,10 +2120,18 @@
-     CHECK(dex_file != nullptr);
-     InitializeClasses(class_loader, *dex_file, dex_files, thread_pool, timings);
-   }
-+#if !defined(__QNXNTO__)
-   if (IsImage()) {
-     // Prune garbage objects created during aborted transactions.
-     Runtime::Current()->GetHeap()->CollectGarbage(true);
-+  }
-+#else
-+  // QNX port: skip the prune GC; the first full GC crashes during
-+  // marking (see docs/bringup-log.md). Re-enable when the GC bug is fixed.
-+  if (IsImage()) {
-+    LOG(WARNING) << "QNX: skipping post-initialize prune GC";
-   }
-+#endif
- }
- 
- void CompilerDriver::Compile(jobject class_loader, const std::vector<const DexFile*>& dex_files,

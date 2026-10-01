@@ -10,6 +10,7 @@
 
 #include "monitor.h"
 #include "runtime.h"
+#include "thread-inl.h"
 
 extern "C" char _btext[];
 
@@ -25,6 +26,10 @@ static void HandleUnexpectedSignal(int signal_number, siginfo_t* info, void* raw
           reinterpret_cast<void*>(sc.arm_pc),
           reinterpret_cast<void*>(sc.arm_lr));
   fprintf(stderr, "art: anchor btext=%p\n", _btext);
+  // r9 holds Thread* in managed code; compare it with the TLS value.
+  fprintf(stderr, "art: regs r8=%08lx r9=%08lx r10=%08lx fp=%08lx ip=%08lx cpsr=%08lx self=%p\n",
+          sc.arm_r8, sc.arm_r9, sc.arm_r10, sc.arm_fp, sc.arm_ip, sc.arm_cpsr,
+          Thread::Current());
   fprintf(stderr, "art: regs r0=%08lx r1=%08lx r2=%08lx r3=%08lx r4=%08lx r5=%08lx r6=%08lx r7=%08lx sp=%08lx\n",
           sc.arm_r0, sc.arm_r1, sc.arm_r2, sc.arm_r3, sc.arm_r4, sc.arm_r5,
           sc.arm_r6, sc.arm_r7, sc.arm_sp);

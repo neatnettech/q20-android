@@ -1,0 +1,20 @@
+Fix CardTable::ClearCardRange on non-Linux targets (q20-android research)
+
+With kMadviseZeroes false (anything but __linux__), upstream memsets the
+heap range instead of the card range, wiping every object in the space on
+each non-sticky GC. Clear the cards covering [start, end) instead.
+
+--- a/art/runtime/gc/accounting/card_table.cc
++++ b/art/runtime/gc/accounting/card_table.cc
+@@ -109,7 +109,10 @@
+ 
+ void CardTable::ClearCardRange(uint8_t* start, uint8_t* end) {
+   if (!kMadviseZeroes) {
+-    memset(start, 0, end - start);
++    // Clear the cards covering [start, end), not the heap memory itself.
++    // Upstream memsets the heap range here, which wipes every object in the
++    // space on each non-sticky GC on any non-Linux target (QNX port).
++    memset(CardFromAddr(start), kCardClean, CardFromAddr(end) - CardFromAddr(start));
+     return;
+   }
+   CHECK_ALIGNED(reinterpret_cast<uintptr_t>(start), kCardSize);

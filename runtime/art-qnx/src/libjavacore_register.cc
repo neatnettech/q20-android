@@ -2,9 +2,10 @@
  * libjavacore QNX subset registration.
  *
  * ponytail: only the native tables needed to get through runtime boot and
- * a hello world are registered. ICU, crypto, regex, zip, and expat natives
- * land with the framework milestone (their classes are not touched by the
- * interpreter milestone).
+ * a hello world are registered. The ICU version natives and the UTF-8 charset
+ * lookup are stubs (src/icu_stubs.cc) because System.<clinit> and
+ * System.out.println call them on the boot path. Crypto, regex, zip and expat
+ * natives land with the framework milestone.
  */
 
 #define LOG_TAG "libcore"
@@ -17,6 +18,7 @@ extern void register_java_io_FileDescriptor(JNIEnv*);
 extern void register_java_lang_System(JNIEnv*);
 extern void register_libcore_io_Memory(JNIEnv*);
 extern void register_libcore_io_Posix(JNIEnv*);
+extern void register_qnx_icu_stubs(JNIEnv*);
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
     JNIEnv* env;
@@ -29,5 +31,6 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     register_java_lang_System(env);
     register_libcore_io_Memory(env);
     register_libcore_io_Posix(env);
+    register_qnx_icu_stubs(env);
     return JNI_VERSION_1_6;
 }

@@ -6,7 +6,7 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
 
 | Item | State |
 |---|---|
-| Docker build environment (ubuntu:24.04 + PlayBook GCC 9.3) | done |
+| Docker build environment (ubuntu:24.04 + PlayBook GCC 9.3) | done, `Dockerfile` + `docker-compose.yml` (the toolchain is a Linux x86-64 binary, so the container is mandatory) |
 | Android 6.0.1 source downloaded (gitignored, local only) | done |
 | Q20 runtime specimens and upstream research cloned (gitignored, local only) | done |
 | Full Q20 Android 4.3 runtime extracted from signed BARs (gitignored, local only) | done |
@@ -17,17 +17,41 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
 | Marshmallow boot classpath extracted from the hammerhead factory image | done |
 | Boot image (boot.art + boot.oat) loads on the Q20, GC heap initializes | done |
 | dex2oat built and running on the Q20, hello.dex compiled to hello.oat on-device | done |
-| Boot image build from the 13 extracted dex files | in progress (GC marks a zeroed object at main space + 0xf90, see docs/bringup-log.md) |
-| Hello DEX execution | blocked on boot image build |
-| Q20 device SSH access | done (dev mode, re-enable after each reboot) |
+| GC crash in the boot image build | root caused: upstream `CardTable::ClearCardRange` memsets the heap range, not the card range, on any non-Linux target (patch 0060), confirmed on hardware |
+| Boot image build | done on device: core image (`core.art` 3.0 MB + `core.oat` 23.5 MB) and full 13 dex boot image (`boot.art` 10.5 MB + `boot.oat` 84.8 MB), both exit 0 |
+| ICU version and UTF-8 charset natives (needed by `System.<clinit>` and `println`) | stubbed in `runtime/art-qnx/src/icu_stubs.cc` |
+| Hello DEX execution | done on device: prints `Hello from ART 6 on QNX! gc ok` in both AOT (Quick-compiled hello.oat) and `-Xint`, exit 0 |
+| Q20 device SSH access | done, reproducible: `runtime/art-qnx/device/connect.sh` plus `q20ssh`/`q20put` |
 
-## What blocks Hello World
+## What blocked Hello World
 
-The factory boot.oat contains compiled code with absolute pointers into the
-hammerhead libart.so. Executed under our libart.so those pointers resolve to
-NULL. A foreign boot image can never work; the boot image must be generated
-by our own dex2oat so the addresses match our libart.so. Next build target:
-`art/compiler` + `art/dex2oat` for QNX.
+Nothing blocks it any more; all four blockers were fixed and confirmed on
+hardware:
+
+1. The first full GC during the boot image build wiped the main heap space.
+   Upstream `CardTable::ClearCardRange` memsets the heap range instead of the
+   card range whenever `kMadviseZeroes` is false, which is every non-Linux
+   target. Patch 0060 clears the cards.
+2. `System.<clinit>` calls three ICU version natives and `println` reaches
+   `NativeConverter.charsetForName`; none were registered, so
+   `WellKnownClasses::LateInit` aborted on a null `Runtime.nativeLoad`.
+   `runtime/art-qnx/src/icu_stubs.cc` registers the four of them.
+3. The image writer died on a dangling dex cache field slot: the factory dexes
+   are quickened, so the verifier marks a few boot classes erroneous, and
+   `DexCache::GetResolvedField()` hides their fields from the prune pass.
+   `PruneNonImageClasses` now reads raw array elements (patch 0070).
+4. `-Xint` overflowed the finalizer thread's stack at exit: QNX thread stacks
+   are far smaller than requested, and the -O0 interpreter used ~17 KB frames.
+   Per-thread stack discovery (patch 0010) plus the interpreter always built
+   at -O2 (art-qnx.mk) fixed it.
+
+Background on why a foreign boot image can never work: the factory boot.oat
+holds absolute pointers into the hammerhead libart.so, so under our libart.so
+the first managed call jumps to NULL. The image has to come from our own
+dex2oat, which is why the compiler was ported.
+
+Next: land the work (patches 0010 to 0070, stubs, device runner, Dockerfile),
+then the quickened verifier follow-up and the fork/execv dex2oat fallback.
 
 ## Timeline
 
@@ -41,14 +65,17 @@ by our own dex2oat so the addresses match our libart.so. Next build target:
 * `FUTEX_CMP_REQUEUE` shim implemented and tested on-device (runtime uses
   pthread mutexes via `ART_USE_FUTEXES=0`, so futex is not the live path)
 
-### Phase 1: dex2oat and the Quick ARM compiler (current)
+### Phase 1: dex2oat and the Quick ARM compiler (done)
 
 * `dex2oat` builds and runs on the Q20: hello.dex compiled to hello.oat
   on-device
-* Quickened factory dex accepted by the verifier and compiler (patch 0040),
-  boot image build is deep into framework compilation
-* Blocked: SIGSEGV in the compile phase, GC marking an object with a null
-  class pointer (details in docs/bringup-log.md)
+* Quickened factory dex accepted by the compiler (patch 0040)
+* The compile phase SIGSEGV is root caused (card table clearing wiped the
+  heap) and fixed by patch 0060, confirmed on hardware
+* Core and full boot images build on device, both exit 0
+* Hello World executes: AOT (Quick-compiled) and interpreter both print
+  `Hello from ART 6 on QNX! gc ok` and exit 0
+  (details in docs/bringup-log.md)
 
 The compiler chain is the critical engineering frontier. Scope for 6.0.1
 arm32 is the Quick backend only; the optimizing compiler is off by default
@@ -63,8 +90,8 @@ and VIXL is arm64 only.
    hello.dex -> hello.oat works)
 5. Compile one small dex plus the boot dex files in a single dex2oat
    invocation (done as the full boot image build now)
-6. Execute the AOT compiled hello.oat under ART
-7. Full boot image build from the quickened factory dex (in progress)
+6. Execute the AOT compiled hello.oat under ART (done, plus interpreter mode)
+7. Full boot image build from the quickened factory dex (done, exit 0)
 
 The single dex step turns the problem into `hello.dex -> dex2oat -> Quick
 ARM -> hello.oat -> ART -> Hello World` instead of debugging a giant boot
@@ -95,8 +122,11 @@ Before calling zygote done, resolve how processes share runtime state:
   memory). POSIX `shm_open` fails on BB10, there is no `/dev/shmem` server;
   the factory runtime used `mmap_peer` / `mem_offset64_peer` for exactly
   this. The current unlinked temp file does not survive fork sharing.
-* Path B (factory style): skip fork based zygote and preload each app
-  process independently, like the factory runtime did.
+* Path B: skip the fork based zygote and preload each app process
+  independently. Note this is not what the factory did: its `init.cfg` starts
+  `app_process -Xzygote --zygote --start-system-server`, so BlackBerry did
+  make fork based zygote work on QNX. Path B is our shortcut, not a
+  precedent.
 
 Path B unblocks APK execution fastest; Path A stays the long term target.
 
@@ -128,8 +158,8 @@ Factory primitives that become testable: `defineAppSandbox`,
 `checkAppCapabilities`, capability retention and dropping,
 `dropWriteAndExecSystemCapabilities`, UID/GID mapping, Pathtrust,
 filesystem boundaries. Optional shortcut: link against the factory
-`libbionic.so` binary itself (265 exported sandbox functions, already a QNX
-ARM ELF on the device) so we test the existing boundary instead of
+`libbionic.so` binary itself (265 exported functions, including the whole
+sandbox and capability family, already a QNX ARM ELF on the device) so we test the existing boundary instead of
 reimplementing it. Deliberate attack probes: filesystem escape, raw device
 access, process signalling, privileged binder, memory access.
 

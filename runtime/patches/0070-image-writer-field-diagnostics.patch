@@ -1,0 +1,84 @@
+Image writer diagnostics for the missing ArtField relocation entry (q20-android research)
+
+Two problems with the upstream diagnostic in FixupPointerArray:
+
+1. Its LOG(FATAL) message is built with PrettyField, which reaches
+   ArtField::GetTypeDescriptor -> GetDexFile ->
+   GetDeclaringClass()->GetDexCache()->GetDexFile(). When the declaring class
+   has no dex cache, which is exactly the state being reported, that
+   dereferences NULL and the diagnostic is replaced by a SIGSEGV inside the
+   logging code.
+2. It does not say whether the declaring class is still a live, registered
+   class or reclaimed memory, which is the question that decides where the bug
+   is (GC roots versus the pruning pass).
+
+Log the raw pointers and the class header words first, then the pretty names
+only when they are safe to compute.
+
+Also fixes the root cause found with that diagnostic on hardware: the prune
+loop read fields through DexCache::GetResolvedField(), which returns nullptr
+for fields of erroneous declaring classes. A boot class that fails
+verification (quickened dex, e.g. android.icu.impl.PluralRulesLoader) keeps
+its field in the resolved fields array, the class is pruned and reclaimed,
+and FixupPointerArray later dies on the dangling ArtField. Read the raw
+array element instead.
+
+--- a/art/compiler/image_writer.cc
++++ b/art/compiler/image_writer.cc
+@@ -657,6 +657,11 @@
+     }
+     for (size_t i = 0; i < dex_cache->NumResolvedFields(); i++) {
+-      ArtField* field = dex_cache->GetResolvedField(i, target_ptr_size_);
++      // Read the raw element: GetResolvedField() returns nullptr for fields of
++      // erroneous declaring classes, which would leave a dangling ArtField in
++      // the array once the class is pruned and reclaimed (q20-android: quickened
++      // dex makes the verifier reject some boot classes as erroneous).
++      ArtField* field = dex_cache->GetResolvedFields()->GetElementPtrSize<ArtField*>(
++          i, target_ptr_size_);
+       if (field != nullptr && !IsImageClass(field->GetDeclaringClass())) {
+         dex_cache->SetResolvedField(i, nullptr, target_ptr_size_);
+       }
+@@ -1153,9 +1153,40 @@
+         } else {
+           CHECK_EQ(array_type, kBinArtField);
+           auto* field = reinterpret_cast<ArtField*>(elem);
+-          LOG(FATAL) << "No relocation entry for ArtField " << PrettyField(field) << " @ "
+-              << field << " idx=" << i << "/" << num_elements << " with declaring class "
+-              << PrettyClass(field->GetDeclaringClass());
++          // Raw facts first: PrettyField goes through GetTypeDescriptor ->
++          // GetDexFile -> GetDeclaringClass()->GetDexCache()->GetDexFile(), so
++          // with no dex cache it faults and replaces this diagnostic with a
++          // SIGSEGV inside the logging code (q20-android).
++          mirror::Class* declaring = field->GetDeclaringClass();
++          mirror::DexCache* dex_cache =
++              (declaring != nullptr) ? declaring->GetDexCache() : nullptr;
++          LOG(ERROR) << "No relocation entry for ArtField @ " << field
++              << " idx=" << i << "/" << num_elements
++              << " dex_field_index=" << field->GetDexFieldIndex()
++              << " access_flags=0x" << std::hex << field->GetAccessFlags() << std::dec
++              << " declaring_class=" << declaring
++              << " dex_cache=" << dex_cache
++              << " array=" << arr;
++          // Is the declaring class still a live, registered Class, or freed
++          // memory? A zeroed header means the GC reclaimed it (q20-android).
++          if (declaring != nullptr) {
++            const uint32_t* w = reinterpret_cast<const uint32_t*>(declaring);
++            LOG(ERROR) << "  declaring words: " << std::hex
++                       << w[0] << " " << w[1] << " " << w[2] << " " << w[3] << " "
++                       << w[4] << " " << w[5] << " " << w[6] << " " << w[7] << std::dec;
++            LOG(ERROR) << "  declaring klass=" << declaring->GetClass()
++                       << " status=" << static_cast<int>(declaring->GetStatus())
++                       << " in_class_table="
++                       << Runtime::Current()->GetClassLinker()->ClassInClassTable(declaring)
++                       << " is_array=" << declaring->IsArrayClass()
++                       << " is_proxy=" << declaring->IsProxyClass()
++                       << " is_erroneous=" << declaring->IsErroneous();
++          }
++          if (declaring != nullptr && dex_cache != nullptr) {
++            LOG(ERROR) << "  field=" << PrettyField(field)
++                       << " declaring=" << PrettyClass(declaring);
++          }
++          LOG(FATAL) << "ArtField with no relocation entry, see above";
+         }
+       } else {
+         elem = image_begin_ + it->second.offset;
