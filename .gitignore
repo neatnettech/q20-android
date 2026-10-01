@@ -37,3 +37,4 @@ runtime/art-qnx/dex2oat
 .omc/
 apps/q20prober/build/
 runtime/qnx-shims/screen-probe
+runtime/qnx-shims/qconnDoor.bin
