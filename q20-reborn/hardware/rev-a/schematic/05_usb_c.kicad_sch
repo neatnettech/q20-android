@@ -1,0 +1,138 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "9ad20545-5d73-4e37-b35e-49004bfa8b08")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 05_usb_c")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "USB C receptacle, ESD, data path")
+	)
+	(lib_symbols)
+	(text "SKELETON: interface contract only. No component is placed until its exact MPN,\ndatasheet pinout and footprint are verified (handover rules 2 and 3)."
+		(exclude_from_sim no)
+		(at 20.32 26.67 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "1ee10d65-b804-4a98-9978-e633bbad992e")
+	)
+	(text "USB_C  (05_usb_c)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "414ab46e-b60b-40d2-b638-013e5d0010d7")
+	)
+	(text "USB C receptacle, ESD, data path"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+			)
+			(justify left top)
+		)
+		(uuid "c57fad6b-b796-4a58-84e9-4a5de4ca3342")
+	)
+	(text "Connector, ESD and data path live here. USB_VBUS protection, OVP and PD are on 01_power."
+		(exclude_from_sim no)
+		(at 20.32 34.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "e6881a67-482b-4c93-8087-af74cebf656b")
+	)
+	(text "Hierarchical interface"
+		(exclude_from_sim no)
+		(at 40.64 43.18 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "f015afef-7bfe-49ae-9811-1c6e8b4c84bf")
+	)
+	(hierarchical_label "USB_CC1"
+		(shape bidirectional)
+		(at 50.8 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "3c85b9d8-ba4f-4f07-ba09-3c64364496b5")
+	)
+	(hierarchical_label "USB_CC2"
+		(shape bidirectional)
+		(at 50.8 60.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "5a2dfbf2-3497-4bfe-beb5-710a349b28bd")
+	)
+	(hierarchical_label "USB_DM"
+		(shape bidirectional)
+		(at 50.8 71.12 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "66026ca8-41f5-4d9b-9186-da2a724f2ab5")
+	)
+	(hierarchical_label "USB_SS_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 76.2 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "87c80e5f-f79c-4f24-b8a2-23c686cb810b")
+	)
+	(hierarchical_label "USB_VBUS"
+		(shape output)
+		(at 50.8 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "d625b152-067b-4e2e-82ae-2363c1ca2f83")
+	)
+	(hierarchical_label "USB_DP"
+		(shape bidirectional)
+		(at 50.8 66.04 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "dd9c02fe-ae19-4698-b29c-53fe178c99ce")
+	)
+)

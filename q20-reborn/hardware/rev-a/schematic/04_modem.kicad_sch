@@ -1,0 +1,116 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "9fb78dbe-10ce-4f66-9d17-a987111b6f51")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 04_modem")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "5G modem (RM500Q-GL candidate), SIM, antennas")
+	)
+	(lib_symbols)
+	(text "Hierarchical interface"
+		(exclude_from_sim no)
+		(at 40.64 43.18 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "12ac7f88-dfe3-4806-bfd3-f472cac8e7ea")
+	)
+	(text "5G modem (RM500Q-GL candidate), SIM, antennas"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+			)
+			(justify left top)
+		)
+		(uuid "738a8f29-f033-49a0-8286-23a2f2c0da17")
+	)
+	(text "MODEM_VCC exists only behind the hardware isolation switch on 01_power.\nModem never connects directly to the battery. Host interface (USB / PCIe) TBD."
+		(exclude_from_sim no)
+		(at 20.32 34.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "9e80f6a6-7e38-4004-b94f-a11c40b5790a")
+	)
+	(text "MODEM  (04_modem)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "d53d7c6e-6210-4015-82b4-861a5f9fab94")
+	)
+	(text "SKELETON: interface contract only. No component is placed until its exact MPN,\ndatasheet pinout and footprint are verified (handover rules 2 and 3)."
+		(exclude_from_sim no)
+		(at 20.32 26.67 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "f826fea7-dece-4775-b579-31eb854d8f95")
+	)
+	(hierarchical_label "MODEM_HOST_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "49436f9b-47f3-4835-b0ab-9afbfd4661cd")
+	)
+	(hierarchical_label "MODEM_RESET_N"
+		(shape input)
+		(at 50.8 60.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "cc090637-0717-4af6-9703-ceca75e25acd")
+	)
+	(hierarchical_label "MODEM_VCC"
+		(shape input)
+		(at 50.8 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "cf4cb083-fa09-457f-b724-9cbfb21032f7")
+	)
+	(hierarchical_label "MODEM_STATUS"
+		(shape output)
+		(at 50.8 66.04 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "d392524a-c82b-4434-a869-9c507abaaf26")
+	)
+)

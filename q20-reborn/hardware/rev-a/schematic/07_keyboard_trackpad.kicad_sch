@@ -1,0 +1,94 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "12907ec3-de82-4d6f-9938-e3f85db81dc2")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 07_keyboard_trackpad")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "Q20 keyboard matrix and trackpad")
+	)
+	(lib_symbols)
+	(text "Hierarchical interface"
+		(exclude_from_sim no)
+		(at 40.64 43.18 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "0259b07c-fc3a-4524-b05f-493f6c6fa44f")
+	)
+	(text "SKELETON: interface contract only. No component is placed until its exact MPN,\ndatasheet pinout and footprint are verified (handover rules 2 and 3)."
+		(exclude_from_sim no)
+		(at 20.32 26.67 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "0e2193c5-14d9-49b7-970c-e2fb6b51d7b5")
+	)
+	(text "KEYBOARD_TRACKPAD  (07_keyboard_trackpad)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "550be9ca-8963-4b7c-ac53-5ea3f4ad73ab")
+	)
+	(text "Interfaces TBD until bench prototyping (project stage 05)."
+		(exclude_from_sim no)
+		(at 20.32 34.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "8813fa37-34cc-4d9c-aaf0-01acabb1f6e5")
+	)
+	(text "Q20 keyboard matrix and trackpad"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+			)
+			(justify left top)
+		)
+		(uuid "9838ab33-cfb5-4c76-8f5e-18092f348dc6")
+	)
+	(hierarchical_label "KBD_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "a68b2596-6cb4-4866-986a-e9554178365b")
+	)
+	(hierarchical_label "TRACKPAD_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "bc1e57d0-34ae-4833-9a9a-32ec7f28a3a6")
+	)
+)

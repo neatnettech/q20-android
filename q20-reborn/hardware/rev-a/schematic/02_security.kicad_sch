@@ -1,0 +1,127 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "e524b410-591b-4e75-b3b5-4dd1bfbe766d")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 02_security")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "Secure element (SE050 family candidate), I2C_SEC bus")
+	)
+	(lib_symbols)
+	(text "Secure element (SE050 family candidate), I2C_SEC bus"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+			)
+			(justify left top)
+		)
+		(uuid "33a1655d-262e-493d-83ce-8995a95b3d28")
+	)
+	(text "Subsystem is SECURE_ELEMENT, not STRONGBOX (handover section 18).\nSE_RST_N and SE_IRQ only if the selected SE variant requires them.\nI2C_SEC pull ups calculated per INTERCONNECTS.md, no default 4.7k."
+		(exclude_from_sim no)
+		(at 20.32 34.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "5af6645b-6071-4dcd-b207-0e922493411d")
+	)
+	(text "SECURITY  (02_security)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "96b380d7-d72f-48fa-a083-e5e61a3562e9")
+	)
+	(text "Hierarchical interface"
+		(exclude_from_sim no)
+		(at 40.64 43.18 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "a35537a6-2263-495c-95ca-482fde4c14f9")
+	)
+	(text "SKELETON: interface contract only. No component is placed until its exact MPN,\ndatasheet pinout and footprint are verified (handover rules 2 and 3)."
+		(exclude_from_sim no)
+		(at 20.32 26.67 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "f85ac5e8-2d2a-43a1-ac84-fa6b23d09be7")
+	)
+	(hierarchical_label "SE_IRQ"
+		(shape output)
+		(at 50.8 71.12 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "34dd4dc1-f618-42fc-bff8-3a6d51194b24")
+	)
+	(hierarchical_label "I2C_SEC_SDA"
+		(shape bidirectional)
+		(at 50.8 60.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "43505af9-e8b0-42b7-afe1-91ba611362df")
+	)
+	(hierarchical_label "SE_RST_N"
+		(shape input)
+		(at 50.8 66.04 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c26b71b8-dc89-452d-b6f2-1a3ca87a66d2")
+	)
+	(hierarchical_label "I2C_SEC_SCL"
+		(shape input)
+		(at 50.8 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "d12bf94e-7b90-4bbb-a943-74a24d411a16")
+	)
+	(hierarchical_label "SE_3V3"
+		(shape input)
+		(at 50.8 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "d89fa7d4-dafc-487d-abb4-faabeeee098c")
+	)
+)

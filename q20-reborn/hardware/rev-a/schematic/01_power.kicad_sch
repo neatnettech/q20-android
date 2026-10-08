@@ -1,0 +1,624 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "d594e8d5-1f43-4857-ad2d-5bcd06610426")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 01_power")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "Power generation for all Rev A rails, see docs/POWER_TREE.md")
+	)
+	(lib_symbols)
+	(rectangle
+		(start 139.7 160.02)
+		(end 195.58 175.26)
+		(stroke
+			(width 0.254)
+			(type dash)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "0bdd10cc-9052-4f03-b39e-eeb0725c26db")
+	)
+	(rectangle
+		(start 40.64 73.66)
+		(end 96.52 88.9)
+		(stroke
+			(width 0.254)
+			(type dash)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "0bead145-d333-4e70-9fa6-79641b9bf605")
+	)
+	(rectangle
+		(start 139.7 73.66)
+		(end 195.58 88.9)
+		(stroke
+			(width 0.254)
+			(type dash)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "6a6393c3-8ea2-4123-9409-8629b2d46e82")
+	)
+	(rectangle
+		(start 40.64 106.68)
+		(end 96.52 121.92)
+		(stroke
+			(width 0.254)
+			(type dash)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "6f5e36d1-f62c-47dd-bbd5-63baa2b35fb5")
+	)
+	(rectangle
+		(start 40.64 40.64)
+		(end 96.52 55.88)
+		(stroke
+			(width 0.254)
+			(type dash)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "82bbcff4-a794-45e8-87ed-8bee1484ac72")
+	)
+	(rectangle
+		(start 139.7 129.54)
+		(end 195.58 144.78)
+		(stroke
+			(width 0.254)
+			(type dash)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "98edfdb0-0037-4779-82d8-0424e79eb4a8")
+	)
+	(rectangle
+		(start 238.76 129.54)
+		(end 294.64 144.78)
+		(stroke
+			(width 0.254)
+			(type dash)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "a2202ce9-e0d6-4845-8fdd-440b20795f71")
+	)
+	(rectangle
+		(start 139.7 99.06)
+		(end 195.58 114.3)
+		(stroke
+			(width 0.254)
+			(type dash)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "dc3457e4-7697-4641-9468-4e486ec281e4")
+	)
+	(rectangle
+		(start 139.7 40.64)
+		(end 195.58 55.88)
+		(stroke
+			(width 0.254)
+			(type dash)
+		)
+		(fill
+			(type none)
+		)
+		(uuid "dcf2e0a5-6129-49c2-80b8-56f2568100cc")
+	)
+	(text "J101  battery connector (VBAT)\nMPN / chemistry: TBD"
+		(exclude_from_sim no)
+		(at 41.91 107.95 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "19375620-826c-428c-9d01-064fdd824dbf")
+	)
+	(text "VBAT_SYS"
+		(exclude_from_sim no)
+		(at 99.06 77.47 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "2d7178ad-789d-4bba-ad08-1927b835e76d")
+	)
+	(text "U102  charger / power path\nMPN: TBD   output: VBAT_SYS"
+		(exclude_from_sim no)
+		(at 41.91 74.93 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "30511dba-1963-49c0-afd9-74664a96a7db")
+	)
+	(text "Control interface (to / from SOC_SOM)"
+		(exclude_from_sim no)
+		(at 20.32 193.04 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "35ee1ffb-b4f9-485c-8284-d3c769a7295e")
+	)
+	(text "U106  PER_1V8 regulator\nMPN: TBD"
+		(exclude_from_sim no)
+		(at 140.97 161.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "4e8aab99-473e-4b24-93a8-4428a17309f3")
+	)
+	(text "Rules: no rail without documented source and load. MODEM_PWR_EN must not restore\nMODEM_VCC while SW101 is OFF. Required test points: TP_VBAT, TP_VBAT_SYS, TP_VPH_PWR,\nTP_PER_3V3, TP_PER_1V8, TP_SE_3V3, TP_MODEM_VCC, TP_USB_VBUS, TP_GND."
+		(exclude_from_sim no)
+		(at 139.7 200.66 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "6759da82-5eb7-4adb-9fba-7f25bc4d7c75")
+	)
+	(text "U104  modem isolation switch\nTPS22965 candidate, UNDER EVALUATION\noutput: MODEM_VCC"
+		(exclude_from_sim no)
+		(at 140.97 74.93 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "7e8221f7-2527-4f4e-b61e-d98a53ac3ec3")
+	)
+	(text "POWER  (01_power)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "896f6dd3-4554-4e51-92c2-6105d466b8df")
+	)
+	(text "U107  SE_3V3 dedicated LDO\nMPN: TBD   input: PER_3V3 (default)"
+		(exclude_from_sim no)
+		(at 240.03 130.81 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "bee92b61-c711-4085-978c-e06fa5c07ac1")
+	)
+	(text "U105  PER_3V3 regulator\nMPN: TBD"
+		(exclude_from_sim no)
+		(at 140.97 130.81 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "cf637093-7033-456e-981f-d504485eda6b")
+	)
+	(text "U103  SOM power stage (may not be needed)\nMPN: TBD   output: VPH_PWR"
+		(exclude_from_sim no)
+		(at 140.97 41.91 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "d0d1b6c1-d43e-41b2-bcc9-2443dccacc9b")
+	)
+	(text "SKELETON: blocks are reserved references, not placed components. Every block stays TBD\nuntil its MPN is selected and verified. Source of truth: docs/POWER_TREE.md."
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "dbfa6d11-8331-4bde-aad3-83de4a2b9efb")
+	)
+	(text "SW101  modem hardware kill switch\nMPN: TBD   OFF must not depend on Android"
+		(exclude_from_sim no)
+		(at 140.97 100.33 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "e91c6d51-8472-4ade-a8ea-224a8ef88767")
+	)
+	(text "U101  USB C protection + PD controller\nMPN: TBD   (input: USB_VBUS, USB_CC1/2)"
+		(exclude_from_sim no)
+		(at 41.91 41.91 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "f6672089-df30-4c20-ba1b-19033eab2390")
+	)
+	(text "VBAT"
+		(exclude_from_sim no)
+		(at 69.85 96.52 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "fe3405d9-9873-4daf-8ccf-74aeeeaa40f7")
+	)
+	(polyline
+		(pts
+			(xy 68.58 88.9) (xy 68.58 106.68)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "198a2295-3ad0-460d-ad39-a5b2ff0c477e")
+	)
+	(polyline
+		(pts
+			(xy 213.36 152.4) (xy 228.6 152.4)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "1de854b7-fae6-424f-8261-bd3e99ede366")
+	)
+	(polyline
+		(pts
+			(xy 30.48 50.8) (xy 40.64 50.8)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "2a226c25-7df3-4d66-9a59-23e642ec160b")
+	)
+	(polyline
+		(pts
+			(xy 119.38 81.28) (xy 139.7 81.28)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "2e52405d-83bd-47ab-902c-1b5754e4fa85")
+	)
+	(polyline
+		(pts
+			(xy 30.48 55.88) (xy 40.64 55.88)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "43a6a9fe-cb95-4a28-bb93-4eba4f1e5a6b")
+	)
+	(polyline
+		(pts
+			(xy 213.36 137.16) (xy 213.36 152.4)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "5087bc06-195c-418b-ad52-866e791f4021")
+	)
+	(polyline
+		(pts
+			(xy 195.58 48.26) (xy 210.82 48.26)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "55fe7dcd-1e7e-460e-81e5-4c9a9f276345")
+	)
+	(polyline
+		(pts
+			(xy 68.58 55.88) (xy 68.58 73.66)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "90c7f5c4-3a3f-49fb-8065-a69e184cc508")
+	)
+	(polyline
+		(pts
+			(xy 195.58 81.28) (xy 210.82 81.28)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "9c1da56e-c854-465e-b256-c82b23ca4c94")
+	)
+	(polyline
+		(pts
+			(xy 96.52 81.28) (xy 119.38 81.28)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "9d9b956b-82dd-4775-a0d9-fb49b0fcf9b3")
+	)
+	(polyline
+		(pts
+			(xy 195.58 137.16) (xy 238.76 137.16)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "a70cd7f8-788e-455d-83c6-154b908496f8")
+	)
+	(polyline
+		(pts
+			(xy 167.64 99.06) (xy 167.64 88.9)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "afd600c2-38f7-4b2d-99e5-8d2b2f5d71a5")
+	)
+	(polyline
+		(pts
+			(xy 119.38 48.26) (xy 119.38 167.64)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "bb294a9e-a6b5-4b7d-abc4-3120cf691910")
+	)
+	(polyline
+		(pts
+			(xy 195.58 167.64) (xy 210.82 167.64)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "ccc075d9-7e82-4c14-a354-630c7d836184")
+	)
+	(polyline
+		(pts
+			(xy 294.64 137.16) (xy 309.88 137.16)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "cdb51cda-5af7-45b4-98af-b982c95ff742")
+	)
+	(polyline
+		(pts
+			(xy 119.38 167.64) (xy 139.7 167.64)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "d2b90424-d580-46a4-b721-88d27fdc7473")
+	)
+	(polyline
+		(pts
+			(xy 119.38 48.26) (xy 139.7 48.26)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "eb2e2d30-b023-4e08-9675-57634a0a6969")
+	)
+	(polyline
+		(pts
+			(xy 30.48 45.72) (xy 40.64 45.72)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "ed980f2f-3a76-460c-a5dd-fb1ba650cd8b")
+	)
+	(polyline
+		(pts
+			(xy 119.38 137.16) (xy 139.7 137.16)
+		)
+		(stroke
+			(width 0.254)
+			(type default)
+		)
+		(uuid "f6bd5cae-13ae-47db-a514-ae0be5008b3b")
+	)
+	(hierarchical_label "USB_CC1"
+		(shape bidirectional)
+		(at 30.48 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "2be0d5c9-5986-4616-bf0a-a36338263771")
+	)
+	(hierarchical_label "MODEM_VCC"
+		(shape output)
+		(at 210.82 81.28 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "36972114-2871-4595-9156-a6f8ef7dc1b9")
+	)
+	(hierarchical_label "MODEM_PWR_EN"
+		(shape input)
+		(at 50.8 210.82 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "5af30f69-cc40-4c70-b094-3ce1c076e73d")
+	)
+	(hierarchical_label "SOM_PWR_EN"
+		(shape output)
+		(at 50.8 200.66 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "6acd9014-e2d6-4c21-ae3f-50c5b6dd99c8")
+	)
+	(hierarchical_label "USB_CC2"
+		(shape bidirectional)
+		(at 30.48 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "8c352779-c0e6-4c09-b817-c63bb0d69df7")
+	)
+	(hierarchical_label "PER_1V8"
+		(shape output)
+		(at 210.82 167.64 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "918fd900-bf6c-430f-a3af-28b4c41949f0")
+	)
+	(hierarchical_label "SE_3V3"
+		(shape output)
+		(at 309.88 137.16 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "98909691-c9cf-4d0a-a918-d13ae9e1b0a1")
+	)
+	(hierarchical_label "SE_PWR_EN"
+		(shape input)
+		(at 50.8 215.9 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "98bff564-f871-46b4-a9af-bd82d3e2362c")
+	)
+	(hierarchical_label "PWR_MGMT_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 220.98 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "998d8a11-131b-491a-98d8-6b18fb3f65ac")
+	)
+	(hierarchical_label "USB_VBUS"
+		(shape input)
+		(at 30.48 45.72 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "9c0506fb-1398-46b6-a4d0-387b17f749eb")
+	)
+	(hierarchical_label "POWER_GOOD"
+		(shape output)
+		(at 50.8 205.74 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "aa059213-6136-48e5-9808-e469578c4a18")
+	)
+	(hierarchical_label "VPH_PWR"
+		(shape output)
+		(at 210.82 48.26 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "c88440bc-301e-47c2-96ca-41f3436b1b64")
+	)
+	(hierarchical_label "PER_3V3"
+		(shape output)
+		(at 228.6 152.4 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "d79251a0-ce0c-41e7-a74e-403823c52404")
+	)
+)
