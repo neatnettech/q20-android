@@ -66,7 +66,7 @@ here with a reason.
 
 | Sheet | ERC message | Reason | Reviewed by |
 | --- | --- | --- | --- |
-| | | | |
+| all (skeleton) | 160 x `label_dangling` | Gate 0 skeleton has no components, so no net contains a component pin. Expected until symbols are placed; must reach zero before Gate 1. | TBD |
 
 ## Decoupling
 

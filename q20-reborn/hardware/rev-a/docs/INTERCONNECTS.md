@@ -22,8 +22,29 @@ SOM and peripheral documentation; unknown is `TBD`.
 ## Top level sheet pins
 
 Subsystems connect through hierarchical sheet pins on `00_top`, never by
-long wires across the top sheet. Initial POWER sheet outputs: VBAT_SYS,
-VPH_PWR, PER_3V3, PER_1V8, MODEM_VCC, USB_VBUS.
+long wires across the top sheet. Each pin gets a short stub and a local
+label on `00_top`. Names ending in `_IF_TBD` are placeholders for an
+interface whose bus, lane count or pinout is not yet known; they are
+replaced by real nets once the SOM and peripheral documentation is
+verified. Directions are as seen from the subsystem sheet.
+
+| Sheet | Pins |
+| --- | --- |
+| POWER | in: `USB_VBUS`, `MODEM_PWR_EN`, `SE_PWR_EN`; out: `VPH_PWR`, `PER_3V3`, `PER_1V8`, `SE_3V3`, `MODEM_VCC`, `SOM_PWR_EN`, `POWER_GOOD`; bidir: `USB_CC1`, `USB_CC2`, `PWR_MGMT_IF_TBD` |
+| SECURITY | in: `SE_3V3`, `I2C_SEC_SCL`, `SE_RST_N`; out: `SE_IRQ`; bidir: `I2C_SEC_SDA` |
+| SOC_SOM | mirror of every non power pin below, plus `VPH_PWR` in |
+| MODEM | in: `MODEM_VCC`, `MODEM_RESET_N`; out: `MODEM_STATUS`; bidir: `MODEM_HOST_IF_TBD` |
+| USB_C | out: `USB_VBUS`; bidir: `USB_CC1`, `USB_CC2`, `USB_DP`, `USB_DM`, `USB_SS_IF_TBD` |
+| DISPLAY | in: `DSI_IF_TBD`, `DISPLAY_RESET_N`, `DISPLAY_I2C_SCL`, `DISPLAY_PWR_EN`; out: `DISPLAY_TE`; bidir: `DISPLAY_I2C_SDA` |
+| KEYBOARD_TRACKPAD | bidir: `KBD_IF_TBD`, `TRACKPAD_IF_TBD` |
+| AUDIO | bidir: `AUDIO_IF_TBD` |
+| CAMERAS | in: `CAM_I2C_SCL`, `CAM_RESET_N`; out: `CSI_IF_TBD`; bidir: `CAM_I2C_SDA` |
+| DEBUG | in: `UART_DBG_TX`; out: `UART_DBG_RX`, `SOM_RESET_N`, `BOOT_MODE`; bidir: `JTAG_IF_TBD` |
+
+Not yet connected on purpose: `PER_3V3` and `PER_1V8` have no load sheet
+until a consumer documents its supply (Rule 4). Display, audio and camera
+supplies are TBD. `VBAT_SYS` stays internal to POWER. GND is not drawn
+until components exist.
 
 ## I²C buses
 

@@ -19,8 +19,9 @@ KiCad hierarchy is created only after the power tree is reviewed.
 
 | Path | Purpose |
 | --- | --- |
-| `q20-reborn-rev-a.kicad_pro` | KiCad project (create via KiCad GUI, File, New Project; never by hand) |
-| `schematic/` | hierarchical sheets `00_top` to `10_debug` |
+| `q20-reborn-rev-a.kicad_pro` | KiCad project; KiCad rewrites it with full settings on first open |
+| `q20-reborn-rev-a.kicad_sch` | root sheet = `00_top` system diagram (KiCad requires the root schematic to share the project name) |
+| `schematic/` | hierarchical sheets `01_power` to `10_debug` |
 | `pcb/` | board file |
 | `symbols/`, `footprints/`, `3d/` | project libraries, each entry tied to an exact MPN |
 | `bom/BOM.csv` | BOM, MPN is authoritative |
@@ -28,7 +29,7 @@ KiCad hierarchy is created only after the power tree is reviewed.
 | `docs/` | engineering documents (source of truth with the KiCad files) |
 | `docs/concept/` | superseded concept material, reference only |
 
-Planned sheets: `00_top`, `01_power`, `02_security`, `03_soc_som`,
+Sheets (skeleton, interface contract only): `00_top` (root), `01_power`, `02_security`, `03_soc_som`,
 `04_modem`, `05_usb_c`, `06_display`, `07_keyboard_trackpad`, `08_audio`,
 `09_cameras`, `10_debug`.
 
@@ -91,7 +92,7 @@ KiCad version and policy: [docs/DESIGN_RULES.md](docs/DESIGN_RULES.md).
 ERC from the command line:
 
 ```bash
-/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch erc schematic/00_top.kicad_sch
+/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli sch erc q20-reborn-rev-a.kicad_sch
 ```
 
 Related project docs: [../../docs/hardware/POWER.md](../../docs/hardware/POWER.md),
