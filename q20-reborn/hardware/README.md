@@ -1,6 +1,6 @@
 # hardware/
 
-* rev-a/ carrier board design (KiCad)
+* [rev-a/](rev-a/) carrier board design (KiCad), Gate 0 architecture phase
 * rev-b/ custom motherboard design
 * components/ selected part database
 * footprints/ KiCad footprints

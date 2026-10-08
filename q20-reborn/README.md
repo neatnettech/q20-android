@@ -66,6 +66,7 @@ chain, and security architecture are proven on development hardware.
 | docs/security/THREAT_MODEL.md | threat model |
 | docs/security/RADIO_ISOLATION.md | kill switches |
 | docs/decisions/ | ADRs |
+| hardware/rev-a/ | Rev A carrier board: KiCad project and Gate 0 docs |
 
 ## Next action
 
