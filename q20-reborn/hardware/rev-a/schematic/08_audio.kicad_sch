@@ -1,0 +1,83 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "2917469c-0918-4774-b7f3-632803e1486e")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 08_audio")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "Codec, amplifier, microphones, speaker")
+	)
+	(lib_symbols)
+	(text "Codec, amplifier, microphones, speaker"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+			)
+			(justify left top)
+		)
+		(uuid "18d95a26-f5e0-4613-83c6-bbd72e85c707")
+	)
+	(text "Codec / amplifier MPNs and supply rails TBD."
+		(exclude_from_sim no)
+		(at 20.32 34.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "b81ad854-1cc5-418c-8869-79f256a99546")
+	)
+	(text "SKELETON: interface contract only. No component is placed until its exact MPN,\ndatasheet pinout and footprint are verified (handover rules 2 and 3)."
+		(exclude_from_sim no)
+		(at 20.32 26.67 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "b95ebdda-edec-4132-a7f0-af86bff6d0d0")
+	)
+	(text "Hierarchical interface"
+		(exclude_from_sim no)
+		(at 40.64 43.18 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "e7e1d08b-6477-43c1-83cf-8ef162830734")
+	)
+	(text "AUDIO  (08_audio)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "f3089d78-9cd6-4f0e-a63a-2730f1a139a5")
+	)
+	(hierarchical_label "AUDIO_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c0d16ed0-b170-46e6-8d74-6ed7e05451a5")
+	)
+)

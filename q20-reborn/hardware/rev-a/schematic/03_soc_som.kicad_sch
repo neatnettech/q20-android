@@ -1,0 +1,446 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "f992160b-85a3-4082-b958-044ad3ded90f")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 03_soc_som")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "QCS8550 SOM board to board interface (black box)")
+	)
+	(lib_symbols)
+	(text "QCS8550 SOM board to board interface (black box)"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+			)
+			(justify left top)
+		)
+		(uuid "36b318cc-6398-49d1-a23d-fe7842d2ca43")
+	)
+	(text "SOM is a black box (Rule 7). Every pin, voltage level and sequence comes from the SOM\nmanufacturer documentation, never from the QCS8550 SoC datasheet. SOM MPN: TBD (ADR-0002).\nPER_3V3 / PER_1V8 are not connected here until the SOM documents its IO domains."
+		(exclude_from_sim no)
+		(at 20.32 34.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "5a7e1602-616a-4ac7-aba5-de21c2d0b753")
+	)
+	(text "Hierarchical interface"
+		(exclude_from_sim no)
+		(at 40.64 43.18 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "5d70e0e0-73e5-41f1-bccb-e1b0dab3dc9d")
+	)
+	(text "SOC_SOM  (03_soc_som)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "7de0a47e-d913-4fba-8a14-64451aacb95c")
+	)
+	(text "SKELETON: interface contract only. No component is placed until its exact MPN,\ndatasheet pinout and footprint are verified (handover rules 2 and 3)."
+		(exclude_from_sim no)
+		(at 20.32 26.67 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "831e96f1-ce55-49a5-b930-c83847e4005c")
+	)
+	(hierarchical_label "DSI_IF_TBD"
+		(shape output)
+		(at 50.8 157.48 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "18ebd1ce-3fd7-4c54-a59e-de34b9fae1a6")
+	)
+	(hierarchical_label "MODEM_STATUS"
+		(shape input)
+		(at 50.8 111.76 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "1b376608-09a1-40dd-b1f8-76c628238667")
+	)
+	(hierarchical_label "JTAG_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 152.4 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "1bbd7fe4-bbee-435f-9b35-bc5d4e4aea94")
+	)
+	(hierarchical_label "CAM_I2C_SDA"
+		(shape bidirectional)
+		(at 50.8 213.36 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "1c95ac7b-5f58-44ec-bf6d-e655311de4a3")
+	)
+	(hierarchical_label "DISPLAY_RESET_N"
+		(shape output)
+		(at 50.8 162.56 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "22c0d5c9-2fb4-4dbf-945a-c90b7a4b17f7")
+	)
+	(hierarchical_label "AUDIO_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 198.12 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "2332a493-3c50-4ada-87cd-ea9317beabe2")
+	)
+	(hierarchical_label "I2C_SEC_SDA"
+		(shape bidirectional)
+		(at 50.8 86.36 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "29f87e7f-8273-43b5-922d-222cf2c2daab")
+	)
+	(hierarchical_label "SOM_RESET_N"
+		(shape input)
+		(at 50.8 142.24 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "2ab8a7c6-65cc-493f-8c15-d68214050cd5")
+	)
+	(hierarchical_label "BOOT_MODE"
+		(shape input)
+		(at 50.8 147.32 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "308f1a43-4d6c-4b1f-9552-40cd34433354")
+	)
+	(hierarchical_label "DISPLAY_I2C_SDA"
+		(shape bidirectional)
+		(at 50.8 177.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "43979d98-97b7-4aa7-8cc1-517a298f0d48")
+	)
+	(hierarchical_label "POWER_GOOD"
+		(shape input)
+		(at 50.8 60.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "483f8f5e-6efb-47d9-8f2f-e9f8f7267d0e")
+	)
+	(hierarchical_label "MODEM_HOST_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 101.6 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "6051d05a-52e3-49df-aa64-fcaddeaaed48")
+	)
+	(hierarchical_label "VPH_PWR"
+		(shape input)
+		(at 50.8 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "67daaef7-5912-4179-ad87-922b838f46b3")
+	)
+	(hierarchical_label "SE_PWR_EN"
+		(shape output)
+		(at 50.8 71.12 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "6bd65906-3dee-43d9-97ee-176ee80d4ee6")
+	)
+	(hierarchical_label "PWR_MGMT_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 76.2 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "737b0fcc-820e-4cc5-9fb7-e5eac8ad5402")
+	)
+	(hierarchical_label "DISPLAY_PWR_EN"
+		(shape output)
+		(at 50.8 182.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "8b4d81ef-d229-4e9b-82b0-17547b3ae9dd")
+	)
+	(hierarchical_label "CSI_IF_TBD"
+		(shape input)
+		(at 50.8 203.2 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "95d2cad5-0eb0-494a-aed4-e9ff10aef783")
+	)
+	(hierarchical_label "I2C_SEC_SCL"
+		(shape output)
+		(at 50.8 81.28 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "9c83ec40-1736-4b42-8906-62187d554777")
+	)
+	(hierarchical_label "USB_DM"
+		(shape bidirectional)
+		(at 50.8 121.92 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "a660837a-a54c-4cc3-b8af-fe9aa3d5ebf0")
+	)
+	(hierarchical_label "DISPLAY_TE"
+		(shape input)
+		(at 50.8 167.64 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "a87cf11e-9b23-462b-8df7-1eece6b793d9")
+	)
+	(hierarchical_label "SE_RST_N"
+		(shape output)
+		(at 50.8 91.44 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "ae20138e-662c-45f6-be7d-326584af9004")
+	)
+	(hierarchical_label "UART_DBG_TX"
+		(shape output)
+		(at 50.8 132.08 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "b67ae40f-bf84-4129-8bc6-a3661a7521e3")
+	)
+	(hierarchical_label "CAM_I2C_SCL"
+		(shape output)
+		(at 50.8 208.28 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "b746d7df-74cc-4efc-9d87-41068814879d")
+	)
+	(hierarchical_label "UART_DBG_RX"
+		(shape input)
+		(at 50.8 137.16 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "b7f1ac75-aa9b-4b90-9b6d-a04566b327fa")
+	)
+	(hierarchical_label "KBD_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 187.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "b8be6acb-4327-4271-8d72-79c3c24a7925")
+	)
+	(hierarchical_label "SE_IRQ"
+		(shape input)
+		(at 50.8 96.52 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "bab7b2de-1659-4830-a278-dc3309f84c70")
+	)
+	(hierarchical_label "MODEM_RESET_N"
+		(shape output)
+		(at 50.8 106.68 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "be9c8a83-1987-46e4-8797-44e0bc717538")
+	)
+	(hierarchical_label "USB_SS_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 127 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "cd92f535-8331-4d9b-a050-52e98c6619b1")
+	)
+	(hierarchical_label "CAM_RESET_N"
+		(shape output)
+		(at 50.8 218.44 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "cf23cfc7-89a0-4ada-8758-2ba81712b046")
+	)
+	(hierarchical_label "SOM_PWR_EN"
+		(shape input)
+		(at 50.8 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "d840f735-d6a1-42e8-a38c-014b8b19d53a")
+	)
+	(hierarchical_label "MODEM_PWR_EN"
+		(shape output)
+		(at 50.8 66.04 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "da4edacd-2951-4a84-85cb-e817a7a117bf")
+	)
+	(hierarchical_label "USB_DP"
+		(shape bidirectional)
+		(at 50.8 116.84 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "ead4079f-e04d-4e39-8f63-8d3bacf7b4b0")
+	)
+	(hierarchical_label "DISPLAY_I2C_SCL"
+		(shape output)
+		(at 50.8 172.72 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "edd75488-eda7-40da-8ad2-243d8655ae73")
+	)
+	(hierarchical_label "TRACKPAD_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 193.04 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "fe573572-b314-4f02-96b7-d934143ade58")
+	)
+)

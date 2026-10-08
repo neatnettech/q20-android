@@ -1,0 +1,116 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "0bd51f45-c186-40cf-b1cb-b4bb7951cad2")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 09_cameras")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "Camera modules, CSI, CCI")
+	)
+	(lib_symbols)
+	(text "CAMERAS  (09_cameras)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "93585448-9cf2-43ec-a8ea-b8759448ee6b")
+	)
+	(text "Camera modules and supply rails TBD."
+		(exclude_from_sim no)
+		(at 20.32 34.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "a4c80145-1165-4da4-b7ca-04a807d3789c")
+	)
+	(text "Camera modules, CSI, CCI"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+			)
+			(justify left top)
+		)
+		(uuid "af18b081-939b-4f6c-b352-0ead46b1a7d9")
+	)
+	(text "SKELETON: interface contract only. No component is placed until its exact MPN,\ndatasheet pinout and footprint are verified (handover rules 2 and 3)."
+		(exclude_from_sim no)
+		(at 20.32 26.67 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "b8648e8a-0adb-4828-ad5f-afece52e2a11")
+	)
+	(text "Hierarchical interface"
+		(exclude_from_sim no)
+		(at 40.64 43.18 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "baf452e1-033e-43c7-807c-e3587e1bdb0f")
+	)
+	(hierarchical_label "CAM_RESET_N"
+		(shape input)
+		(at 50.8 66.04 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "4b138501-9071-44e4-95e0-a505b1c3cae4")
+	)
+	(hierarchical_label "CAM_I2C_SCL"
+		(shape input)
+		(at 50.8 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "85d78e34-5dbd-4789-91af-faa4f5d05500")
+	)
+	(hierarchical_label "CAM_I2C_SDA"
+		(shape bidirectional)
+		(at 50.8 60.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "9bacbb6e-2245-4237-8cb1-2becade5a918")
+	)
+	(hierarchical_label "CSI_IF_TBD"
+		(shape output)
+		(at 50.8 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "ac983966-ed28-4f63-8824-0cc05b3698df")
+	)
+)

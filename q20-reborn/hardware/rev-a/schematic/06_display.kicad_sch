@@ -1,0 +1,138 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "e54fbee2-e845-4b39-b3d8-1c1a76974ff0")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 06_display")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "Display panel and touch, connector TBD")
+	)
+	(lib_symbols)
+	(text "DISPLAY  (06_display)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "541c1ff3-17de-4a66-a342-a498f335504c")
+	)
+	(text "Display supply rails TBD: not connected until the panel MPN is selected."
+		(exclude_from_sim no)
+		(at 20.32 34.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "a94a8296-190c-42d5-bce9-3e78022182d6")
+	)
+	(text "Hierarchical interface"
+		(exclude_from_sim no)
+		(at 40.64 43.18 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "aebccf03-545e-44c0-b95c-377c6cbb315c")
+	)
+	(text "Display panel and touch, connector TBD"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+			)
+			(justify left top)
+		)
+		(uuid "c7e1b6bd-d2c6-49a8-ac4e-14fe1b7bb7f3")
+	)
+	(text "SKELETON: interface contract only. No component is placed until its exact MPN,\ndatasheet pinout and footprint are verified (handover rules 2 and 3)."
+		(exclude_from_sim no)
+		(at 20.32 26.67 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "dc6370fc-54d0-4175-9384-b138aa5ba464")
+	)
+	(hierarchical_label "DSI_IF_TBD"
+		(shape input)
+		(at 50.8 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "1642c2b3-a629-4577-bd20-c5f3b25e8728")
+	)
+	(hierarchical_label "DISPLAY_PWR_EN"
+		(shape input)
+		(at 50.8 76.2 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "37199e8b-6c05-4149-bb59-5b95a3ffb777")
+	)
+	(hierarchical_label "DISPLAY_I2C_SCL"
+		(shape input)
+		(at 50.8 66.04 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "44df7bc2-8c1b-4f2b-987b-d084f8100077")
+	)
+	(hierarchical_label "DISPLAY_RESET_N"
+		(shape input)
+		(at 50.8 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "4cdc905d-6562-4a08-8ce2-1f22a4f9fb6c")
+	)
+	(hierarchical_label "DISPLAY_I2C_SDA"
+		(shape bidirectional)
+		(at 50.8 71.12 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "7dbb7d52-daf8-44ef-ad7a-6e47966b7b82")
+	)
+	(hierarchical_label "DISPLAY_TE"
+		(shape output)
+		(at 50.8 60.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "ca9e09cd-7ebb-4ae2-88da-a7414e4c1a73")
+	)
+)

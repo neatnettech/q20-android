@@ -1,0 +1,127 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "d6f4082e-a0b1-4646-93b2-a8603ff91d50")
+	(paper "A3")
+	(title_block
+		(title "Q20 Reborn Rev A: 10_debug")
+		(date "2026-10-08")
+		(rev "A")
+		(company "Q20 Reborn")
+		(comment 1 "Debug UART, reset, boot/recovery, JTAG/SWD if supported")
+	)
+	(lib_symbols)
+	(text "SKELETON: interface contract only. No component is placed until its exact MPN,\ndatasheet pinout and footprint are verified (handover rules 2 and 3)."
+		(exclude_from_sim no)
+		(at 20.32 26.67 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "3596d35a-88e8-444f-927b-f5f19336c315")
+	)
+	(text "Hierarchical interface"
+		(exclude_from_sim no)
+		(at 40.64 43.18 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "39f5861c-f960-4c96-ac42-15b0d9439b63")
+	)
+	(text "Debug UART, reset, boot/recovery, JTAG/SWD if supported"
+		(exclude_from_sim no)
+		(at 20.32 21.59 0)
+		(effects
+			(font
+				(size 1.524 1.524)
+			)
+			(justify left top)
+		)
+		(uuid "4926e18f-6029-4890-8023-8c1eff522014")
+	)
+	(text "DEBUG  (10_debug)"
+		(exclude_from_sim no)
+		(at 20.32 15.24 0)
+		(effects
+			(font
+				(size 2.54 2.54)
+				(bold yes)
+			)
+			(justify left top)
+		)
+		(uuid "97ccf1ef-ed93-40da-b635-c636cb7bdb2b")
+	)
+	(text "Debug is part of the security architecture. Rev C must not expose development debug by default.\nTest points: UART_TX, UART_RX, RESET, BOOT."
+		(exclude_from_sim no)
+		(at 20.32 34.29 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left top)
+		)
+		(uuid "cac7de2a-1d89-4cd7-8c3d-a48feadb1db9")
+	)
+	(hierarchical_label "SOM_RESET_N"
+		(shape output)
+		(at 50.8 60.96 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "43c9f85b-b300-4d4c-9c67-2aa6590abceb")
+	)
+	(hierarchical_label "BOOT_MODE"
+		(shape output)
+		(at 50.8 66.04 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "576d962c-0f7d-47da-a3e2-1dd29e9ecf6f")
+	)
+	(hierarchical_label "JTAG_IF_TBD"
+		(shape bidirectional)
+		(at 50.8 71.12 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "652a5651-b305-44f8-898d-df4d10b0f72b")
+	)
+	(hierarchical_label "UART_DBG_RX"
+		(shape output)
+		(at 50.8 55.88 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "8a1f1431-5ed3-46b3-9fc3-ab9780c910bd")
+	)
+	(hierarchical_label "UART_DBG_TX"
+		(shape input)
+		(at 50.8 50.8 180)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "e3353ec6-bdfd-436c-bc41-ba995597b65f")
+	)
+)
