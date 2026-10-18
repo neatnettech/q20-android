@@ -128,7 +128,7 @@ JAVACORE_SRCS := android_system_OsConstants.cpp java_io_File.cpp \
                  NetworkUtilities.cpp canonicalize_path.cpp readlink.cpp \
                  valueOf.cpp libcore_io_AsynchronousCloseMonitor.cpp \
                  java_util_regex_Pattern.cpp java_util_regex_Matcher.cpp IcuUtilities.cpp java_lang_Math.cpp \
-                 libcore_icu_ICU.cpp java_lang_Character.cpp
+                 libcore_icu_ICU.cpp java_lang_Character.cpp java_lang_Float.cpp java_lang_Double.cpp
 JAVACORE_OBJS := $(patsubst %.cpp,build/javacore/%.o,$(JAVACORE_SRCS))
 JAVACORE_OBJS += build/javacore/register.o build/javacore/icu_stubs.o
 JAVACORE_OBJS += build/javacore/JNIHelp.o \
@@ -179,6 +179,13 @@ JCFLAGS := -I$(ZLIB_ROOT) $(JCFLAGS) -I$(FWBASE)/include
 # A6 message pump: libutils Looper on poll (patch 0102) under the stock
 # MessageQueue JNI.
 JAVACORE_OBJS += build/javacore/Looper.o build/javacore/android_os_MessageQueue.o
+
+# A6 graphics facade (src/graphics_facade.cc): Paint metrics from the sysroot
+# FreeType, whose zlib references resolve from libart; plus the stock
+# PropertyValuesHolder JNI (plain reflection, no Skia).
+JAVACORE_OBJS += build/javacore/graphics_facade.o build/javacore/android_animation_PropertyValuesHolder.o
+JCFLAGS += -I$(QNX_INC)/freetype2
+JAVACORE_EXTRA_LIBS += $(ICU_LIBS)/libfreetypeS.a
 
 build/javacore/androidfw/%.o: $(FWBASE)/libs/androidfw/%.cpp
 	@mkdir -p $(dir $@)
@@ -392,6 +399,7 @@ stage: dalvikvm dex2oat libart.so libjavacore.so
 	@mkdir -p $(STAGE_DIR)/system/framework $(STAGE_DIR)/system/fonts
 	cp device/build.prop $(STAGE_DIR)/system/
 	cp $(DEPLOY)/system/framework/framework-res.apk $(STAGE_DIR)/system/framework/
+	cp ../../q20-runtime/sys.android/native/system/fonts/Roboto-Regular.ttf $(STAGE_DIR)/system/fonts/
 	cp ../../apps/q20prober/build/q20prober.apk ../../apps/q20facade/build/q20facade.jar $(STAGE_DIR)/
 	@echo "staged in $(STAGE_DIR); copy it to the device and run: sh run_core.sh all"
 

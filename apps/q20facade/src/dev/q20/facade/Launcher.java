@@ -3,6 +3,9 @@ package dev.q20.facade;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
+import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
@@ -10,6 +13,10 @@ import android.os.Looper;
 import android.os.Process;
 import android.os.SystemClock;
 import android.os.Trace;
+import android.text.BoringLayout;
+import android.text.TextPaint;
+import android.view.View;
+import android.view.animation.PathInterpolator;
 
 import org.xmlpull.v1.XmlPullParser;
 
@@ -25,6 +32,7 @@ import java.util.Locale;
  *   props  build.prop properties, ICU locale data, Character natives
  *   res    framework-res and the APK's own resources through libandroidfw
  *   looper Looper/Handler message pump on poll, Binder and Trace statics
+ *   gfx    graphics facade: FreeType metrics, Path, RenderNode, ColorFilter
  */
 public final class Launcher {
     private static int passed;
@@ -41,6 +49,8 @@ public final class Launcher {
                 res(apk);
             } else if (mode.equals("looper")) {
                 looper();
+            } else if (mode.equals("gfx")) {
+                gfx();
             } else {
                 System.out.println("facade: unknown mode " + mode);
                 System.exit(2);
@@ -133,6 +143,33 @@ public final class Launcher {
         check("cross thread wake (" + cross[0] + " ms)", cross[0] >= 100 && cross[0] < 250);
         check("delayed post (" + delayed[0] + " ms)", delayed[0] >= 300);
         check("quit", true);
+    }
+
+    static void gfx() throws Exception {
+        Paint p = new Paint();
+        p.setTextSize(48);
+        float h = p.measureText("H");
+        Paint.FontMetricsInt fmi = p.getFontMetricsInt();
+        System.out.println("facade: paint 48px H=" + h + " ascent=" + fmi.ascent
+                + " descent=" + fmi.descent + " top=" + fmi.top + " bottom=" + fmi.bottom);
+        check("paint metrics", h > 0 && fmi.ascent < 0 && fmi.descent > 0 && fmi.top <= fmi.ascent);
+
+        TextPaint tp = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+        tp.setTextSize(48);
+        BoringLayout.Metrics bm = BoringLayout.isBoring("count: 0", tp);
+        check("BoringLayout count: 0 width=" + (bm == null ? -1 : bm.width), bm != null && bm.width > 0);
+
+        PathInterpolator pi = new PathInterpolator(0.4f, 0f, 0.2f, 1f);
+        float a = pi.getInterpolation(0f), m = pi.getInterpolation(0.5f), z = pi.getInterpolation(1f);
+        check("PathInterpolator 0=" + a + " 0.5=" + m + " 1=" + z, a == 0f && z == 1f && m > 0.5f && m < 1f);
+
+        check("PorterDuffColorFilter", new PorterDuffColorFilter(0xff00ff00, PorterDuff.Mode.SRC_IN) != null);
+
+        Class<?> rn = Class.forName("android.view.RenderNode");
+        Object node = rn.getMethod("create", String.class, View.class).invoke(null, "q20", null);
+        rn.getMethod("setElevation", float.class).invoke(node, 3f);
+        float e = (Float) rn.getMethod("getElevation").invoke(node);
+        check("RenderNode elevation round trip " + e, e == 3f);
     }
 
     static Throwable rootCause(Throwable t) {
