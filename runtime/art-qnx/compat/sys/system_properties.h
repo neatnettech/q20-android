@@ -1,7 +1,7 @@
 /*
- * QNX port stub for <sys/system_properties.h>: cutils/properties.h needs it.
- * Property lookup is a no-op on QNX (no property service); property_get
- * returns the default value.
+ * QNX port stub for <sys/system_properties.h>: cutils/properties.h needs it
+ * for the size limits. There is no property service; property_get and
+ * property_set come from src/android_os_qnx.cc ($ANDROID_ROOT/build.prop).
  */
 #ifndef _SYS_SYSTEM_PROPERTIES_H
 #define _SYS_SYSTEM_PROPERTIES_H

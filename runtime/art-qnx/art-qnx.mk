@@ -127,7 +127,8 @@ JAVACORE_SRCS := android_system_OsConstants.cpp java_io_File.cpp \
                  AsynchronousCloseMonitor.cpp ExecStrings.cpp JniException.cpp \
                  NetworkUtilities.cpp canonicalize_path.cpp readlink.cpp \
                  valueOf.cpp libcore_io_AsynchronousCloseMonitor.cpp \
-                 java_util_regex_Pattern.cpp java_util_regex_Matcher.cpp IcuUtilities.cpp java_lang_Math.cpp
+                 java_util_regex_Pattern.cpp java_util_regex_Matcher.cpp IcuUtilities.cpp java_lang_Math.cpp \
+                 libcore_icu_ICU.cpp java_lang_Character.cpp
 JAVACORE_OBJS := $(patsubst %.cpp,build/javacore/%.o,$(JAVACORE_SRCS))
 JAVACORE_OBJS += build/javacore/register.o build/javacore/icu_stubs.o
 JAVACORE_OBJS += build/javacore/JNIHelp.o \
@@ -157,9 +158,44 @@ JCFLAGS := $(CXXFLAGS) -fpermissive -Wno-error=format -I$(LIBCORE_NATIVE) \
            -I$(abspath ../../bionic/libc/kernel/uapi) \
            -I$(abspath ../../bionic/libc/kernel/uapi/asm-arm)
 
-libjavacore.so: $(JAVACORE_OBJS)
+# A6 framework slice: properties (src/android_os_qnx.cc, $ANDROID_ROOT/build.prop).
+# New objects go above the libjavacore.so rule: its prerequisites expand when read.
+FWBASE ?= $(abspath ../../frameworks/base)
+JAVACORE_OBJS += build/javacore/android_os_SystemProperties.o build/javacore/android_os_qnx.o
+# framework JNI includes <nativehelper/JNIHelp.h>
+JCFLAGS += -I$(LIBNATIVE)/include
+
+# A6 resources: real libandroidfw plus the AssetManager, StringBlock and
+# XmlBlock JNI (patch 0101 drops the idmap fork). -O2 like AOSP: ResTable parses
+# the 7.5 MB framework arsc on every start.
+ANDROIDFW := Asset AssetDir AssetManager misc ResourceTypes StreamingZipInflater \
+             TypeWrappers ZipFileRO ZipUtils
+JAVACORE_OBJS += $(patsubst %,build/javacore/androidfw/%.o,$(ANDROIDFW)) \
+                 build/javacore/android_util_AssetManager.o \
+                 build/javacore/android_util_StringBlock.o build/javacore/android_util_XmlBlock.o
+# zlib headers from the repo copy that libart links (1.2.8), ahead of the sysroot's 1.2.5
+JCFLAGS := -I$(ZLIB_ROOT) $(JCFLAGS) -I$(FWBASE)/include
+
+# A6 message pump: libutils Looper on poll (patch 0102) under the stock
+# MessageQueue JNI.
+JAVACORE_OBJS += build/javacore/Looper.o build/javacore/android_os_MessageQueue.o
+
+build/javacore/androidfw/%.o: $(FWBASE)/libs/androidfw/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -O2 -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+build/javacore/%.o: src/%.cc
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
+# libart.so supplies zlib, log and atrace symbols at runtime. Linking against it
+# with --no-undefined turns symbols that would only fail on the device into
+# build errors.
+JAVACORE_LDFLAGS ?= -L. -lart -Wl,--no-undefined
+
+libjavacore.so: $(JAVACORE_OBJS) | libart.so
 	@mkdir -p build
-	$(CXX) -shared -o $@ $^ $(JAVACORE_EXTRA_LIBS) > build/link-libjavacore.log 2>&1 \
+	$(CXX) -shared -o $@ $^ $(JAVACORE_EXTRA_LIBS) $(JAVACORE_LDFLAGS) > build/link-libjavacore.log 2>&1 \
 	  || { grep -vE "DWARF error" build/link-libjavacore.log | head -20; false; }
 
 build/javacore/%.o: $(LIBCORE_NATIVE)/%.cpp
@@ -337,6 +373,8 @@ build/%.o: $(ART_ROOT)/%.S
 STAGE_DIR ?= build/stage
 DEPLOY    ?= $(abspath ../art6-deploy)
 
+# The two apps are built on the host (macOS java): run apps/q20prober/build.sh
+# and apps/q20facade/build.sh before staging.
 stage: dalvikvm dex2oat libart.so libjavacore.so
 	@mkdir -p $(STAGE_DIR)/bin $(STAGE_DIR)/lib $(STAGE_DIR)/boot
 	cp dalvikvm dex2oat $(STAGE_DIR)/bin/
@@ -351,6 +389,10 @@ stage: dalvikvm dex2oat libart.so libjavacore.so
 	cp $(abspath ../hello/hello.dex) $(STAGE_DIR)/
 	cp $(abspath ../../frameworks/base/preloaded-classes) $(STAGE_DIR)/
 	cp device/run_core.sh $(STAGE_DIR)/
+	@mkdir -p $(STAGE_DIR)/system/framework $(STAGE_DIR)/system/fonts
+	cp device/build.prop $(STAGE_DIR)/system/
+	cp $(DEPLOY)/system/framework/framework-res.apk $(STAGE_DIR)/system/framework/
+	cp ../../apps/q20prober/build/q20prober.apk ../../apps/q20facade/build/q20facade.jar $(STAGE_DIR)/
 	@echo "staged in $(STAGE_DIR); copy it to the device and run: sh run_core.sh all"
 
 # patch paths are repo relative (a/art/..., a/libcore/..., a/system/core/...);

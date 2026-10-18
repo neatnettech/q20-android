@@ -1,0 +1,151 @@
+libcore ICU natives on the QNX sysroot ICU 4.6 (q20-android)
+
+The stock file targets ICU 55 with a mapped icudt55l.dat. On QNX the data is
+linked statically, a few APIs are newer than 4.6, NumberFormat takes the old
+EStyles enum, and the 4.6 data lacks AmPmMarkersNarrow, which made
+initLocaleDataNative fail for every locale.
+
+--- a/libcore/luni/src/main/native/libcore_icu_ICU.cpp	2026-10-18 18:45:21
++++ b/libcore/luni/src/main/native/libcore_icu_ICU.cpp	2026-10-18 18:51:36
+@@ -48,6 +48,7 @@
+ #include "unicode/uloc.h"
+ #include "unicode/ulocdata.h"
+ #include "unicode/ustring.h"
++#include "unicode/ucasemap.h"  // q20-android: U_TITLECASE_* live here in ICU 4.6
+ #include "ureslocs.h"
+ #include "valueOf.h"
+ 
+@@ -126,7 +127,12 @@
+     return 0;
+   }
+   icu::UnicodeString icuCurrencyCode(currencyCode.unicodeString());
++#if U_ICU_VERSION_MAJOR_NUM >= 49
+   return ucurr_getNumericCode(icuCurrencyCode.getTerminatedBuffer());
++#else
++  // q20-android: ucurr_getNumericCode is newer than the QNX sysroot ICU 4.6.
++  return 0;
++#endif
+ }
+ 
+ // TODO: rewrite this with int32_t ucurr_forLocale(const char* locale, UChar* buff, int32_t buffCapacity, UErrorCode* ec)...
+@@ -191,9 +197,11 @@
+     if (nameStyle == UCURR_SYMBOL_NAME) {
+       // ICU doesn't distinguish between falling back to the root locale and meeting a genuinely
+       // unknown currency. The Currency class does.
++#if U_ICU_VERSION_MAJOR_NUM >= 49
+       if (!ucurr_isAvailable(icuCurrencyCode.getTerminatedBuffer(), U_DATE_MIN, U_DATE_MAX, &status)) {
+         return NULL;
+       }
++#endif  // q20-android: ICU 4.6 has no ucurr_isAvailable; treat the currency as known.
+     }
+     if (nameStyle == UCURR_LONG_NAME) {
+       // ICU's default is English. We want the ISO 4217 currency code instead.
+@@ -379,16 +387,24 @@
+ static void setNumberPatterns(JNIEnv* env, jobject obj, icu::Locale& locale) {
+     UErrorCode status = U_ZERO_ERROR;
+ 
++#if U_ICU_VERSION_MAJOR_NUM >= 49
++    const UNumberFormatStyle kCurrency = UNUM_CURRENCY, kDecimal = UNUM_DECIMAL, kPercent = UNUM_PERCENT;
++#else
++    // q20-android: ICU 4.6 createInstance takes NumberFormat::EStyles. The UNUM_*
++    // values convert silently and select the wrong style (UNUM_CURRENCY == kPercentStyle).
++    const icu::NumberFormat::EStyles kCurrency = icu::NumberFormat::kCurrencyStyle,
++        kDecimal = icu::NumberFormat::kNumberStyle, kPercent = icu::NumberFormat::kPercentStyle;
++#endif
+     icu::UnicodeString pattern;
+-    std::unique_ptr<icu::DecimalFormat> fmt(static_cast<icu::DecimalFormat*>(icu::NumberFormat::createInstance(locale, UNUM_CURRENCY, status)));
++    std::unique_ptr<icu::DecimalFormat> fmt(static_cast<icu::DecimalFormat*>(icu::NumberFormat::createInstance(locale, kCurrency, status)));
+     pattern = fmt->toPattern(pattern.remove());
+     setStringField(env, obj, "currencyPattern", pattern);
+ 
+-    fmt.reset(static_cast<icu::DecimalFormat*>(icu::NumberFormat::createInstance(locale, UNUM_DECIMAL, status)));
++    fmt.reset(static_cast<icu::DecimalFormat*>(icu::NumberFormat::createInstance(locale, kDecimal, status)));
+     pattern = fmt->toPattern(pattern.remove());
+     setStringField(env, obj, "numberPattern", pattern);
+ 
+-    fmt.reset(static_cast<icu::DecimalFormat*>(icu::NumberFormat::createInstance(locale, UNUM_PERCENT, status)));
++    fmt.reset(static_cast<icu::DecimalFormat*>(icu::NumberFormat::createInstance(locale, kPercent, status)));
+     pattern = fmt->toPattern(pattern.remove());
+     setStringField(env, obj, "percentPattern", pattern);
+ }
+@@ -567,8 +583,16 @@
+       }
+     }
+     if (!foundYesterdayTodayAndTomorrow) {
++#if defined(__QNXNTO__)
++      // q20-android: the ICU 4.6 data can lack these; English beats failing the whole locale.
++      ALOGW("Couldn't find ICU yesterday/today/tomorrow for %s, using English", languageTag.c_str());
++      setStringField(env, localeData, "yesterday", env->NewStringUTF("Yesterday"));
++      setStringField(env, localeData, "today", env->NewStringUTF("Today"));
++      setStringField(env, localeData, "tomorrow", env->NewStringUTF("Tomorrow"));
++#else
+       ALOGE("Couldn't find ICU yesterday/today/tomorrow for %s", languageTag.c_str());
+       return JNI_FALSE;
++#endif
+     }
+ 
+     // Get the narrow "AM" and "PM" strings.
+@@ -580,8 +604,14 @@
+       }
+     }
+     if (!foundAmPmMarkersNarrow) {
++#if defined(__QNXNTO__)
++      // q20-android: ICU 4.6 data has no AmPmMarkersNarrow at all (CLDR added it later).
++      setStringField(env, localeData, "narrowAm", env->NewStringUTF("a"));
++      setStringField(env, localeData, "narrowPm", env->NewStringUTF("p"));
++#else
+       ALOGE("Couldn't find ICU AmPmMarkersNarrow for %s", languageTag.c_str());
+       return JNI_FALSE;
++#endif
+     }
+ 
+     status = U_ZERO_ERROR;
+@@ -738,8 +768,29 @@
+ 
+ static jobject ICU_getAvailableCurrencyCodes(JNIEnv* env, jclass) {
+   UErrorCode status = U_ZERO_ERROR;
++#if U_ICU_VERSION_MAJOR_NUM >= 49
+   icu::UStringEnumeration e(ucurr_openISOCurrencies(UCURR_COMMON|UCURR_NON_DEPRECATED, &status));
+   return fromStringEnumeration(env, status, "ucurr_openISOCurrencies", &e);
++#else
++  // q20-android: ICU 4.6 has no icu::UStringEnumeration; walk the C enumeration.
++  UEnumeration* e = ucurr_openISOCurrencies(UCURR_COMMON|UCURR_NON_DEPRECATED, &status);
++  if (maybeThrowIcuException(env, "ucurr_openISOCurrencies", status)) {
++    return NULL;
++  }
++  int32_t count = uenum_count(e, &status);
++  jobjectArray result = U_SUCCESS(status) ? env->NewObjectArray(count, JniConstants::stringClass, NULL) : NULL;
++  for (int32_t i = 0; result != NULL && i < count; ++i) {
++    const char* code = uenum_next(e, NULL, &status);
++    if (maybeThrowIcuException(env, "uenum_next", status)) {
++      result = NULL;
++      break;
++    }
++    ScopedLocalRef<jstring> javaCode(env, env->NewStringUTF(code));
++    env->SetObjectArrayElement(result, i, javaCode.get());
++  }
++  uenum_close(e);
++  return result;
++#endif
+ }
+ 
+ static jstring ICU_getBestDateTimePatternNative(JNIEnv* env, jclass, jstring javaSkeleton, jstring javaLanguageTag) {
+@@ -858,6 +909,18 @@
+ }
+ 
+ void register_libcore_icu_ICU(JNIEnv* env) {
++#if defined(__QNXNTO__)
++    // q20-android: the ICU data is linked in statically (libicudataS.a from the QNX
++    // sysroot), so there is no .dat file to map and no TZ override file.
++    UErrorCode qnxStatus = U_ZERO_ERROR;
++    u_init(&qnxStatus);
++    if (qnxStatus != U_ZERO_ERROR) {
++        ALOGE("Couldn't initialize ICU (u_init): %s", u_errorName(qnxStatus));
++        abort();
++    }
++    jniRegisterNativeMethods(env, "libcore/icu/ICU", gMethods, NELEM(gMethods));
++    return;
++#endif
+     // Check the timezone override file exists. If it does, map it first so we use it in preference
+     // to the one that shipped with the device.
+     const char* dataPathPrefix = getenv("ANDROID_DATA");

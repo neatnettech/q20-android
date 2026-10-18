@@ -591,3 +591,64 @@ On device, the full A5 board now reads: PASS arithmetic, regex matches,
 regex replace, SystemClock, Log, ICU PluralRules, Bundle. The facade charter
 in docs/apk-milestones.md governs from here: replace all BlackBerry legacy
 with plain Android, no Google services.
+
+### 2026-10-18: A6 phases 0 to 2: properties, resources and the Looper on device
+
+A6 turned out larger than its row in docs/apk-milestones.md: measuring the
+Prober layout headless already reaches graphics natives (RenderNode, Path,
+Paint) and three binder services (window, display, activity). The plan splits
+it into phases, each with a launcher mode as its runnable check:
+`sh run_core.sh facade [props|res|looper|gfx|activity|all]` runs our own
+launcher (apps/q20facade, the seed of an ActivityThread replacement) against
+the unmodified Prober APK, AOT and `-Xint`.
+
+Phase 0, binder at r81: frameworks/native (include and libs/binder) was an r1
+copy missing the 2016 Parcel fixes; every other tree is android-6.0.1_r81.
+Refetched (the tree is gitignored, so the commands live here):
+
+```
+cd frameworks/native && mv include include.r1 && mv libs/binder libs/binder.r1
+mkdir -p include libs/binder
+B=https://android.googlesource.com/platform/frameworks/native/+archive/refs/tags/android-6.0.1_r81
+curl -sfL $B/include.tar.gz | tar xz -C include
+curl -sfL $B/libs/binder.tar.gz | tar xz -C libs/binder
+rm -rf runtime/art-qnx/build/javacore
+```
+
+libjavacore now links against libart with `--no-undefined`, so a symbol that
+used to fail only on the phone fails the build. The r81 Parcel added none.
+
+Phase 1a, properties and ICU: no property service on QNX, so property_get and
+property_set (src/android_os_qnx.cc) read `$ANDROID_ROOT/build.prop`
+(device/build.prop). Three keys are mandatory: `ro.build.version.sdk=23`
+(SDK_INT 0 rejects every `-vNN` resource), `ro.build.version.all_codenames`
+and `ro.product.cpu.abilist32` (Build.<clinit> indexes element 0 of both).
+The real libcore ICU natives replace the version stubs, on the sysroot ICU 4.6
+(patch 0100): static data instead of a mapped icudt55l.dat, guards for
+ucurr_getNumericCode, ucurr_isAvailable and UStringEnumeration, NumberFormat's
+old EStyles enum (UNUM_CURRENCY silently meant kPercentStyle), the titlecase
+flags from ucasemap.h, and English fallbacks because the 4.6 data has no
+AmPmMarkersNarrow, which had made initLocaleDataNative fail for every locale.
+java_lang_Character.cpp compiles unchanged. One ScopedLocalFrame in JNI_OnLoad
+keeps the main thread's local reference table clean for all stock register
+functions.
+
+Phase 1b, resources: real libandroidfw (9 files, -O2) plus the AssetManager,
+StringBlock and XmlBlock JNI. Patch 0101 compiles out verifySystemIdmaps
+(fork, capset and exec of an idmap binary the phone does not have).
+Resources.getSystem() then reached StandardCharsets.<clinit>, which needs
+Charset objects for UTF-16 and UTF-16LE: the charset stub now recognizes both
+names (converting with them still fails loudly). framework-res.apk is staged
+under `$ANDROID_ROOT/framework`. Resources.getSystem() takes 52 ms AOT and
+63 ms interpreted.
+
+Phase 2, the message pump: libutils Looper on a pipe and poll (patch 0102)
+under the stock MessageQueue JNI, plus Binder Java statics (calling identity
+is always this process, clearCallingIdentity deterministic for Looper.loop's
+check) and Trace's enabled tags query. A post from a second thread while the
+pump sleeps toward a 300 ms message runs at 143 to 155 ms, so the pipe wake
+works; a broken wake would show about 300.
+
+On device, both modes: prober 7/7, props 3/3, res 4/4, looper 6/6.
+`/system/etc/fonts.xml` is not readable for devuser, so Typeface.<clinit>
+takes its missing file path, as the facade plan assumes.
