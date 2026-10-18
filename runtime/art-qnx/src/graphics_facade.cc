@@ -1,5 +1,5 @@
 /*
- * QNX graphics facade: the Paint, Path, RenderNode, ColorFilter and
+ * QNX graphics facade: the Paint, Path, Matrix, RenderNode, ColorFilter and
  * EmojiFactory natives a View tree reaches while it is built, measured and
  * laid out, with nothing drawn (A6). There is no Skia, minikin or hwui on the
  * Q20 yet, so these natives keep plain state; text metrics come from FreeType
@@ -13,7 +13,8 @@
  * A7 brings Skia. No HarfBuzz shaping, kerning or hinting (widths differ from a
  * real phone by a few percent); Roboto Regular stands in for every family, bold
  * and medium included; left to right only; Path keeps points for
- * approximate() and nothing else; RenderNode is a property bag. A native that
+ * approximate() and nothing else; Matrix is real 3x3 math for the operations
+ * registered below (no rotate or skew yet); RenderNode is a property bag. A native that
  * is not registered here fails with UnsatisfiedLinkError naming the method:
  * add it when a trace reaches it.
  */
@@ -31,6 +32,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <string>
 #include <vector>
@@ -461,6 +463,130 @@ JNINativeMethod gPathMethods[] = {
   { "native_approximate", "(JF)[F", reinterpret_cast<void*>(Path_approximate) },
 };
 
+// ---- Matrix ----
+
+// Row major like android.graphics.Matrix values: x' = m[0]x + m[1]y + m[2].
+struct FMatrix { float m[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1}; };
+
+FMatrix* matrixAt(jlong h) { return reinterpret_cast<FMatrix*>(h); }
+
+FMatrix multiply(const FMatrix& a, const FMatrix& b) {
+  FMatrix r;
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      r.m[3 * i + j] = a.m[3 * i] * b.m[j] + a.m[3 * i + 1] * b.m[3 + j] + a.m[3 * i + 2] * b.m[6 + j];
+    }
+  }
+  return r;
+}
+FMatrix translate(float dx, float dy) { FMatrix t; t.m[2] = dx; t.m[5] = dy; return t; }
+FMatrix scale(float sx, float sy, float px, float py) {
+  FMatrix t;
+  t.m[0] = sx; t.m[4] = sy; t.m[2] = px - sx * px; t.m[5] = py - sy * py;
+  return t;
+}
+
+jlong Matrix_create(JNIEnv*, jclass, jlong src) {
+  return reinterpret_cast<jlong>(src != 0 ? new FMatrix(*matrixAt(src)) : new FMatrix());
+}
+void Matrix_finalizer(JNIEnv*, jclass, jlong h) { delete matrixAt(h); }
+jboolean Matrix_isIdentity(JNIEnv*, jclass, jlong h) {
+  static const FMatrix kIdentity;
+  return memcmp(matrixAt(h)->m, kIdentity.m, sizeof(kIdentity.m)) == 0;
+}
+jboolean Matrix_isAffine(JNIEnv*, jclass, jlong h) {
+  const float* m = matrixAt(h)->m;
+  return m[6] == 0 && m[7] == 0 && m[8] == 1;
+}
+void Matrix_reset(JNIEnv*, jclass, jlong h) { *matrixAt(h) = FMatrix(); }
+void Matrix_set(JNIEnv*, jclass, jlong h, jlong other) { *matrixAt(h) = *matrixAt(other); }
+void Matrix_setTranslate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) { *matrixAt(h) = translate(dx, dy); }
+void Matrix_setScale(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy) { *matrixAt(h) = scale(sx, sy, 0, 0); }
+void Matrix_setScaleAt(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy, jfloat px, jfloat py) {
+  *matrixAt(h) = scale(sx, sy, px, py);
+}
+void Matrix_setConcat(JNIEnv*, jclass, jlong h, jlong a, jlong b) { *matrixAt(h) = multiply(*matrixAt(a), *matrixAt(b)); }
+void Matrix_preConcat(JNIEnv*, jclass, jlong h, jlong o) { *matrixAt(h) = multiply(*matrixAt(h), *matrixAt(o)); }
+void Matrix_postConcat(JNIEnv*, jclass, jlong h, jlong o) { *matrixAt(h) = multiply(*matrixAt(o), *matrixAt(h)); }
+void Matrix_preTranslate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) { *matrixAt(h) = multiply(*matrixAt(h), translate(dx, dy)); }
+void Matrix_postTranslate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) { *matrixAt(h) = multiply(translate(dx, dy), *matrixAt(h)); }
+void Matrix_preScale(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy) { *matrixAt(h) = multiply(*matrixAt(h), scale(sx, sy, 0, 0)); }
+void Matrix_postScale(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy) { *matrixAt(h) = multiply(scale(sx, sy, 0, 0), *matrixAt(h)); }
+void Matrix_preScaleAt(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy, jfloat px, jfloat py) {
+  *matrixAt(h) = multiply(*matrixAt(h), scale(sx, sy, px, py));
+}
+void Matrix_postScaleAt(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy, jfloat px, jfloat py) {
+  *matrixAt(h) = multiply(scale(sx, sy, px, py), *matrixAt(h));
+}
+jboolean Matrix_invert(JNIEnv*, jclass, jlong h, jlong inverse) {
+  const float* m = matrixAt(h)->m;
+  double det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6])
+             + m[2] * (m[3] * m[7] - m[4] * m[6]);
+  if (det == 0) return false;
+  if (inverse == 0) return true;
+  float* r = matrixAt(inverse)->m;
+  float c[9] = {m[4] * m[8] - m[5] * m[7], m[2] * m[7] - m[1] * m[8], m[1] * m[5] - m[2] * m[4],
+                m[5] * m[6] - m[3] * m[8], m[0] * m[8] - m[2] * m[6], m[2] * m[3] - m[0] * m[5],
+                m[3] * m[7] - m[4] * m[6], m[1] * m[6] - m[0] * m[7], m[0] * m[4] - m[1] * m[3]};
+  for (int i = 0; i < 9; i++) r[i] = c[i] / det;
+  return true;
+}
+// isPts false maps vectors: no translation, affine part only.
+void Matrix_mapPoints(JNIEnv* env, jclass, jlong h, jfloatArray dst, jint dstIndex, jfloatArray src,
+                      jint srcIndex, jint count, jboolean isPts) {
+  const float* m = matrixAt(h)->m;
+  std::vector<float> in(2 * count), out(2 * count);
+  env->GetFloatArrayRegion(src, srcIndex, 2 * count, in.data());
+  for (int i = 0; i < count; i++) {
+    float x = in[2 * i], y = in[2 * i + 1];
+    if (isPts) {
+      float w = m[6] * x + m[7] * y + m[8];
+      if (w == 0) w = 1;
+      out[2 * i] = (m[0] * x + m[1] * y + m[2]) / w;
+      out[2 * i + 1] = (m[3] * x + m[4] * y + m[5]) / w;
+    } else {
+      out[2 * i] = m[0] * x + m[1] * y;
+      out[2 * i + 1] = m[3] * x + m[4] * y;
+    }
+  }
+  env->SetFloatArrayRegion(dst, dstIndex, 2 * count, out.data());
+}
+void Matrix_getValues(JNIEnv* env, jclass, jlong h, jfloatArray values) {
+  env->SetFloatArrayRegion(values, 0, 9, matrixAt(h)->m);
+}
+void Matrix_setValues(JNIEnv* env, jclass, jlong h, jfloatArray values) {
+  env->GetFloatArrayRegion(values, 0, 9, matrixAt(h)->m);
+}
+jboolean Matrix_equals(JNIEnv*, jclass, jlong a, jlong b) {
+  return memcmp(matrixAt(a)->m, matrixAt(b)->m, sizeof(FMatrix::m)) == 0;
+}
+
+JNINativeMethod gMatrixMethods[] = {
+  { "native_create", "(J)J", reinterpret_cast<void*>(Matrix_create) },
+  { "finalizer", "(J)V", reinterpret_cast<void*>(Matrix_finalizer) },
+  { "native_isIdentity", "(J)Z", reinterpret_cast<void*>(Matrix_isIdentity) },
+  { "native_isAffine", "(J)Z", reinterpret_cast<void*>(Matrix_isAffine) },
+  { "native_reset", "(J)V", reinterpret_cast<void*>(Matrix_reset) },
+  { "native_set", "(JJ)V", reinterpret_cast<void*>(Matrix_set) },
+  { "native_setTranslate", "(JFF)V", reinterpret_cast<void*>(Matrix_setTranslate) },
+  { "native_setScale", "(JFF)V", reinterpret_cast<void*>(Matrix_setScale) },
+  { "native_setScale", "(JFFFF)V", reinterpret_cast<void*>(Matrix_setScaleAt) },
+  { "native_setConcat", "(JJJ)V", reinterpret_cast<void*>(Matrix_setConcat) },
+  { "native_preConcat", "(JJ)V", reinterpret_cast<void*>(Matrix_preConcat) },
+  { "native_postConcat", "(JJ)V", reinterpret_cast<void*>(Matrix_postConcat) },
+  { "native_preTranslate", "(JFF)V", reinterpret_cast<void*>(Matrix_preTranslate) },
+  { "native_postTranslate", "(JFF)V", reinterpret_cast<void*>(Matrix_postTranslate) },
+  { "native_preScale", "(JFF)V", reinterpret_cast<void*>(Matrix_preScale) },
+  { "native_postScale", "(JFF)V", reinterpret_cast<void*>(Matrix_postScale) },
+  { "native_preScale", "(JFFFF)V", reinterpret_cast<void*>(Matrix_preScaleAt) },
+  { "native_postScale", "(JFFFF)V", reinterpret_cast<void*>(Matrix_postScaleAt) },
+  { "native_invert", "(JJ)Z", reinterpret_cast<void*>(Matrix_invert) },
+  { "native_mapPoints", "(J[FI[FIIZ)V", reinterpret_cast<void*>(Matrix_mapPoints) },
+  { "native_getValues", "(J[F)V", reinterpret_cast<void*>(Matrix_getValues) },
+  { "native_setValues", "(J[F)V", reinterpret_cast<void*>(Matrix_setValues) },
+  { "native_equals", "(JJ)Z", reinterpret_cast<void*>(Matrix_equals) },
+};
+
 // ---- RenderNode ----
 
 // hwui RenderProperties defaults. Camera distance is in Sk3DView units.
@@ -641,6 +767,7 @@ void register_qnx_graphics(JNIEnv* env) {
   gFmi.leading = env->GetFieldID(fmi, "leading", "I");
   jniRegisterNativeMethods(env, "android/graphics/Paint", gPaintMethods, NELEM(gPaintMethods));
   jniRegisterNativeMethods(env, "android/graphics/Path", gPathMethods, NELEM(gPathMethods));
+  jniRegisterNativeMethods(env, "android/graphics/Matrix", gMatrixMethods, NELEM(gMatrixMethods));
   jniRegisterNativeMethods(env, "android/view/RenderNode", gRenderNodeMethods, NELEM(gRenderNodeMethods));
   jniRegisterNativeMethods(env, "android/graphics/PorterDuffColorFilter", gPorterDuffColorFilterMethods,
                            NELEM(gPorterDuffColorFilterMethods));

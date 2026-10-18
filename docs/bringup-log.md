@@ -652,3 +652,60 @@ works; a broken wake would show about 300.
 On device, both modes: prober 7/7, props 3/3, res 4/4, looper 6/6.
 `/system/etc/fonts.xml` is not readable for devuser, so Typeface.<clinit>
 takes its missing file path, as the facade plan assumes.
+
+### 2026-10-18: A6 complete: the Prober Activity runs and lays out headless
+
+Phase 3a, graphics facade (src/graphics_facade.cc): the Paint, Path, Matrix,
+RenderNode, ColorFilter and EmojiFactory natives a View tree reaches while it
+is built, measured and laid out. No Skia: Paint keeps plain state and measures
+with the sysroot FreeType 2.4.9 on Roboto-Regular.ttf (unscaled advances times
+size over units per em; ascent, descent, top and bottom from the face with
+Skia's signs and rounding). Path keeps points so PathInterpolator can
+approximate its curve; Matrix is real 3x3 math for the registered operations;
+RenderNode is a property bag. The stock PropertyValuesHolder JNI compiles
+unchanged. `-Xint` also needed the libcore Float and Double natives, which
+AOT code inlines as intrinsics. On device at 48 px: H advances 35.0 px,
+ascent 45 above the baseline, descent 12 below, "count: 0" is 173 px wide,
+fast out slow in at 0.5 gives 0.775.
+
+Phase 3b, the Activity: the launcher prepares the main Looper, installs the
+fake services, parses the manifest with the real PackageParser, builds an
+ActivityThread, a LoadedApk (includeCode false, so the app comes from the
+launch classpath), the real ContextImpl app and activity contexts and an
+Application, then creates the Activity through the public
+Instrumentation.newActivity (which calls attach) and drives
+callActivityOnCreate, performStart, callActivityOnPostCreate and
+performResume. Theme.Material.NoActionBar stands in for DeviceDefault, whose
+action bar needs a PackageManager and bitmap decoding.
+
+Phase 4, measure and layout: the decor is measured EXACTLY 720x720 and laid
+out; no ViewRootImpl, AttachInfo or Choreographer is needed. Same tree, AOT
+and `-Xint`:
+
+```
+facade: view DecorView 0,0 720x720
+facade: view   LinearLayout 0,0 720x720
+facade: view     ViewStub id=action_mode_bar_stub 0,0 0x0 gone
+facade: view     FrameLayout id=content 0,0 720x720
+facade: view       LinearLayout 0,0 720x720
+facade: view         TextView id=counter_text 273,279 173x65 "count: 0"
+facade: view         Button id=bump_button 272,344 176x96 "bump"
+facade: activity passed=6/6
+```
+
+The service surface, logged by the fakes, is the research result: display
+getDisplayInfo and registerCallback, activity setTaskDescription,
+checkPermission and getActivityOptions (twice), window
+getCurrentAnimatorScale and hasNavigationBar. accessibility is looked up 14
+times and tolerated as missing. Everything else in the Activity path stays in
+process.
+
+The only native added on the way that the plan had not traced was Matrix
+(View, VectorDrawable and RippleDrawable create Matrix fields). One open
+diagnostic issue: Java stack traces printed on device contain only app and
+launcher frames, never framework (boot image) frames, in both modes; the
+UnsatisfiedLinkError text named the missing native each time, so it did not
+block A6.
+
+Full suite on device, AOT and `-Xint`: prober 7/7, props 3/3, res 4/4, looper
+6/6, gfx 5/5, activity 6/6.

@@ -23,9 +23,11 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
 | dex2oat built and running on the Q20, hello.dex compiled to hello.oat on-device | done |
 | GC crash in the boot image build | root caused: upstream `CardTable::ClearCardRange` memsets the heap range, not the card range, on any non-Linux target (patch 0060), confirmed on hardware |
 | Boot image build | done on device: core image (`core.art` 3.0 MB + `core.oat` 23.5 MB) and full 13 dex boot image (`boot.art` 10.5 MB + `boot.oat` 84.8 MB), both exit 0 |
-| ICU version and UTF-8 charset natives (needed by `System.<clinit>` and `println`) | stubbed in `runtime/art-qnx/src/icu_stubs.cc` |
+| ICU natives | real libcore ICU natives on the sysroot ICU 4.6 (patch 0100); only the charset lookup is still a stub (`runtime/art-qnx/src/icu_stubs.cc`) |
 | Hello DEX execution | done on device: prints `Hello from ART 6 on QNX! gc ok` in both AOT (Quick-compiled hello.oat) and `-Xint`, exit 0 |
 | Q20 device SSH access | done, reproducible: `runtime/art-qnx/device/connect.sh` plus `q20ssh`/`q20put` |
+| APK ladder A1 to A5 (docs/apk-milestones.md) | done on device: Q20 Prober APK built on the host, headless self test 7/7 AOT and `-Xint` |
+| A6 Activity headless | done on device: our launcher (`apps/q20facade`) runs the Prober Activity through onCreate, onStart, onResume and lays its window out at 720x720 (`sh run_core.sh facade all`) |
 
 ## What blocked Hello World
 
@@ -54,8 +56,7 @@ holds absolute pointers into the hammerhead libart.so, so under our libart.so
 the first managed call jumps to NULL. The image has to come from our own
 dex2oat, which is why the compiler was ported.
 
-Next: land the work (patches 0010 to 0070, stubs, device runner, Dockerfile),
-then the quickened verifier follow-up and the fork/execv dex2oat fallback.
+Next: A7, the Prober's first pixels on the Q20 display (docs/apk-milestones.md).
 
 ## Timeline
 
