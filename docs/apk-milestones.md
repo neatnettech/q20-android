@@ -56,7 +56,7 @@ cheap headless check before it needs the display.
 | A3 | Headless app | `dalvikvm -cp q20prober.apk Q20Prober` runs main() self test, prints, exits 0; AOT via a dex2oat pass over the APK as well | done, both modes |
 | A4 | Screen probe | window, group, CPU-mappable 720x720 buffer, post and flush all succeed from an unsigned SSH process, but nothing composites: BB10 draws only registered app windows. A7 needs the app-launch path (dev-mode BAR), not a bare process | done, see docs/bringup-log.md |
 | A5 | Framework slice | Log, SystemClock, regex and ICU natives all registered and working on device; Bundle works through the real AOSP Parcel with the binder IPC layer stubbed. Self test passes 7/7 | done |
-| A6 | Activity headless | Activity.onCreate runs against a minimal context, resources resolve via AssetManager, a View tree measures and lays out; no window yet |
+| A6 | Activity headless | Activity.onCreate runs against a minimal context, resources resolve via AssetManager, a View tree measures and lays out; no window yet | done: our launcher (apps/q20facade) runs the unmodified Prober through onCreate, onStart, onResume; its window lays out at 720x720 with FreeType text widths, AOT and `-Xint`, see docs/bringup-log.md |
 | A7 | Window | the app's first pixels on the Q20 display, driven by A4's route |
 | A8 | Input | button tap increments the counter: touch, key events, dispatch, invalidation, redraw |
 | A9 | Full app | second screen list, image draw, audio beep, file write; lifecycle survives pause/resume |
@@ -85,6 +85,14 @@ ActivityManager: our own bootstrap calls ActivityThread-ish entry points
 directly. That is the point: measure how much of Android is actually
 reachable without system_server before deciding whether system_server is
 worth building.
+
+A6 measured it. The launcher (apps/q20facade) answers the three services an
+Activity reaches before it has a window (window, display, activity) with
+in process Proxy objects behind a local Binder, and logs every call. The whole
+list for the Prober is display getDisplayInfo and registerCallback, activity
+setTaskDescription, checkPermission and getActivityOptions, window
+getCurrentAnimatorScale and hasNavigationBar; accessibility is asked for and
+tolerated as missing.
 
 ## Facade charter (owner decision, 2026-10-01)
 

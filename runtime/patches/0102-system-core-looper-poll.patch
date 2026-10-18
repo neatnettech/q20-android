@@ -1,0 +1,379 @@
+libutils Looper on poll and a pipe for QNX (q20-android)
+
+QNX has neither epoll nor eventfd. The wake signal is a nonblocking pipe, and
+pollInner polls the wake pipe plus every registered request; addFd and
+removeFd edit the request map and wake the poller. The epoll rebuild logic is
+compiled out.
+
+--- a/system/core/include/utils/Looper.h	2026-10-18 18:58:48
++++ b/system/core/include/utils/Looper.h	2026-10-18 19:03:22
+@@ -22,7 +22,7 @@
+ #include <utils/KeyedVector.h>
+ #include <utils/Timers.h>
+ 
+-#include <sys/epoll.h>
++#include <poll.h>  // q20-android: QNX has no epoll; the Looper polls a pollfd set
+ 
+ namespace android {
+ 
+@@ -424,8 +424,6 @@
+         int seq;
+         sp<LooperCallback> callback;
+         void* data;
+-
+-        void initEventItem(struct epoll_event* eventItem) const;
+     };
+ 
+     struct Response {
+@@ -447,7 +445,8 @@
+ 
+     const bool mAllowNonCallbacks; // immutable
+ 
+-    int mWakeEventFd;  // immutable
++    int mWakeReadPipeFd;  // immutable
++    int mWakeWritePipeFd; // immutable
+     Mutex mLock;
+ 
+     Vector<MessageEnvelope> mMessageEnvelopes; // guarded by mLock
+@@ -457,9 +456,6 @@
+     // any use of it is racy anyway.
+     volatile bool mPolling;
+ 
+-    int mEpollFd; // guarded by mLock but only modified on the looper thread
+-    bool mEpollRebuildRequired; // guarded by mLock
+-
+     // Locked list of file descriptor monitoring requests.
+     KeyedVector<int, Request> mRequests;  // guarded by mLock
+     int mNextRequestSeq;
+@@ -467,6 +463,7 @@
+     // This state is only used privately by pollOnce and does not require a lock since
+     // it runs on a single thread.
+     Vector<Response> mResponses;
++    Vector<struct pollfd> mPollFds; // rebuilt from mRequests on every poll
+     size_t mResponseIndex;
+     nsecs_t mNextMessageUptime; // set to LLONG_MAX when none
+ 
+@@ -474,12 +471,9 @@
+     int removeFd(int fd, int seq);
+     void awoken();
+     void pushResponse(int events, const Request& request);
+-    void rebuildEpollLocked();
+-    void scheduleEpollRebuildLocked();
+ 
+     static void initTLSKey();
+     static void threadDestructor(void *st);
+-    static void initEpollEvent(struct epoll_event* eventItem);
+ };
+ 
+ } // namespace android
+--- a/system/core/libutils/Looper.cpp	2026-10-18 18:58:48
++++ b/system/core/libutils/Looper.cpp	2026-10-18 19:03:22
+@@ -21,7 +21,7 @@
+ #include <fcntl.h>
+ #include <limits.h>
+ #include <inttypes.h>
+-#include <sys/eventfd.h>
++#include <poll.h>
+ 
+ 
+ namespace android {
+@@ -59,31 +59,31 @@
+ 
+ // --- Looper ---
+ 
+-// Hint for number of file descriptors to be associated with the epoll instance.
+-static const int EPOLL_SIZE_HINT = 8;
+-
+-// Maximum number of file descriptors for which to retrieve poll events each iteration.
+-static const int EPOLL_MAX_EVENTS = 16;
+-
+ static pthread_once_t gTLSOnce = PTHREAD_ONCE_INIT;
+ static pthread_key_t gTLSKey = 0;
+ 
+ Looper::Looper(bool allowNonCallbacks) :
+         mAllowNonCallbacks(allowNonCallbacks), mSendingMessage(false),
+-        mPolling(false), mEpollFd(-1), mEpollRebuildRequired(false),
++        mPolling(false),
+         mNextRequestSeq(0), mResponseIndex(0), mNextMessageUptime(LLONG_MAX) {
+-    mWakeEventFd = eventfd(0, EFD_NONBLOCK);
+-    LOG_ALWAYS_FATAL_IF(mWakeEventFd < 0, "Could not make wake event fd.  errno=%d", errno);
+-
+-    AutoMutex _l(mLock);
+-    rebuildEpollLocked();
++    // q20-android: QNX has neither eventfd nor epoll. A nonblocking pipe wakes
++    // the poller, and pollInner polls the wake pipe plus every request.
++    int wakeFds[2];
++    int result = pipe(wakeFds);
++    LOG_ALWAYS_FATAL_IF(result != 0, "Could not create wake pipe.  errno=%d", errno);
++    mWakeReadPipeFd = wakeFds[0];
++    mWakeWritePipeFd = wakeFds[1];
++    result = fcntl(mWakeReadPipeFd, F_SETFL, O_NONBLOCK);
++    LOG_ALWAYS_FATAL_IF(result != 0, "Could not make wake read pipe non-blocking.  errno=%d",
++            errno);
++    result = fcntl(mWakeWritePipeFd, F_SETFL, O_NONBLOCK);
++    LOG_ALWAYS_FATAL_IF(result != 0, "Could not make wake write pipe non-blocking.  errno=%d",
++            errno);
+ }
+ 
+ Looper::~Looper() {
+-    close(mWakeEventFd);
+-    if (mEpollFd >= 0) {
+-        close(mEpollFd);
+-    }
++    close(mWakeReadPipeFd);
++    close(mWakeWritePipeFd);
+ }
+ 
+ void Looper::initTLSKey() {
+@@ -137,50 +137,6 @@
+     return mAllowNonCallbacks;
+ }
+ 
+-void Looper::rebuildEpollLocked() {
+-    // Close old epoll instance if we have one.
+-    if (mEpollFd >= 0) {
+-#if DEBUG_CALLBACKS
+-        ALOGD("%p ~ rebuildEpollLocked - rebuilding epoll set", this);
+-#endif
+-        close(mEpollFd);
+-    }
+-
+-    // Allocate the new epoll instance and register the wake pipe.
+-    mEpollFd = epoll_create(EPOLL_SIZE_HINT);
+-    LOG_ALWAYS_FATAL_IF(mEpollFd < 0, "Could not create epoll instance.  errno=%d", errno);
+-
+-    struct epoll_event eventItem;
+-    memset(& eventItem, 0, sizeof(epoll_event)); // zero out unused members of data field union
+-    eventItem.events = EPOLLIN;
+-    eventItem.data.fd = mWakeEventFd;
+-    int result = epoll_ctl(mEpollFd, EPOLL_CTL_ADD, mWakeEventFd, & eventItem);
+-    LOG_ALWAYS_FATAL_IF(result != 0, "Could not add wake event fd to epoll instance.  errno=%d",
+-            errno);
+-
+-    for (size_t i = 0; i < mRequests.size(); i++) {
+-        const Request& request = mRequests.valueAt(i);
+-        struct epoll_event eventItem;
+-        request.initEventItem(&eventItem);
+-
+-        int epollResult = epoll_ctl(mEpollFd, EPOLL_CTL_ADD, request.fd, & eventItem);
+-        if (epollResult < 0) {
+-            ALOGE("Error adding epoll events for fd %d while rebuilding epoll set, errno=%d",
+-                    request.fd, errno);
+-        }
+-    }
+-}
+-
+-void Looper::scheduleEpollRebuildLocked() {
+-    if (!mEpollRebuildRequired) {
+-#if DEBUG_CALLBACKS
+-        ALOGD("%p ~ scheduleEpollRebuildLocked - scheduling epoll set rebuild", this);
+-#endif
+-        mEpollRebuildRequired = true;
+-        wake();
+-    }
+-}
+-
+ int Looper::pollOnce(int timeoutMillis, int* outFd, int* outEvents, void** outData) {
+     int result = 0;
+     for (;;) {
+@@ -240,12 +196,33 @@
+     int result = POLL_WAKE;
+     mResponses.clear();
+     mResponseIndex = 0;
++
++    // Gather the fds to watch: the wake pipe first, then every request.
++    // ponytail: the pollfd set is rebuilt from mRequests on every poll, O(n) in
++    // registered fds; addFd and removeFd wake() a concurrent poll so it restarts
++    // with the new set.
++    mPollFds.clear();
++    mLock.lock();
++    struct pollfd wakePollFd;
++    wakePollFd.fd = mWakeReadPipeFd;
++    wakePollFd.events = POLLIN;
++    wakePollFd.revents = 0;
++    mPollFds.push(wakePollFd);
++    for (size_t i = 0; i < mRequests.size(); i++) {
++        const Request& request = mRequests.valueAt(i);
++        struct pollfd requestPollFd;
++        requestPollFd.fd = request.fd;
++        requestPollFd.events = (request.events & EVENT_INPUT ? POLLIN : 0)
++                | (request.events & EVENT_OUTPUT ? POLLOUT : 0);
++        requestPollFd.revents = 0;
++        mPollFds.push(requestPollFd);
++    }
++    mLock.unlock();
+ 
+     // We are about to idle.
+     mPolling = true;
+ 
+-    struct epoll_event eventItems[EPOLL_MAX_EVENTS];
+-    int eventCount = epoll_wait(mEpollFd, eventItems, EPOLL_MAX_EVENTS, timeoutMillis);
++    int eventCount = poll(mPollFds.editArray(), mPollFds.size(), timeoutMillis);
+ 
+     // No longer idling.
+     mPolling = false;
+@@ -253,13 +230,6 @@
+     // Acquire lock.
+     mLock.lock();
+ 
+-    // Rebuild epoll set if needed.
+-    if (mEpollRebuildRequired) {
+-        mEpollRebuildRequired = false;
+-        rebuildEpollLocked();
+-        goto Done;
+-    }
+-
+     // Check for poll error.
+     if (eventCount < 0) {
+         if (errno == EINTR) {
+@@ -284,27 +254,32 @@
+     ALOGD("%p ~ pollOnce - handling events from %d fds", this, eventCount);
+ #endif
+ 
+-    for (int i = 0; i < eventCount; i++) {
+-        int fd = eventItems[i].data.fd;
+-        uint32_t epollEvents = eventItems[i].events;
+-        if (fd == mWakeEventFd) {
+-            if (epollEvents & EPOLLIN) {
++    for (size_t i = 0; i < mPollFds.size(); i++) {
++        const struct pollfd& pollFd = mPollFds.itemAt(i);
++        int fd = pollFd.fd;
++        short pollEvents = pollFd.revents;
++        if (pollEvents == 0) {
++            continue;
++        }
++        if (i == 0) {
++            if (pollEvents & POLLIN) {
+                 awoken();
+             } else {
+-                ALOGW("Ignoring unexpected epoll events 0x%x on wake event fd.", epollEvents);
++                ALOGW("Ignoring unexpected poll events 0x%x on wake read pipe.", pollEvents);
+             }
+         } else {
+             ssize_t requestIndex = mRequests.indexOfKey(fd);
+             if (requestIndex >= 0) {
+                 int events = 0;
+-                if (epollEvents & EPOLLIN) events |= EVENT_INPUT;
+-                if (epollEvents & EPOLLOUT) events |= EVENT_OUTPUT;
+-                if (epollEvents & EPOLLERR) events |= EVENT_ERROR;
+-                if (epollEvents & EPOLLHUP) events |= EVENT_HANGUP;
++                if (pollEvents & POLLIN) events |= EVENT_INPUT;
++                if (pollEvents & POLLOUT) events |= EVENT_OUTPUT;
++                if (pollEvents & POLLERR) events |= EVENT_ERROR;
++                if (pollEvents & POLLHUP) events |= EVENT_HANGUP;
++                if (pollEvents & POLLNVAL) events |= EVENT_INVALID;
+                 pushResponse(events, mRequests.valueAt(requestIndex));
+             } else {
+-                ALOGW("Ignoring unexpected epoll events 0x%x on fd %d that is "
+-                        "no longer registered.", epollEvents, fd);
++                ALOGW("Ignoring unexpected poll events 0x%x on fd %d that is "
++                        "no longer registered.", pollEvents, fd);
+             }
+         }
+     }
+@@ -406,9 +381,9 @@
+     ALOGD("%p ~ wake", this);
+ #endif
+ 
+-    uint64_t inc = 1;
+-    ssize_t nWrite = TEMP_FAILURE_RETRY(write(mWakeEventFd, &inc, sizeof(uint64_t)));
+-    if (nWrite != sizeof(uint64_t)) {
++    // A full pipe (EAGAIN) means a wake is already pending.
++    ssize_t nWrite = TEMP_FAILURE_RETRY(write(mWakeWritePipeFd, "W", 1));
++    if (nWrite != 1) {
+         if (errno != EAGAIN) {
+             ALOGW("Could not write wake signal, errno=%d", errno);
+         }
+@@ -420,8 +395,11 @@
+     ALOGD("%p ~ awoken", this);
+ #endif
+ 
+-    uint64_t counter;
+-    TEMP_FAILURE_RETRY(read(mWakeEventFd, &counter, sizeof(uint64_t)));
++    char buffer[16];
++    ssize_t nRead;
++    do {
++        nRead = read(mWakeReadPipeFd, buffer, sizeof(buffer));
++    } while ((nRead == -1 && errno == EINTR) || nRead == sizeof(buffer));
+ }
+ 
+ void Looper::pushResponse(int events, const Request& request) {
+@@ -467,18 +445,21 @@
+         request.data = data;
+         if (mNextRequestSeq == -1) mNextRequestSeq = 0; // reserve sequence number -1
+ 
+-        struct epoll_event eventItem;
+-        request.initEventItem(&eventItem);
+-
+         ssize_t requestIndex = mRequests.indexOfKey(fd);
+         if (requestIndex < 0) {
+-            int epollResult = epoll_ctl(mEpollFd, EPOLL_CTL_ADD, fd, & eventItem);
+-            if (epollResult < 0) {
+-                ALOGE("Error adding epoll events for fd %d, errno=%d", fd, errno);
+-                return -1;
+-            }
+             mRequests.add(fd, request);
+         } else {
++            mRequests.replaceValueAt(requestIndex, request);
++        }
++    } // release lock
++    wake(); // a concurrent poll restarts with the new fd set
++    return 1;
++}
++
++#if 0  // q20-android: epoll bookkeeping, unused with poll
++{
++    {
++        {
+             int epollResult = epoll_ctl(mEpollFd, EPOLL_CTL_MOD, fd, & eventItem);
+             if (epollResult < 0) {
+                 if (errno == ENOENT) {
+@@ -517,6 +498,7 @@
+     } // release lock
+     return 1;
+ }
++#endif
+ 
+ int Looper::removeFd(int fd) {
+     return removeFd(fd, -1);
+@@ -543,10 +525,15 @@
+             return 0;
+         }
+ 
+-        // Always remove the FD from the request map even if an error occurs while
+-        // updating the epoll set so that we avoid accidentally leaking callbacks.
+         mRequests.removeItemsAt(requestIndex);
++    } // release lock
++    wake(); // a concurrent poll stops watching the fd
++    return 1;
++}
+ 
++#if 0  // q20-android: epoll bookkeeping, unused with poll
++{
++    {
+         int epollResult = epoll_ctl(mEpollFd, EPOLL_CTL_DEL, fd, NULL);
+         if (epollResult < 0) {
+             if (seq != -1 && (errno == EBADF || errno == ENOENT)) {
+@@ -579,6 +566,7 @@
+     } // release lock
+     return 1;
+ }
++#endif
+ 
+ void Looper::sendMessage(const sp<MessageHandler>& handler, const Message& message) {
+     nsecs_t now = systemTime(SYSTEM_TIME_MONOTONIC);
+@@ -664,14 +652,4 @@
+     return mPolling;
+ }
+ 
+-void Looper::Request::initEventItem(struct epoll_event* eventItem) const {
+-    int epollEvents = 0;
+-    if (events & EVENT_INPUT) epollEvents |= EPOLLIN;
+-    if (events & EVENT_OUTPUT) epollEvents |= EPOLLOUT;
+-
+-    memset(eventItem, 0, sizeof(epoll_event)); // zero out unused members of data field union
+-    eventItem->events = epollEvents;
+-    eventItem->data.fd = fd;
+-}
+-
+ } // namespace android

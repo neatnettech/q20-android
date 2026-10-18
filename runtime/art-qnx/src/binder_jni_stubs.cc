@@ -22,6 +22,8 @@ jobject javaObjectForIBinder(JNIEnv*, const sp<IBinder>&) { return nullptr; }
 sp<IBinder> ibinderForJavaObject(JNIEnv*, jobject) { return nullptr; }
 void signalExceptionForError(JNIEnv*, jobject, int, bool, int) {}
 void set_dalvik_blockguard_policy(JNIEnv*, jint) {}
+// AssetManager.openAssetFd wraps the fd in a ParcelFileDescriptor; unused headless.
+jobject newParcelFileDescriptor(JNIEnv*, jobject) { return nullptr; }
 
 
 // ---- ProcessState: a dummy instance, no driver ----

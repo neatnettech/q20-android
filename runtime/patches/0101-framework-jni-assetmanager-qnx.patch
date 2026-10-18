@@ -1,0 +1,48 @@
+AssetManager JNI on QNX (q20-android)
+
+The system AssetManager forks and execs /system/bin/idmap with Linux
+capabilities to verify resource overlays. The Q20 has neither the binary nor
+overlays, and capget/capset do not exist on QNX. Compile the verification out.
+
+--- a/frameworks/base/core/jni/android_util_AssetManager.cpp	2026-10-18 18:54:32
++++ b/frameworks/base/core/jni/android_util_AssetManager.cpp	2026-10-18 18:54:32
+@@ -20,7 +20,9 @@
+ #include <android_runtime/android_util_AssetManager.h>
+ 
+ #include <inttypes.h>
++#if !defined(__QNXNTO__)  // q20-android: Linux capabilities, idmap only
+ #include <linux/capability.h>
++#endif
+ #include <stdio.h>
+ #include <sys/types.h>
+ #include <sys/wait.h>
+@@ -41,8 +43,10 @@
+ #include "utils/Log.h"
+ #include "utils/misc.h"
+ 
++#if !defined(__QNXNTO__)
+ extern "C" int capget(cap_user_header_t hdrp, cap_user_data_t datap);
+ extern "C" int capset(cap_user_header_t hdrp, const cap_user_data_t datap);
++#endif
+ 
+ 
+ namespace android {
+@@ -121,6 +125,10 @@
+ // This is called by zygote (running as user root) as part of preloadResources.
+ static void verifySystemIdmaps()
+ {
++#if defined(__QNXNTO__)
++    // q20-android: the Q20 has no idmap binary and no resource overlays, and
++    // QNX refuses fork() in a threaded process. Nothing to verify.
++#else
+     pid_t pid;
+     char system_id[10];
+ 
+@@ -173,6 +181,7 @@
+             waitpid(pid, NULL, 0);
+             break;
+     }
++#endif
+ }
+ 
+ // ----------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-# Handover: Android 6 on QNX (Q20), 2026-10-01 (M1 and M2 done)
+# Handover: Android 6 on QNX (Q20), 2026-10-18 (APK ladder through A6)
 
 Read `docs/bringup-log.md` for the full history. This file is what to do next.
 
@@ -14,6 +14,14 @@ that blocked M1 and M2 were a dex cache prune hole for erroneous classes
 QNX thread stack bugs that let the interpreter overflow the finalizer's stack
 at exit. All of it is committed and merged to main.
 
+Since then the APK ladder reached A6 (branch feat/a6-activity-headless): our
+own launcher (apps/q20facade) runs the unmodified Prober APK's Activity
+through onCreate, onStart and onResume and lays its window out at 720x720,
+on real resources (libandroidfw), a poll based Looper, the real ICU on the
+sysroot 4.6, build.prop properties, fake window/display/activity services and
+a FreeType graphics facade. `sh run_core.sh facade all` is the regression
+suite. A7 (first pixels) is next.
+
 ## Milestones
 
 | ID | Goal | Exit criteria | State |
@@ -24,13 +32,12 @@ at exit. All of it is committed and merged to main.
 | M3.5 | Quickened verifier | all boot classes verify despite quickened opcodes (patch 0040), proven at runtime by loading android.icu.text.PluralRules | done, confirmed on device |
 | M4 | Land the work | patches 0010 to 0091, stubs, device runner, Dockerfile committed and merged to main | done |
 | M5 | Platform hygiene | release build (`-O2`, stripped), fault handler stack scan bounded, verbose per method verifier logging behind a flag | after M4 |
-| M6 | APK path | replaced by the concrete ladder in `docs/apk-milestones.md`: the Q20 Prober APK, milestones A1 to A10 | start with A1 |
+| M6 | APK path | replaced by the concrete ladder in `docs/apk-milestones.md`: the Q20 Prober APK, milestones A1 to A10 | A1 to A6 done, A7 next |
 
 M1 through M4 are done and merged. The facade charter in
 `docs/apk-milestones.md` governs the rest: replace all BlackBerry legacy with
-plain Android, no Google services. The A ladder (A5 done, A6 next) is the
-current work, scoped in `docs/apk-milestones.md` and the plan file at
-`~/.claude/plans/i-was-looking-into-virtual-jellyfish.md`.
+plain Android, no Google services. The A ladder (A6 done, A7 next) is the
+current work, scoped in `docs/apk-milestones.md`.
 
 ## What fixed M1: erroneous class fields were never pruned
 
@@ -187,3 +194,19 @@ M3.
   zygote later.
 * The heap stays tiny during a core image build, 7 MB peak, so `-Xmx256m` is
   generous and heap pressure is not a factor.
+* qconn (8000) and sshd (22) only open while `connect.sh` holds its session;
+  ping and the 4455 door answering is not enough.
+* The device shell has no `printf` and no `head`; push trees with
+  `COPYFILE_DISABLE=1 tar --no-xattrs`, or macOS adds `._*` files.
+* build.prop must carry `ro.build.version.sdk`, `ro.build.version.all_codenames`
+  and `ro.product.cpu.abilist32`, or Build.<clinit> breaks or every `-vNN`
+  resource is rejected.
+* `-Xint` calls natives that AOT code inlines as intrinsics (Float and Double
+  bit conversions): run every new check in both modes.
+* `/system/etc/fonts.xml` is unreadable for devuser, so Typeface.<clinit> leaves
+  every Typeface null and no Typeface natives run; the graphics facade measures
+  with `$ANDROID_ROOT/fonts/Roboto-Regular.ttf`.
+* Java stack traces printed on device show only app and launcher frames; every
+  framework (boot image) frame is missing, in AOT and `-Xint` alike. Find the
+  failing framework method from the UnsatisfiedLinkError text or by grep for
+  now; fixing the trace is M5 hygiene.

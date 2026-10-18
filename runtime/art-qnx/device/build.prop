@@ -1,0 +1,28 @@
+# Read by src/android_os_qnx.cc from $ANDROID_ROOT/build.prop.
+# Plain key=value. Comments only on their own lines.
+#
+# Required: Build.VERSION.SDK_INT; at 0 every -vNN resource is rejected.
+ro.build.version.sdk=23
+# Required: Build.java indexes ALL_CODENAMES[0] in <clinit>.
+ro.build.version.all_codenames=REL
+ro.build.version.codename=REL
+ro.build.version.release=6.0.1
+# Required: Build.java indexes the 32 bit ABI list [0] in <clinit>.
+ro.product.cpu.abilist32=armeabi-v7a,armeabi
+ro.product.cpu.abilist=armeabi-v7a,armeabi
+ro.product.cpu.abi=armeabi-v7a
+ro.product.manufacturer=BlackBerry
+ro.product.brand=q20
+ro.product.model=Q20
+ro.product.name=q20
+ro.product.device=q20
+ro.product.board=msm8960
+ro.build.type=userdebug
+ro.debuggable=1
+# Calibration knob: 720 px wide at 320 dpi is 360 dp (xhdpi resources).
+ro.sf.lcd_density=320
+# Required until A7: Choreographer uses Handler timing, so DisplayEventReceiver
+# natives stay unreached.
+debug.choreographer.vsync=false
+persist.sys.ui.hw=false
+ro.config.low_ram=false

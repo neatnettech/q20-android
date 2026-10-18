@@ -1,23 +1,23 @@
 /*
- * QNX port: minimal ICU and charset natives for libjavacore.
+ * QNX port: minimal charset natives for libjavacore. The libcore.icu.ICU
+ * natives are the real ones (libcore_icu_ICU.cpp on the sysroot ICU 4.6,
+ * patch 0100).
  *
- * Runtime::Start -> InitNativeMethods -> WellKnownClasses::LateInit caches
- * Runtime.nativeLoad, which runs Runtime.<clinit> and then System.<clinit>.
- * initUnchangeableSystemProperties calls three ICU version natives, and any
- * System.out.println reaches Charset.forName("UTF-8") ->
- * NativeConverter.charsetForName. Unregistered, each throws
+ * Any System.out.println reaches Charset.forName("UTF-8") ->
+ * NativeConverter.charsetForName. Unregistered, it throws
  * UnsatisfiedLinkError, CacheMethod then gets a null method id and LOG(FATAL)s,
  * so the runtime never reaches main().
  *
- * ponytail: version strings are constants, and only the charsets that
- * String.getBytes encodes with its own ART natives (CharsetUtils.toUtf8Bytes
- * and friends) are recognised, so no ICU converter is ever opened. A decode
- * (newDecoder) or any other charset still fails with UnsatisfiedLinkError.
- * Upgrade path: delete this file and register the real libcore ICU natives
- * once external/icu 55 plus icudt55l.dat are cross built for QNX.
+ * ponytail: only the charsets that String.getBytes encodes with its own ART
+ * natives (CharsetUtils.toUtf8Bytes and friends) are recognised, plus UTF-16
+ * and UTF-16LE so StandardCharsets.<clinit> (reached from Resources.getSystem)
+ * can build its constants. No ICU converter is ever opened: a decode
+ * (newDecoder), a UTF-16/UTF-16LE encode or any other charset still fails with
+ * UnsatisfiedLinkError. Upgrade path: delete this file and register the real
+ * libcore_icu_NativeConverter.cpp.
  *
  * Runnable check: Hello printing "Hello from ART 6 on QNX! gc ok" on device
- * exercises all four natives (three properties plus the UTF-8 lookup).
+ * exercises the UTF-8 lookup.
  */
 
 #define LOG_TAG "icu-stubs"
@@ -28,27 +28,10 @@
 #include "JniConstants.h"
 #include "ScopedUtfChars.h"
 
-// What libcore M expects to find (it hard codes icudt55l). Stored as system
-// properties only; nothing on the boot path parses them.
-static const char* const kIcuVersion = "55.1";
-static const char* const kUnicodeVersion = "7.0";
-static const char* const kCldrVersion = "27.0.1";
-
-static jstring ICU_getIcuVersion(JNIEnv* env, jclass) {
-  return env->NewStringUTF(kIcuVersion);
-}
-
-static jstring ICU_getUnicodeVersion(JNIEnv* env, jclass) {
-  return env->NewStringUTF(kUnicodeVersion);
-}
-
-static jstring ICU_getCldrVersion(JNIEnv* env, jclass) {
-  return env->NewStringUTF(kCldrVersion);
-}
-
 // Accepted names and the canonical name each maps to. Matched case
 // insensitively, so only spellings that differ by more than case are listed.
-// Every canonical name here has a native encoder in String.getBytes.
+// Every canonical name here except UTF-16 and UTF-16LE has a native encoder
+// in String.getBytes.
 struct CharsetName {
   const char* name;
   const char* canonical;
@@ -66,6 +49,8 @@ static const CharsetName kCharsets[] = {
   { "ASCII",             "US-ASCII" },
   { "UTF-16BE",          "UTF-16BE" },
   { "UnicodeBigUnmarked", "UTF-16BE" },
+  { "UTF-16LE",          "UTF-16LE" },
+  { "UTF-16",            "UTF-16" },
 };
 
 static jobject NativeConverter_charsetForName(JNIEnv* env, jclass, jstring javaName) {
@@ -104,18 +89,11 @@ static jobject NativeConverter_charsetForName(JNIEnv* env, jclass, jstring javaN
                         canonicalName, canonicalName, noAliases);
 }
 
-static JNINativeMethod gIcuMethods[] = {
-  NATIVE_METHOD(ICU, getCldrVersion, "()Ljava/lang/String;"),
-  NATIVE_METHOD(ICU, getIcuVersion, "()Ljava/lang/String;"),
-  NATIVE_METHOD(ICU, getUnicodeVersion, "()Ljava/lang/String;"),
-};
-
 static JNINativeMethod gNativeConverterMethods[] = {
   NATIVE_METHOD(NativeConverter, charsetForName, "(Ljava/lang/String;)Ljava/nio/charset/Charset;"),
 };
 
 void register_qnx_icu_stubs(JNIEnv* env) {
-  jniRegisterNativeMethods(env, "libcore/icu/ICU", gIcuMethods, NELEM(gIcuMethods));
   jniRegisterNativeMethods(env, "libcore/icu/NativeConverter", gNativeConverterMethods,
                            NELEM(gNativeConverterMethods));
 }
