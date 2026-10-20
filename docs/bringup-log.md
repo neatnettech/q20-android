@@ -741,3 +741,77 @@ Canvas native is a one-line forward, mapped at the foot of raster.h) but
 untestable without the device, so per the project rule it waits for the
 on-device A7 session, which wraps a posted window buffer in a Surface, runs one
 decor.draw(canvas) pass, and posts.
+
+### 2026-10-20: A7 phase 2: the Prober's View tree rasterized on the phone
+
+The drawing half of A7 is done and confirmed on hardware. The compositor half
+is not, and the two are now cleanly separable.
+
+**What runs.** `sh run_core.sh facade draw` takes the laid out tree from A6,
+locks a Surface, draws it, and posts. 8/8 checks pass in AOT and in `-Xint`.
+The frame it produces is the Prober's own window: the Material dark background
+at `#ff303030`, "count: 0" in Roboto at its laid out position in 70 percent
+white, and the Button's Material shape inset by 4dp horizontal and 6dp
+vertical inside its 176x96 bounds, exactly as the theme specifies.
+
+**How it is wired.** 35 Canvas natives and 4 Surface natives live in
+`graphics_facade.cc`, the same translation unit as the FreeType face and the
+Paint state they read, which is why no accessor header was needed.
+`android.view.Surface` is the registration host because `JNI_OnLoad` can only
+`FindClass` boot classpath types, so a facade owned native class would never
+resolve; Surface already declares `nativeLockCanvas` and
+`nativeUnlockCanvasAndPost`, which is precisely this contract. The launcher
+constructs a Surface through its reflection door (the no argument constructor
+is hidden from `android-23.jar`), forces `mNativeObject` non zero, locks,
+calls `decor.draw(canvas)`, and posts.
+
+Every native signature was read out of
+`frameworks/base/graphics/java/android/graphics/Canvas.java` rather than
+recalled, and **nothing was missing on the first device run**: no
+UnsatisfiedLinkError, in either mode.
+
+**One real portability bug.** The device build is `gnu++11`, where a struct
+with default member initializers is not an aggregate, so `raster::Rect{a,b,c,d}`
+and `raster::Surface{...}` compiled on the host (c++14) and failed on the
+target. Both now have explicit constructors. Host test: 20/20.
+
+**The buffer refusal, and that it is intermittent.** The first device run got
+`screen_create_window_buffers: Operation not permitted` and fell back to a
+heap surface; the next two runs allocated a real window buffer (720x720,
+stride 2944) and posted with rc=0. Same binary, same user, no state change we
+made. Treat it as a flaky allocation rather than a privilege wall until it is
+reproduced; `screen_get_window_property_iv(BUFFER_SIZE)` returns rc=-1 before
+allocation, so it tells us nothing in advance, and `SCREEN_PROPERTY_POWER_MODE`
+reads back junk (30336) with rc=0 on this build, so the power poke is now
+conditional and effectively pointless.
+
+Because the fallback exists, a missing window costs the panel and not the
+proof: `Q20_DRAW_PNG=<path>` writes the frame through the engine's own PNG
+writer either way, and that file is how both frames above were read back.
+
+**Two defects the frame shows, both outside the drawing path.**
+`Q20_DRAW_TRACE=1` logs every draw call with its colour and geometry:
+
+```text
+drawRect 0,0 720x720 #ff303030 style=0
+drawRun 8 glyphs at 0,51 #b3ffffff size=48.0 first=U+0063
+drawRoundRect 8,12 160x72 #ffffffff
+drawRun 4 glyphs at 25,30 #ffffffff size=28.0 first=U+0042
+```
+
+The label is drawn (4 glyphs, starting 'B', so `textAllCaps` works), and the
+text colours are the correct Material dark values. The button fill arrives as
+pure white, which no Material palette contains, and the white label then
+vanishes into it. The theme attributes themselves resolve correctly:
+`colorButtonNormal` comes back `type=3` (string) pointing at framework
+resource `0x10600f4`, which is what a colour state list XML looks like. So the
+loss is downstream, in loading that colour state list, and it belongs to the
+resources work, not to A7. Next probe: walk `bump.getBackground()` and print
+the GradientDrawable's resolved `mSolidColors`.
+
+**Compositing is still unanswered**, for a mundane reason: the phone was
+password locked for this whole session, so nothing composites regardless and
+there was no foreground app to borrow a window group from. See
+docs/token-wall-and-device-access.md section 11 for the privilege sweep
+(devuser gets APPLICATION, is refused WINDOW_MANAGER, DISPLAY_MANAGER and
+INPUT_PROVIDER) and for the one experiment left to run.

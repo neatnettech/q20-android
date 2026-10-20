@@ -28,6 +28,7 @@ import android.os.Trace;
 import android.text.BoringLayout;
 import android.text.TextPaint;
 import android.system.Os;
+import android.util.TypedValue;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
@@ -306,9 +307,22 @@ public final class Launcher {
         Canvas c = s.lockCanvas(null);
         check("canvas " + c.getWidth() + "x" + c.getHeight(),
                 c.getWidth() > 0 && c.getHeight() > 0);
+        themeColor("colorButtonNormal", android.R.attr.colorButtonNormal);
+        themeColor("colorControlHighlight", android.R.attr.colorControlHighlight);
+        themeColor("textColorPrimary", android.R.attr.textColorPrimary);
         sDecor.draw(c);
         s.unlockCanvasAndPost(c);
         check("draw pass completed", true);
+    }
+
+    // Which theme attribute the button background resolves through: the draw
+    // trace shows the fill arriving as pure white, which no Material palette
+    // contains, so the question is resources, not rasterizing.
+    static void themeColor(String name, int attr) {
+        TypedValue tv = new TypedValue();
+        boolean got = sDecor.getContext().getTheme().resolveAttribute(attr, tv, true);
+        System.out.println("facade: theme " + name + " resolved=" + got + " type=" + tv.type
+                + " data=#" + Integer.toHexString(tv.data) + " res=0x" + Integer.toHexString(tv.resourceId));
     }
 
     static Configuration configuration(int dpi) {

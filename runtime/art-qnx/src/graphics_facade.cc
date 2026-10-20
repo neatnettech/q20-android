@@ -780,6 +780,19 @@ JNINativeMethod gEmojiFactoryMethods[] = {
 jfieldID gCanvasNative;
 struct { jfieldID left, top, right, bottom; } gRect;
 
+// Q20_DRAW_TRACE=1 logs every draw call with its colour and geometry. The
+// frame is one pass over a tree nobody can see while it renders, so this is
+// the only way to tell "drew nothing" from "drew it in the wrong colour".
+bool traceOn() {
+  static int on = -1;
+  if (on < 0) {
+    const char* e = getenv("Q20_DRAW_TRACE");
+    on = (e != nullptr && e[0] != '\0' && e[0] != '0') ? 1 : 0;
+  }
+  return on == 1;
+}
+#define DTRACE(...) do { if (traceOn()) ALOGI(__VA_ARGS__); } while (0)
+
 raster::Canvas* canvasAt(jlong h) { return reinterpret_cast<raster::Canvas*>(h); }
 
 // Draw coordinates round like the engine's own; reject tests round outward so
@@ -846,12 +859,16 @@ jboolean Canvas_quickRejectRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jf
 jboolean Canvas_quickRejectPath(JNIEnv*, jclass, jlong, jlong) { return JNI_FALSE; }
 
 void Canvas_drawColor(JNIEnv*, jclass, jlong h, jint color, jint /*mode*/) {
+  const raster::Rect& c = canvasAt(h)->deviceClip();
+  DTRACE("drawColor #%08x clip %d,%d %dx%d", color, c.l, c.t, c.width(), c.height());
   canvasAt(h)->drawColor(static_cast<uint32_t>(color));
 }
 void Canvas_drawPaint(JNIEnv*, jclass, jlong h, jlong paint) {
   canvasAt(h)->drawColor(paintAt(paint)->color);
 }
 void Canvas_drawRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b, jlong paint) {
+  DTRACE("drawRect %.0f,%.0f %.0fx%.0f #%08x style=%d", l, t, r - l, b - t,
+         paintAt(paint)->color, paintAt(paint)->style);
   canvasAt(h)->drawRect(rectOf(l, t, r, b), paintAt(paint)->color);
 }
 void Canvas_drawRoundRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b,
@@ -859,6 +876,7 @@ void Canvas_drawRoundRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r
   // ponytail: square corners. The Prober's Button is the stock Material shape
   // at control_corner_material, 2dp, which does not read at 176x96; corner
   // coverage is a loop in raster.cc the day a design needs it.
+  DTRACE("drawRoundRect %.0f,%.0f %.0fx%.0f #%08x", l, t, r - l, b - t, paintAt(paint)->color);
   canvasAt(h)->drawRect(rectOf(l, t, r, b), paintAt(paint)->color);
 }
 
@@ -869,6 +887,8 @@ void drawRun(jlong canvas, const jchar* text, int start, int end, jfloat x, jflo
   const FPaint* p = paintAt(paint);
   std::vector<uint32_t> cps;
   decodeUtf16(text, start, end, &cps);
+  DTRACE("drawRun %d glyphs at %.0f,%.0f #%08x size=%.1f first=U+%04X", (int)cps.size(), x, y,
+         p->color, p->textSize, cps.empty() ? 0 : cps[0]);
   pthread_mutex_lock(&gFontLock);
   canvasAt(canvas)->drawGlyphs(face(), cps.data(), (int)cps.size(), x, y, p->color, p->textSize);
   pthread_mutex_unlock(&gFontLock);

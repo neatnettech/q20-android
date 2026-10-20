@@ -28,6 +28,8 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
 | Q20 device SSH access | done, reproducible: `runtime/art-qnx/device/connect.sh` plus `q20ssh`/`q20put` |
 | APK ladder A1 to A5 (docs/apk-milestones.md) | done on device: Q20 Prober APK built on the host, headless self test 7/7 AOT and `-Xint` |
 | A6 Activity headless | done on device: our launcher (`apps/q20facade`) runs the Prober Activity through onCreate, onStart, onResume and lays its window out at 720x720 (`sh run_core.sh facade all`) |
+| A7 drawing | done on device: `sh run_core.sh facade draw` rasterizes the real View tree through our own Canvas JNI onto a software engine, 8/8 in AOT and `-Xint`; the frame is read back with `Q20_DRAW_PNG` |
+| A7 compositing | open: devuser is granted a Screen APPLICATION context and refused WINDOW_MANAGER, DISPLAY_MANAGER and INPUT_PROVIDER, so we cannot composite ourselves without root; the remaining no root variant is joining a foreground app's window group |
 
 ## What blocked Hello World
 
@@ -56,7 +58,9 @@ holds absolute pointers into the hammerhead libart.so, so under our libart.so
 the first managed call jumps to NULL. The image has to come from our own
 dex2oat, which is why the compiler was ported.
 
-Next: A7, the Prober's first pixels on the Q20 display (docs/apk-milestones.md).
+Next: A7's second half. The Prober's own window now renders through our stack
+(docs/bringup-log.md, 2026-10-20), so what is left is getting a window the BB10
+compositor will actually draw.
 
 ## Timeline
 

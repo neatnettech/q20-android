@@ -26,17 +26,28 @@ int envInt(const char* name, int fallback) {
   return (v != nullptr && v[0] != '\0') ? atoi(v) : fallback;
 }
 
-// Attach to display 0 and make sure the panel is powered.
+// Attach to display 0 and make sure the panel is powered. Every rc is logged:
+// this runs blind inside dalvikvm, where a silently failing property read is
+// indistinguishable from a working one until buffer allocation refuses.
 void attachDisplay(screen_window_t win, screen_context_t ctx) {
   int nd = 0;
-  screen_get_context_property_iv(ctx, SCREEN_PROPERTY_DISPLAY_COUNT, &nd);
-  if (nd <= 0) return;
+  const int crc = screen_get_context_property_iv(ctx, SCREEN_PROPERTY_DISPLAY_COUNT, &nd);
+  ALOGI("display count rc=%d n=%d", crc, nd);
+  if (crc != 0 || nd <= 0) return;
   screen_display_t* disps = static_cast<screen_display_t*>(calloc(nd, sizeof(screen_display_t)));
   if (disps == nullptr) return;
-  screen_get_context_property_pv(ctx, SCREEN_PROPERTY_DISPLAYS, reinterpret_cast<void**>(disps));
-  int power = -1;
-  screen_get_display_property_iv(disps[0], SCREEN_PROPERTY_POWER_MODE, &power);
-  if (power != SCREEN_POWER_MODE_ON) {
+  const int drc = screen_get_context_property_pv(ctx, SCREEN_PROPERTY_DISPLAYS,
+                                                 reinterpret_cast<void**>(disps));
+  int power = -1, attached = -1, dsize[2] = {0, 0};
+  const int prc = screen_get_display_property_iv(disps[0], SCREEN_PROPERTY_POWER_MODE, &power);
+  const int arc = screen_get_display_property_iv(disps[0], SCREEN_PROPERTY_ATTACHED, &attached);
+  const int src = screen_get_display_property_iv(disps[0], SCREEN_PROPERTY_SIZE, dsize);
+  ALOGI("displays rc=%d; display0 power=%d (rc=%d) attached=%d (rc=%d) size=%dx%d (rc=%d)",
+        drc, power, prc, attached, arc, dsize[0], dsize[1], src);
+  // Only poke power on a read that actually worked: a failed read leaves junk
+  // in power, and writing a display property we did not understand is how a
+  // context gets itself refused later.
+  if (prc == 0 && power != SCREEN_POWER_MODE_ON) {
     int on = SCREEN_POWER_MODE_ON;
     ALOGI("display power was %d, setting ON rc=%d", power,
           screen_set_display_property_iv(disps[0], SCREEN_PROPERTY_POWER_MODE, &on));
@@ -70,9 +81,15 @@ bool create() {
   }
 
   int fmt = SCREEN_FORMAT_RGBA8888;
-  screen_set_window_property_iv(gWin, SCREEN_PROPERTY_FORMAT, &fmt);
-  int usage = SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE;
-  screen_set_window_property_iv(gWin, SCREEN_PROPERTY_USAGE, &usage);
+  ALOGI("set format rc=%d", screen_set_window_property_iv(gWin, SCREEN_PROPERTY_FORMAT, &fmt));
+  // Knob, because the two probes disagree and neither ran inside dalvikvm:
+  // A4 set no usage at all and got buffers, navigator_probe set WRITE|NATIVE
+  // and got buffers. Q20_SCREEN_USAGE=0 drops the property entirely.
+  const int usage = envInt("Q20_SCREEN_USAGE", SCREEN_USAGE_WRITE | SCREEN_USAGE_NATIVE);
+  if (usage != 0) {
+    ALOGI("set usage 0x%x rc=%d", usage,
+          screen_set_window_property_iv(gWin, SCREEN_PROPERTY_USAGE, &usage));
+  }
   screen_set_window_property_cv(gWin, SCREEN_PROPERTY_ID_STRING,
                                 strlen("q20-facade") + 1, "q20-facade");
   int zorder = envInt("Q20_SCREEN_ZORDER", 200);
@@ -85,6 +102,11 @@ bool create() {
   int visible = 1;
   screen_set_window_property_iv(gWin, SCREEN_PROPERTY_VISIBLE, &visible);
 
+  // The buffer size a window inherits from its display is what gets allocated;
+  // a 0x0 read here would explain a refusal without any privilege involved.
+  int want[2] = {0, 0};
+  ALOGI("buffer size before alloc: rc=%d %dx%d",
+        screen_get_window_property_iv(gWin, SCREEN_PROPERTY_BUFFER_SIZE, want), want[0], want[1]);
   if (screen_create_window_buffers(gWin, 1) != 0) {
     ALOGE("screen_create_window_buffers failed errno=%d (%s)", errno, strerror(errno));
     return false;
