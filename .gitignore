@@ -41,3 +41,5 @@ runtime/qnx-shims/screen-probe
 runtime/qnx-shims/qconnDoor.bin
 frameworks/native/
 external/
+runtime/art-qnx/src/raster_test
+runtime/art-qnx/src/raster_out.png

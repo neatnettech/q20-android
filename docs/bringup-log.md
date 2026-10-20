@@ -709,3 +709,35 @@ block A6.
 
 Full suite on device, AOT and `-Xint`: prober 7/7, props 3/3, res 4/4, looper
 6/6, gfx 5/5, activity 6/6.
+
+### 2026-10-20: A7 phase 1: the software rasterizer, host-verified
+
+A6 measures and lays out the View tree but draws nothing. A7's first step is a
+drawing engine that turns the laid-out tree into pixels in an RGBA8888 surface
+— the exact format of the CPU-mappable window buffer A4 proved posts to the
+panel (R,G,B,A bytes, stride 2944 for 720 wide).
+
+`runtime/art-qnx/src/raster.{h,cc}` is that engine: a software canvas with a
+save/restore stack (translate + rect clip), src-over blending, solid fills, and
+FreeType glyph runs measured and rendered from the same face the A6 metrics
+path uses. No Skia, no JNI, no ART — portable C++ + FreeType, so it compiles
+into the device facade beside graphics_facade.cc AND builds on the host, where
+`raster_test.cc` renders the Prober's A6 layout (DecorView 720x720, counter
+TextView at 273,279 173x65 "count: 0" at 48px, bump Button at 272,344 176x96)
+and asserts the pixels. It also carries a dependency-free PNG writer (stored
+DEFLATE, no zlib) to eyeball the output; PIL decodes it clean.
+
+`make -f runtime/art-qnx/src/raster.mk test` builds and runs host-side: 11/11
+assertions pass (blend to mid-gray, clip containment, padded-stride equality,
+the three layout fills at exact colors, >150 glyph pixels inside the counter
+box, none above it). The rendered PNG shows the layout correctly; the host
+font (DejaVu) is wider than Roboto so "count: 0" overflows the Roboto-measured
+173px box and the clipRect cuts the "0" — correct behavior, and it fits on
+device with Roboto.
+
+Deliberately NOT done here: the android.graphics.Canvas JNI that forwards onto
+this engine, and any change to art-qnx.mk. That binding is mechanical (each
+Canvas native is a one-line forward, mapped at the foot of raster.h) but
+untestable without the device, so per the project rule it waits for the
+on-device A7 session, which wraps a posted window buffer in a Surface, runs one
+decor.draw(canvas) pass, and posts.
