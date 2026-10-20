@@ -727,3 +727,74 @@ fell back to a generic 169.254/16).
 
 The research proxy and any custom client are deliberately kept out of the repo
 for now; the devuser channel (`connect.sh`, `q20ssh`, qconn 8000) is unchanged.
+
+## 15. Root quest, session four: the root branch is reachable but RTAS-key gated (2026-10-20, device on WiFi)
+
+Ran the experiment from sections 13 and 14 against the live door. Clean,
+decisive result: the root branch is reachable with the password, but the root
+challenge is bound to the device's own RTAS key, which the password does not
+provide. Root via the door is not achievable with the password alone.
+
+### Setup
+
+Dev mode over WiFi (owner enabled "discoverable", same password). The Q20 came
+up at `192.168.1.184` with the door on 4455; USB stayed stuck in mass-storage
+mode, so WiFi was the usable channel. The door accepts WiFi connections with
+dev mode's WiFi discovery on: no wired-only rejection.
+
+The client is `runtime/qnx-shims/door/Q20Door.java`, built on the vendor
+`jqconnDoor.jar` classes so all crypto is stock. Baseline `user` mode ran the
+full vendor handshake and **re-provisioned devuser**: port 22 opened and
+`q20ssh` logged in as `devuser` (`uid`, `home=/accounts/devuser`). So the
+password `drstone` and the whole harness are correct over WiFi.
+
+### The root probe and its result
+
+`root` mode sends HELLO, then a ChallengeRequest with an **empty** public key,
+the selector proven in section 14 (the daemon's zeroed receive buffer reads the
+empty key as 0 and takes the root branch). The wire:
+
+```
+HELLO ->
+  feedback <- code=2 (FEEDBACK) payload 0000 0000   (OK)
+CHALLENGE_REQUEST (empty key = root selector) ->
+  challenge response <- code=4 (ENCRYPTED_CHALLENGE_RESPONSE) len=168
+  challenge: version=0x100 sessionKeyType=3 containerKeyVersion=1
+             sourceName="QCONN-r144" sigType=1
+  local RTAS decrypt => FAIL
+```
+
+Two facts, both decisive:
+
+1. **The daemon took the root branch.** The empty-key ChallengeRequest was not
+   rejected; the daemon answered with a real 168-byte encrypted challenge. So
+   the root selector works exactly as the static analysis predicted, and root
+   is not gated by the client being unable to *ask*.
+2. **The root challenge is bound to `QCONN-r144`, not to us.** In the devuser
+   flow the daemon encrypts the challenge to the client's own public key (which
+   `LocalRTASConnection` generated, so the client decrypts it). For root, with
+   no client key, the daemon encrypts to its own RTAS key named `QCONN-r144`,
+   and `LocalRTASConnection.decrypt` fails. Answering it needs the `QCONN-r144`
+   private key, which is RTAS/debug-token grade and is not derived from the
+   device password.
+
+### Where this leaves root
+
+The password unlocks devuser; it does not unlock root. The door's root branch
+is a real, reachable code path, but its challenge is cryptographically gated by
+the `QCONN-r144` RTAS key. The only ways past it:
+
+* **Recover the `QCONN-r144` private key.** Whether it is the OS-shipped
+  "fallback RTAS key" the daemon logs (potentially static and extractable) or a
+  per-device key in protected storage is unknown and untested; probing for the
+  key on the device is credential extraction and is left as an explicit owner
+  decision, not pursued here.
+* A QNX-side privilege path independent of the door (section 9 list items 2 to
+  4), still open.
+
+So A7 compositing, which needs root (section 12), stays blocked, and the
+drawing half of A7 remains the delivered result. The devuser channel is fully
+working over WiFi now, which is a simpler path than the USB dance for everyday
+work: `Q20_IP=192.168.1.184 q20ssh`.
+
+The experiment client and proxy live in `runtime/qnx-shims/door/` (gitignored).
