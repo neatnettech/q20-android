@@ -77,6 +77,10 @@ int main(int argc, char** argv) {
    * land on top of the homescreen has to beat that. Default above it; pass
    * a third argument to sweep. */
   const int zorder_arg = (argc > 3) ? atoi(argv[3]) : 200;
+  /* NAV_HOLD=0 sweeps group names fast: the JOIN rc is the datum, and only a
+   * name that joins is worth holding on screen for a human to look at. */
+  const char* hold_env = getenv("NAV_HOLD");
+  const int hold = (hold_env != NULL && hold_env[0] != '\0') ? atoi(hold_env) : 60;
 
   classify_contexts();
 
@@ -144,9 +148,28 @@ int main(int argc, char** argv) {
   P("set visible rc=%d\n",
     screen_set_window_property_iv(win, SCREEN_PROPERTY_VISIBLE, &visible));
 
+  /* A window that CREATEs its own group inherits the display size. A window
+   * that JOINs one inherits its size from the parent group, which for a group
+   * whose owner has never heard of us means 0x0: the compositor then has a
+   * correctly filled buffer to draw at zero size, which looks exactly like
+   * being ignored. Set it explicitly. NAV_SIZE overrides. */
+  const char* size_env = getenv("NAV_SIZE");
+  const int want = (size_env != NULL && size_env[0] != '\0') ? atoi(size_env) : 720;
+  int wsize[2] = {want, want};
+  P("set size %dx%d rc=%d errno=%d\n", wsize[0], wsize[1],
+    screen_set_window_property_iv(win, SCREEN_PROPERTY_SIZE, wsize), errno);
+  int ssize[2] = {want, want};
+  P("set source size rc=%d\n",
+    screen_set_window_property_iv(win, SCREEN_PROPERTY_SOURCE_SIZE, ssize));
+  /* BB10 identifies a child window to the group owner by its id string. */
+  screen_set_window_property_cv(win, SCREEN_PROPERTY_ID_STRING,
+                                strlen("q20-nav-probe") + 1, "q20-nav-probe");
+
   int bdims[2] = {0, 0};
   screen_get_window_property_iv(win, SCREEN_PROPERTY_BUFFER_SIZE, bdims);
-  P("buffer size %dx%d\n", bdims[0], bdims[1]);
+  int rsize[2] = {0, 0};
+  screen_get_window_property_iv(win, SCREEN_PROPERTY_SIZE, rsize);
+  P("buffer size %dx%d, window size reads %dx%d\n", bdims[0], bdims[1], rsize[0], rsize[1]);
 
   if (screen_create_window_buffers(win, 1) != 0) {
     P("screen_create_window_buffers failed errno=%d (%s)\n",
@@ -161,6 +184,22 @@ int main(int argc, char** argv) {
   screen_get_buffer_property_iv(buf, SCREEN_PROPERTY_STRIDE, &stride);
   P("buf=%p ptr=%p stride=%d\n", (void*)buf, ptr, stride);
   if (ptr == NULL) { P("no cpu pointer\n"); return 4; }
+
+  /* Trust the allocated buffer, not the window read above: the window's
+   * BUFFER_SIZE is 0x0 before allocation, and stays 0x0 for a JOINED window
+   * because size comes from the parent group. Filling bdims[1] rows of a 0x0
+   * read posts an UNFILLED buffer, which looks exactly like "the compositor
+   * ignored us" and is how the first join sweep lied. */
+  int abuf[2] = {0, 0};
+  screen_get_buffer_property_iv(buf, SCREEN_PROPERTY_BUFFER_SIZE, abuf);
+  if (abuf[0] > 0 && abuf[1] > 0) {
+    bdims[0] = abuf[0];
+    bdims[1] = abuf[1];
+  } else if (stride > 0 && bdims[0] <= 0) {
+    bdims[0] = stride / 4;  /* RGBA8888 */
+    bdims[1] = bdims[0];    /* the Q20 panel is square */
+  }
+  P("filling %dx%d\n", bdims[0], bdims[1]);
 
   /* Solid magenta: unmistakably this probe, not A4. */
   for (int y = 0; y < bdims[1]; y++) {
@@ -185,11 +224,15 @@ int main(int argc, char** argv) {
     screen_get_window_property_iv(win, SCREEN_PROPERTY_POSITION, ppos);
     screen_get_window_property_iv(win, SCREEN_PROPERTY_VISIBLE, &pvis);
     screen_get_window_property_iv(win, SCREEN_PROPERTY_ZORDER, &pz);
-    P("after post: position=%d,%d visible=%d zorder=%d\n",
-      ppos[0], ppos[1], pvis, pz);
+    int psize[2] = {-1, -1};
+    char gname[128] = {0};
+    screen_get_window_property_iv(win, SCREEN_PROPERTY_SIZE, psize);
+    screen_get_window_property_cv(win, SCREEN_PROPERTY_GROUP, sizeof(gname), gname);
+    P("after post: position=%d,%d visible=%d zorder=%d size=%dx%d group=\"%s\"\n",
+      ppos[0], ppos[1], pvis, pz, psize[0], psize[1], gname);
   }
-  P("holding 60s — look at the phone for a MAGENTA fill\n");
+  P("holding %ds, look at the phone for a MAGENTA fill\n", hold);
   logline("nav-probe posted, holding");
-  sleep(60);
+  if (hold > 0) sleep(hold);
   return 0;
 }

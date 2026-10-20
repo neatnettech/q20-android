@@ -495,3 +495,82 @@ docker compose run --rm --entrypoint /bin/bash aosp6 -c \
 `/pps/services/navigator/control?wait`, and a `?wait` open blocks until the
 object changes, which never happens on a locked idle device. It reads `state`
 now.
+
+## 12. The JOIN route is closed (2026-10-20, device unlocked, owner watching)
+
+Section 10 set the bar for calling the display question settled: "Only if both
+fail cleanly is A7 needs app-launch/root actually earned." Both have now
+failed cleanly, on an unlocked phone with an app in the foreground and the
+owner watching the panel.
+
+### The foreground group was found, and it was the right one
+
+With the device unlocked and the File Manager open,
+`/pps/services/navigator/state` gives the live group directly:
+
+```text
+[n]curr_window::sys.perimeterbrowser.gYABgMgpl40MVrFkZvPEXRuQTGE
+[n]windows_size:n:1
+```
+
+`sys.perimeterbrowser` is the File Manager. So `curr_window` is the group name
+source we were missing in section 11, and `window_id` in the per app
+`rundata_*` is empty even for the live fullscreen app, on this build.
+
+### screen_join_window_group lies
+
+It returns rc=0 for any string, including a deliberately bogus one:
+
+```text
+JOIN group "sys.perimeterbrowser.gYABgMgpl40MVrFkZvPEXRuQTGE" rc=0 (joined)
+JOIN group "42672382"                                        rc=0 (joined)
+JOIN group "sys.perimeterbrowser"                            rc=0 (joined)
+```
+
+The return value is worthless. What settles it is reading the membership back
+after the post, and the control run proves the read itself works:
+
+| path | `SCREEN_PROPERTY_GROUP` reads back | `BUFFER_SIZE` | on the panel |
+|---|---|---|---|
+| CREATE own group | `"q20probe-group"` | 720x720 | nothing (A4 baseline) |
+| JOIN foreground group | `""` | 0x0 | nothing |
+
+The joined window is in no group at all. The call is accepted at the API
+boundary and dropped. The `0x0` buffer size is the same fact seen from the
+other side: with no parent group there is nothing to inherit a size from.
+
+### Two probe bugs that were hiding this
+
+Both are fixed, and both mattered, because each one independently produces
+"nothing on screen" for a reason that is not the compositor:
+
+1. The probe filled `bdims[1]` rows using a `BUFFER_SIZE` read taken **before**
+   allocation. For a joined window that read is `0x0`, so it filled zero rows
+   and posted an unfilled buffer while printing "filled magenta". It now takes
+   the size from the allocated buffer.
+2. The probe never set `SCREEN_PROPERTY_SIZE`. A window that creates its own
+   group inherits the display size; a joined one does not. It is set
+   explicitly now (`NAV_SIZE`, default 720), and reads back 720x720 even on
+   the joined window.
+
+With both fixed the probe posts a genuinely filled, correctly sized 720x720
+magenta buffer, `post` and `flush` both return 0, and the panel does not
+change. Confirmed visually by the owner, twice.
+
+### What this earns
+
+* devuser gets a Screen `APPLICATION` context and nothing else (section 11).
+* devuser cannot join a group it does not own.
+* devuser cannot read the group registry, and cannot read any other process's
+  environment to steal a name that would not work anyway.
+
+So compositing requires either root (the `SCREEN_WINDOW_MANAGER_CONTEXT` that
+the facade charter's "be the presentation layer" end state needs anyway) or
+being launched by the Navigator (the app launch path, behind the dead debug
+token servers of sections 1 to 8). The qconnDoor track in section 9 is now the
+critical path for pixels on the panel.
+
+This does not block the rest of A7 or the ladder above it: the drawing half is
+done and verified on hardware (docs/bringup-log.md, A7 phase 2), and
+`Q20_DRAW_PNG` reads every rendered frame back off the device without a
+compositor.

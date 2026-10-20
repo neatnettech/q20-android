@@ -29,7 +29,7 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
 | APK ladder A1 to A5 (docs/apk-milestones.md) | done on device: Q20 Prober APK built on the host, headless self test 7/7 AOT and `-Xint` |
 | A6 Activity headless | done on device: our launcher (`apps/q20facade`) runs the Prober Activity through onCreate, onStart, onResume and lays its window out at 720x720 (`sh run_core.sh facade all`) |
 | A7 drawing | done on device: `sh run_core.sh facade draw` rasterizes the real View tree through our own Canvas JNI onto a software engine, 8/8 in AOT and `-Xint`; the frame is read back with `Q20_DRAW_PNG` |
-| A7 compositing | open: devuser is granted a Screen APPLICATION context and refused WINDOW_MANAGER, DISPLAY_MANAGER and INPUT_PROVIDER, so we cannot composite ourselves without root; the remaining no root variant is joining a foreground app's window group |
+| A7 compositing | blocked on root, and now proven so: devuser gets a Screen APPLICATION context and is refused WINDOW_MANAGER, DISPLAY_MANAGER and INPUT_PROVIDER, and `screen_join_window_group` returns rc=0 but leaves the window in no group (`SCREEN_PROPERTY_GROUP` reads back empty, against `"q20probe-group"` for a group we create). Pixels on the panel now depend on the qconnDoor root track |
 
 ## What blocked Hello World
 
