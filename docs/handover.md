@@ -1,4 +1,4 @@
-# Handover: Android 6 on QNX (Q20), 2026-10-18 (APK ladder through A6)
+# Handover: Android 6 on QNX (Q20), 2026-10-20 (A7 drawing done, root track mapped)
 
 Read `docs/bringup-log.md` for the full history. This file is what to do next.
 
@@ -14,13 +14,30 @@ that blocked M1 and M2 were a dex cache prune hole for erroneous classes
 QNX thread stack bugs that let the interpreter overflow the finalizer's stack
 at exit. All of it is committed and merged to main.
 
-Since then the APK ladder reached A6 (branch feat/a6-activity-headless): our
-own launcher (apps/q20facade) runs the unmodified Prober APK's Activity
-through onCreate, onStart and onResume and lays its window out at 720x720,
-on real resources (libandroidfw), a poll based Looper, the real ICU on the
-sysroot 4.6, build.prop properties, fake window/display/activity services and
-a FreeType graphics facade. `sh run_core.sh facade all` is the regression
-suite. A7 (first pixels) is next.
+Since then the APK ladder reached A6 and A7's drawing half (branch
+claude/practical-bell-aj19zz). A6: the launcher (apps/q20facade) runs the
+unmodified Prober through onCreate/onStart/onResume and lays its window out at
+720x720. A7 phase 2: the real View tree now rasterizes through our own
+android.graphics.Canvas JNI (graphics_facade.cc) onto a software engine
+(raster.cc) and a QNX Screen window (screen_window.cc), `sh run_core.sh facade
+draw`, 8/8 in AOT and -Xint; `Q20_DRAW_PNG` reads the frame back and it is
+correct (Material bg, Roboto "count: 0", Button shape). `sh run_core.sh facade
+all` (5 modes, both execution modes) is the headless regression and stays
+green.
+
+A7 compositing is blocked on root, proven on hardware: devuser gets a Screen
+APPLICATION context but not WINDOW_MANAGER, and screen_join_window_group
+accepts any name yet leaves the window in no group (section 12 of
+docs/token-wall-and-device-access.md). So the next real unlock is root, and
+session two of the root quest mapped it: the qconnDoor daemon's root-vs-devuser
+sshd provisioning is a client-supplied flag gated by the device PASSWORD
+challenge, not a debug token (section 13). The next action is the dynamic test
+in section 13: speak the door protocol, pass the password challenge, send the
+root selector 0, see whether sshd comes up with PermitRootLogin=yes.
+
+Two known, non-blocking defects in the A7 frame: the Button fill resolves to
+white (a colour-state-list load issue, not drawing; theme attrs resolve
+correctly), and one non-reproducing screen_create_window_buffers EPERM.
 
 ## Milestones
 
