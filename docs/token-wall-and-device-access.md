@@ -574,3 +574,98 @@ This does not block the rest of A7 or the ladder above it: the drawing half is
 done and verified on hardware (docs/bringup-log.md, A7 phase 2), and
 `Q20_DRAW_PNG` reads every rendered frame back off the device without a
 compositor.
+
+## 13. Root quest, session two: the door's root branch is a client flag (2026-10-20)
+
+Static RE of `runtime/qnx-shims/qconnDoor.bin` (34 KB, stripped ARM/Thumb-2,
+analyzed with the toolchain's objdump/readelf in the container). The daemon is
+far more legible than "string-obfuscated" suggested: the dynamic import table
+plus the `.rodata` literals reconstruct the whole protocol. This is the
+BlackBerry qconnDoor, the dev-mode door that provisions sshd/qconn, on an owned
+Q20 running end-of-life 10.3.3.
+
+### The daemon provisions sshd two ways, from the same binary
+
+The `.rodata` carries both an sshd config for **root** and one for **devuser**,
+at adjacent addresses, and the code picks between them line by line:
+
+| line | root branch | devuser branch (what Connect.jar uses) |
+|---|---|---|
+| keyfile | `AuthorizedKeysFile=/var/qconndoor/.ssh/authorized_keys2` | `.../accounts/devuser/.ssh/authorized_keys2` |
+| users | `AllowUsers=root` | `AllowUsers=devuser` |
+| root login | `PermitRootLogin=yes` | `DenyUsers=root` |
+
+All four `posix_spawn` sites in the binary call
+`posix_spawnattr_setcred(attr, 0, 0)` first: every service the door spawns
+(qconn, sshd) runs as uid 0. The devuser outcome we use today is not a
+privilege ceiling in the spawn; it is the sshd config the devuser branch
+writes.
+
+### The branch is selected by a client-supplied field
+
+The config-building function at `0x2f44` keys every choice above off one
+boolean, a field at offset `0xf0` of the per-connection session struct
+(`ldr.w r3, [r0, #0xf0]; cbz r3, <devuser>`). That field is written in the
+command handler at `0x33c8`:
+
+```
+33c0  ldr   r3, [r4, #16]      ; session state
+33c2  cmp   r3, #2             ; must be state 2 (authenticated)
+33c4  bne   <error>
+33c8  ldrh  r6, [sp, #64]      ; a 16-bit field from the client's request
+33cc  mov   r9, #1
+33d0  cbnz  r6, <devuser>      ; r6 != 0  -> devuser
+33d2  str   r9, [r4, #0xf0]    ; r6 == 0  -> ROOT (flag = 1)
+33d6  blx   RTAS_LoadQconnKeyExV2
+```
+
+So **root versus devuser is a client flag**: a 16-bit value in the
+authenticated key-upload request, `0` for root. The session constructor at
+`0x27c4` zeroes the flag, so devuser is only the default; the client chooses.
+Connect.jar evidently sends a non-zero value. This is the heart of the finding:
+the debug-token wall (sections 1 to 8) governs BAR/APK **installation**; it does
+not gate this branch.
+
+### What still has to be true, and the one unknown
+
+The root branch is reachable only from session state 2, which is set after the
+authentication challenge, and the auth is the **device password**, not a RIM
+debug token: the challenge handler decodes `passwordExists` / `challenge` over
+PPS and rejects with `Password not valid. Authentication failed` and `The
+device password you provided is incorrect`. The owner has the password (it is
+already what `connect.sh` feeds as `$BBPW`).
+
+The root path does one extra thing the devuser path does not: at `0x33d6` it
+calls `RTAS_LoadQconnKeyExV2`, and the challenge is checked by the QNX library
+routine `VerifyEncryptionChallenge` (`0x349c`) against the loaded key. The open
+question is purely **which key**: if the root branch verifies the challenge
+against the RTAS **device-specific** key, a client needs the matching private
+key (debug-token grade) and password alone is not enough; if it accepts the
+password-derived challenge like the devuser branch, the password is enough. The
+binary logs both `Using the device specific RTAS key %s` and `Using the
+fallback RTAS key`, so the device-specific key is **not** a hard requirement at
+load time: there is a fallback. Whether the fallback key also satisfies the
+root-branch verify is the single thing static analysis cannot settle.
+
+### The experiment that settles it (no new primitives, owner + device)
+
+Drive the door protocol directly instead of through Connect.jar:
+
+1. Open the qconndoor port over USB (wired is enforced: the daemon rejects
+   non-wired with `Attempted to connect via non-wired connection`).
+2. Complete the password challenge with the known device password, exactly as
+   Connect.jar does, to reach session state 2. jqconnDoor.jar is the protocol
+   reference; the wire format is the PPS-framed challenge above.
+3. Send the key-upload command with the root selector `0` and our existing
+   RSA-4096 public key, and watch for two outcomes:
+   * sshd comes up with `PermitRootLogin=yes` and our key at
+     `/var/qconndoor/.ssh/authorized_keys2` -> `ssh root@<ip>` works, root
+     achieved, and A7 compositing (and the whole facade charter) unblocks.
+   * the daemon rejects at `VerifyEncryptionChallenge` -> the root branch is
+     bound to a device-specific key after all, and root stays behind the token;
+     the finding then is a clean negative, not a guess.
+
+Either way this is the next session's first action, and it is cheap: no new
+crypto to break, just the protocol spoken correctly with the password we have.
+The devuser channel (`q20ssh`, qconn 8000) is unaffected and stays the daily
+tool.
