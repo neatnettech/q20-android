@@ -390,3 +390,108 @@ whether 10.3.3 lets a non-launched devuser process join a foreign group):
 This is the productive, device-reachable half of the display work. The root
 track (qconnDoor RE, section 9) is unchanged and remains gated on the saved
 binary + device, i.e. a session with the hardware attached.
+
+## 11. The experiments, run (2026-10-20, device attached)
+
+Both experiments from section 10 ran on the phone over `q20ssh`. The results
+narrow the A7 display route to one remaining variant, and they close two
+routes for good.
+
+### What the privilege sweep says
+
+`navigator_probe` with no arguments, as devuser:
+
+```text
+=== context privilege sweep (devuser)
+  APPLICATION      rc=0  errno=0 (granted)
+  WINDOW_MANAGER   rc=-1 errno=1 (Operation not permitted)
+  DISPLAY_MANAGER  rc=-1 errno=1 (Operation not permitted)
+  INPUT_PROVIDER   rc=-1 errno=1 (Operation not permitted)
+```
+
+So **devuser cannot be the compositor.** Section 10's experiment 2 is
+answered: the force composite route is privilege gated, exactly as predicted,
+and it does not become available by trying harder. Owning the presentation
+layer ourselves (the facade charter end state) needs root or a different
+process identity, not a cleverer Screen call.
+
+The CREATE baseline reproduced A4 exactly: group created, `USAGE WRITE|NATIVE`
+accepted, display 0 attached, CPU mapped 720x720 buffer at stride 2944,
+magenta filled, `screen_post_window` and `screen_flush_context` both rc=0, and
+nothing on the panel. One new detail: the probe set `SCREEN_PROPERTY_ZORDER`
+to 200 and the window read back `zorder=0`. The z order we ask for is not the
+z order we get, which is consistent with a window whose group no compositor
+owns.
+
+### What the recon says
+
+`nav_recon.sh` dumped the live Navigator state. The useful parts:
+
+* `/pps/services/navigator/state` is world readable and names the Navigator's
+  own z order, `navzorder:n:100`. Anything meant to land above the homescreen
+  has to beat that, which is why the probe's z order is now a knob
+  (`navigator_probe <mode> <GROUP> <Z>`, default 200).
+* The per app `rundata_*` objects are world readable, and they carry
+  `window_id`, which is the group handle we need. **Every one of them was
+  empty or `none`**, because the phone was locked: `state` also showed
+  `isDeviceLocked::passwordLocked`, `curr_window::none` and `windows_size:n:0`.
+  Nothing was in the foreground to join.
+* `/pps/services/navigator/windowgroup` and `/pps/system/navigator/groups` are
+  **not readable** by devuser (`apps:nto`). The authoritative group registry
+  is closed to us.
+* `/pps/services/window_manager` and `/pps/services/screen` do not exist on
+  this build.
+
+### The env leak is closed too
+
+On BB10 the Navigator mints the group name and hands it to the app it launches
+through its environment, which is why a bare SSH process has no windowing
+environment at all (the recon confirms that). Reading it out of a launched app
+instead does not work either: devuser cannot open any other process's
+address space.
+
+```text
+$ pidin -F "%b %N"
+couldn't open /proc/1/as: Operation not permitted
+couldn't open /proc/15196162/as: Operation not permitted
+... every pid, same answer
+```
+
+### What is left
+
+One variant, and it is still untried for a mundane reason: **the phone was
+locked**. With the device unlocked and an app in the foreground, that app's
+world readable `rundata_*` should publish a real `window_id`, and that is a
+group name to try:
+
+```sh
+runtime/art-qnx/device/q20ssh 'cat /pps/services/navigator/state'          # curr_window
+runtime/art-qnx/device/q20ssh 'cat /pps/services/navigator/rundata_<app>'  # window_id
+runtime/art-qnx/device/q20ssh 'cd /accounts/devuser && ./navigator_probe join <GROUP> 200'
+```
+
+If a joined child window does composite, A7's display route is open with no
+root. If the join is refused, the display half of A7 is genuinely gated on
+root or the app launch path, and the qconnDoor track (section 9) becomes the
+critical path for pixels.
+
+Either way the *drawing* half of A7 no longer waits on this: the facade
+renders the real View tree through its own Canvas JNI into the window buffer,
+and `Q20_DRAW_PNG` writes the same frame to a PNG when Screen gives us no
+composited window. A missing compositor now costs us the panel, not the proof.
+
+### Probe builds
+
+Both probes now build from the checked in Makefile instead of a remembered
+command line, and link the dynamic sysroot `libscreen` with `/base/usr/lib`
+baked as the runtime path, which is what the working A4 binary did:
+
+```sh
+docker compose run --rm --entrypoint /bin/bash aosp6 -c \
+  '. toolchains/playbook-gcc9/env.sh && make -C runtime/qnx-shims probes'
+```
+
+`nav_recon.sh` also lost its last section: it opened
+`/pps/services/navigator/control?wait`, and a `?wait` open blocks until the
+object changes, which never happens on a locked idle device. It reads `state`
+now.

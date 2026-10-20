@@ -36,6 +36,11 @@ namespace raster {
 // Half-open rectangle [l, r) x [t, b). Empty when r<=l or b<=t.
 struct Rect {
   int l = 0, t = 0, r = 0, b = 0;
+  // Explicit constructors, not aggregate initialization: the device build is
+  // gnu++11, where default member initializers make a struct non-aggregate,
+  // so Rect{a,b,c,d} only compiles with these. The host test builds c++14.
+  Rect() = default;
+  Rect(int left, int top, int right, int bottom) : l(left), t(top), r(right), b(bottom) {}
   bool empty() const { return r <= l || b <= t; }
   int width() const { return r > l ? r - l : 0; }
   int height() const { return b > t ? b - t : 0; }
@@ -52,6 +57,9 @@ struct Rect {
 struct Surface {
   uint8_t* px = nullptr;
   int w = 0, h = 0, stride = 0;
+  Surface() = default;
+  Surface(uint8_t* pixels, int width, int height, int rowBytes)
+      : px(pixels), w(width), h(height), stride(rowBytes) {}
 };
 
 // Pack/unpack Android Color ints (0xAARRGGBB).
@@ -80,14 +88,28 @@ class Canvas {
  public:
   explicit Canvas(const Surface& s);
 
+  // Point this canvas at a different buffer and reset the state stack. The
+  // device path needs it: Surface.lockCanvas hands back a Canvas that Java
+  // built (initRaster) before any window buffer existed.
+  void setSurface(const Surface& s);
+
   int save();
   void restore();
+  // Canvas.getSaveCount(): the number of saved states, 1 on a fresh canvas.
+  int saveCount() const { return (int)st_.size(); }
+  // Canvas.restoreToCount(): pop until saveCount() == n. Never pops the base.
+  void restoreToCount(int n);
   void translate(float dx, float dy);
   // Intersect the clip with this local-space rect. Returns false if the clip
   // became empty (Canvas.clipRect's contract).
   bool clipRect(const Rect& localRect);
 
   const Rect& deviceClip() const { return st_.back().clip; }
+  int width() const { return s_.w; }
+  int height() const { return s_.h; }
+  // The same clip in local (pre-translate) coordinates, which is what
+  // Canvas.getClipBounds and Canvas.quickReject answer in.
+  Rect localClip() const;
 
   // Fill the entire current clip (Canvas.drawColor / drawPaint).
   void drawColor(uint32_t color);

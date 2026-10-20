@@ -21,6 +21,8 @@
  *   navigator_probe join <GROUP>    create an app window and JOIN <GROUP>
  *                                   (<GROUP> = the live foreground group name
  *                                    that nav_recon.sh found)
+ *   navigator_probe <mode> <GROUP> <Z>   same, with an explicit z order
+ *                                   (default 200, above the Navigator's 100)
  *
  * Fills SOLID MAGENTA so you can tell it apart from A4's RGB stripes.
  */
@@ -70,6 +72,11 @@ int main(int argc, char** argv) {
 
   const char* mode = (argc > 1) ? argv[1] : "create";
   const char* group = (argc > 2) ? argv[2] : "q20probe-group";
+  /* Tuning knob, not a constant: the Navigator publishes its own z order in
+   * /pps/services/navigator/state as navzorder:n:100, so anything meant to
+   * land on top of the homescreen has to beat that. Default above it; pass
+   * a third argument to sweep. */
+  const int zorder_arg = (argc > 3) ? atoi(argv[3]) : 200;
 
   classify_contexts();
 
@@ -112,7 +119,7 @@ int main(int argc, char** argv) {
   int urc = screen_set_window_property_iv(win, SCREEN_PROPERTY_USAGE, &usage);
   P("set usage WRITE|NATIVE rc=%d errno=%d\n", urc, errno);
 
-  int zorder = 1;  /* a sane app z, not INT_MAX */
+  int zorder = zorder_arg;  /* a sane app z, not INT_MAX */
   screen_set_window_property_iv(win, SCREEN_PROPERTY_ZORDER, &zorder);
   int alpha = 255;
   screen_set_window_property_iv(win, SCREEN_PROPERTY_GLOBAL_ALPHA, &alpha);

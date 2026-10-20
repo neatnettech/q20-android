@@ -63,6 +63,7 @@ const char* resolve_font(int argc, char** argv) {
   static const char* candidates[] = {
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",  // macOS dev hosts
     "/system/fonts/Roboto-Regular.ttf",
   };
   for (const char* c : candidates) {
@@ -133,6 +134,40 @@ int main(int argc, char** argv) {
       for (int x = 0; x < W; x++)
         if (get_pixel(sa, x, y) != get_pixel(sb, x, y)) { same = false; break; }
     check(same, "tight and padded strides give identical pixels");
+  }
+
+  printf("state stack (Android save-count semantics), local clip, rebind:\n");
+  {
+    std::vector<uint8_t> a(4 * 4 * 4), b(8 * 8 * 4);
+    Surface sa{a.data(), 4, 4, 4 * 4}, sb{b.data(), 8, 8, 8 * 4};
+    Canvas c(sa);
+    check(c.saveCount() == 1, "fresh canvas saveCount is 1");
+    int base = c.save();
+    check(base == 1, "first save returns the count to restore to (1)");
+    c.translate(2, 2);
+    c.save();
+    check(c.saveCount() == 3, "two saves give saveCount 3");
+    c.restoreToCount(base);
+    check(c.saveCount() == 1, "restoreToCount unwinds to the base");
+    c.restoreToCount(0);
+    check(c.saveCount() == 1, "restoreToCount underflow keeps the base state");
+
+    c.save();
+    c.translate(1, 1);
+    c.clipRect(Rect{0, 0, 2, 2});
+    Rect lc = c.localClip();
+    check(lc.l == 0 && lc.t == 0 && lc.r == 2 && lc.b == 2,
+          "localClip answers in local coordinates");
+    check(c.deviceClip().l == 1 && c.deviceClip().t == 1,
+          "deviceClip keeps the translate applied");
+    c.restoreToCount(base);
+
+    // Rebind onto a different, larger buffer: the Surface.lockCanvas case.
+    c.setSurface(sb);
+    check(c.saveCount() == 1 && c.deviceClip().r == 8 && c.deviceClip().b == 8,
+          "setSurface resets the stack and the clip to the new size");
+    c.drawColor(kButtonBg);
+    check_px(sb, 7, 7, kButtonBg, 0, "drawing after setSurface lands in the new buffer");
   }
 
   // --- the Prober A6 layout at device size and stride ---

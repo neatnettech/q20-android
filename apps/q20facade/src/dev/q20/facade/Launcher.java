@@ -11,6 +11,7 @@ import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
+import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
@@ -27,6 +28,7 @@ import android.os.Trace;
 import android.text.BoringLayout;
 import android.text.TextPaint;
 import android.system.Os;
+import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.animation.PathInterpolator;
@@ -79,6 +81,9 @@ public final class Launcher {
                 gfx();
             } else if (mode.equals("activity")) {
                 activity(apk, activityClass);
+            } else if (mode.equals("draw")) {
+                activity(apk, activityClass);
+                draw();
             } else {
                 System.out.println("facade: unknown mode " + mode);
                 System.exit(2);
@@ -267,6 +272,7 @@ public final class Launcher {
 
         // Phase 4: the window at the Q20 screen size, no ViewRootImpl.
         View decor = act.getWindow().getDecorView();
+        sDecor = decor;  // the draw mode renders this after the checks
         int spec = View.MeasureSpec.makeMeasureSpec(SCREEN_PX, View.MeasureSpec.EXACTLY);
         decor.measure(spec, spec);
         decor.layout(0, 0, SCREEN_PX, SCREEN_PX);
@@ -282,6 +288,27 @@ public final class Launcher {
         check("both inside the screen", inside(counter, decor) && inside(bump, decor));
         bump.setElevation(3f);
         check("RenderNode round trip elevation=" + bump.getElevation(), bump.getElevation() == 3f);
+    }
+
+    // A7: the laid out tree's first pixels. Surface is the window handle the
+    // framework already knows how to drive: lockCanvas maps the Q20 Screen
+    // buffer into a Canvas (our JNI in graphics_facade.cc), one draw pass
+    // fills it, unlockCanvasAndPost posts it. mNativeObject only has to be
+    // non zero: Surface checks it before every call and our natives ignore it.
+    static View sDecor;
+
+    static void draw() throws Exception {
+        if (sDecor == null) throw new IllegalStateException("nothing laid out to draw");
+        // Surface() is public in the framework but hidden from android-23.jar,
+        // so it comes through the same reflection door as everything else here.
+        Surface s = (Surface) make("android.view.Surface");
+        set(s, "mNativeObject", 1L);
+        Canvas c = s.lockCanvas(null);
+        check("canvas " + c.getWidth() + "x" + c.getHeight(),
+                c.getWidth() > 0 && c.getHeight() > 0);
+        sDecor.draw(c);
+        s.unlockCanvasAndPost(c);
+        check("draw pass completed", true);
     }
 
     static Configuration configuration(int dpi) {

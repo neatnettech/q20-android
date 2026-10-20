@@ -40,13 +40,32 @@ Canvas::Canvas(const Surface& s) : s_(s) {
   st_.push_back(State{0.0f, 0.0f, Rect{0, 0, s.w, s.h}});
 }
 
+void Canvas::setSurface(const Surface& s) {
+  s_ = s;
+  st_.clear();
+  st_.push_back(State{0.0f, 0.0f, Rect{0, 0, s.w, s.h}});
+}
+
 int Canvas::save() {
+  const int before = (int)st_.size();  // the save count before this save
   st_.push_back(st_.back());
-  return (int)st_.size() - 2;  // the save count before this save, as Canvas does
+  return before;
 }
 
 void Canvas::restore() {
   if (st_.size() > 1) st_.pop_back();
+}
+
+void Canvas::restoreToCount(int n) {
+  if (n < 1) n = 1;
+  while ((int)st_.size() > n) st_.pop_back();
+}
+
+Rect Canvas::localClip() const {
+  const State& st = st_.back();
+  const Rect& c = st.clip;
+  return Rect{(int)lroundf(c.l - st.dx), (int)lroundf(c.t - st.dy),
+              (int)lroundf(c.r - st.dx), (int)lroundf(c.b - st.dy)};
 }
 
 void Canvas::translate(float dx, float dy) {

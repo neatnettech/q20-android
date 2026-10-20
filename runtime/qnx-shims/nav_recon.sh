@@ -53,7 +53,10 @@ dumpdir /pps/system/navigator
 dumpdir /pps/services/screen
 
 say "who is in the foreground (look for a grp:/window-group token)"
-dump /pps/services/navigator/control?wait
+# NOT control?wait: opening a PPS object with ?wait blocks until the next
+# change, which never comes on a locked idle device, and the whole recon hangs.
+# The foreground app is in state (curr_window) and in its own rundata window_id.
+dump /pps/services/navigator/state
 dump /pps/system/navigator/applications/applications
 
 say "running graphics processes (navigator, screen service, winmgr)"
