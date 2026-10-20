@@ -344,3 +344,49 @@ sessions.
 
 Next session starts with (1): disassemble qconnDoor, find the service spawn
 and its credential source.
+
+## 10. The compositor gate re-examined: A4 tested CREATE, not JOIN (2026-10-20)
+
+Re-reading `runtime/qnx-shims/screen_probe.c` against the BB10 windowing model
+shows A4's negative result was over-interpreted. The probe called
+`screen_create_window_group(win, "q20probe-group")` (screen_probe.c:47): it
+made itself the **parent** of a brand-new group the Navigator has never heard
+of. On BB10 the Navigator is the window manager that actually composites app
+windows, and it composites the groups **it** owns. An app does the opposite of
+what the probe did: it **joins** a group the Navigator already manages
+(`screen_join_window_group`), and rides the Navigator's compositing of that
+group.
+
+So "bare process windows never composite" is explained by the self-created,
+Navigator-unknown group alone. It is **not** evidence of a signing or root
+gate on compositing. The app-launch/BAR/token conclusion was reached a rung
+early: the JOIN path was never tested, and it needs no root to try.
+
+What the model predicts (confidence: Likely for the mechanism, Guessing for
+whether 10.3.3 lets a non-launched devuser process join a foreign group):
+
+1. A window joined to the **live foreground** group the Navigator is already
+   drawing should be composited as a child, no privilege change.
+2. If joining a foreign group is denied, the next question is whether devuser
+   can obtain a `SCREEN_WINDOW_MANAGER_CONTEXT` (force-composite route). EPERM
+   there means that specific route is root-gated; it does not close path 1.
+3. Only if both fail cleanly is "A7 needs app-launch/root" actually earned.
+
+### Experiments, in order (all devuser, no root, run on the owned device)
+
+1. `runtime/qnx-shims/nav_recon.sh` — zero build. Dumps the Navigator PPS
+   registry (`/pps/services/navigator/*`), the foreground app's window-group
+   name, and this process's (absent) windowing environment. Run it first: the
+   live group name is the input to the probe. Drive it over the existing qconn
+   channel (`qconn_exec.py`) or `q20ssh`.
+2. `runtime/qnx-shims/navigator_probe.c` — links the device's own
+   `/base/usr/lib/libscreen.so`, same build line as screen_probe. It (a) sweeps
+   the four Screen context types and logs which the kernel grants devuser, then
+   (b) `navigator_probe join <GROUP>` creates an app window and JOINS the group
+   nav_recon found, fills solid magenta, posts, holds 60s. Magenta on the panel
+   = A7 display route open without root. `navigator_probe` with no args
+   reproduces the A4 CREATE baseline for comparison.
+
+This is the productive, device-reachable half of the display work. The root
+track (qconnDoor RE, section 9) is unchanged and remains gated on the saved
+binary + device, i.e. a session with the hardware attached.
