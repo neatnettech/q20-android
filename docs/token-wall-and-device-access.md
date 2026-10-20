@@ -669,3 +669,61 @@ Either way this is the next session's first action, and it is cheap: no new
 crypto to break, just the protocol spoken correctly with the password we have.
 The devuser channel (`q20ssh`, qconn 8000) is unaffected and stays the daily
 tool.
+
+## 14. Root quest, session three: the client confirms local password auth (2026-10-20)
+
+Decompiled the vendor client (`Connect.jar` + `jqconnDoor.jar`, the
+`blackberry-connect` tool, with javap) to settle section 13's open question
+from the client side. It confirms the important half.
+
+### Authentication is local and password-only, no RIM server
+
+`AbstractSecureTargetConnection.authenticate()` runs the whole handshake
+against a `LocalRTASConnection` (created by `ConnectionRegistry` whenever no
+RTAS server setting is supplied, which is the default):
+
+1. `SecureTargetChallengeRequest` with `rtas.getPublicEncryptionKey()` from the
+   **local** RTAS object.
+2. Target returns an encrypted challenge; the client decrypts it **locally**
+   (`rtas.decrypt(challenge)`), logs `RTAS credentials verified.`, and returns a
+   `SecureTargetDecryptedChallengeResponse`.
+3. `SecureTargetAuthenticateChallengeRequest` -> target returns algorithm,
+   iterations, salt, challenge.
+4. `SecureTargetAuthenticate` carries `hashAndEncode(devicePassword, algo, salt,
+   iterations, challenge)`: SHA1 or SHA512 of the device password with the
+   salt, iterated, hex-encoded, then AES-wrapped with the session key.
+5. `SecureTargetSendSSHKey`, then start services.
+
+No network RTAS server and no debug token anywhere in the path. Identity is the
+device password, which the owner has. This confirms, from the client side, that
+the dead RIM infrastructure (sections 1 to 8) does not gate the door.
+
+### The root selector is a client setting the stock tool pins to false
+
+`TargetSetting` has a boolean `authenticateAsRoot` with
+`setAuthenticateAsRoot` / `isAuthenticateAsRoot`. `Connect.createConnection`
+calls `addTargetSetting(host, 4455, version, password, false)`: the stock tool
+hardwires it **false**, and in this jar version no outgoing frame reads it, so
+`blackberry-connect` can only ever provision devuser. Driving the daemon's root
+branch (section 13) therefore needs a client that sets the flag and serializes
+it into the frame the daemon reads, i.e. a small custom client built on the
+jar's own frame and `LocalRTASConnection` classes, not the stock CLI.
+
+### Harness and the one thing still unverified
+
+A frame-logging TCP proxy (host `127.0.0.1:4455` -> device `4455`, since
+`Connect.jar` hardcodes the port and takes only a host arg) captures the wire
+format; the device still sees the USB peer, so the wired-connection check
+holds. A first run captured the client HELLO (`len=6 ver=2 code=1`, empty
+payload) before the device dropped off USB.
+
+Still unverified, and it is the same single unknown as section 13: whether the
+daemon's root branch accepts this local password auth or additionally binds the
+challenge verify to the device-specific RTAS key. The next action is a custom
+client with the selector set, run against the door, watching for sshd with
+`PermitRootLogin=yes` versus a challenge rejection. It needs the device back on
+USB (this session it disconnected: no ARP entry, all ports closed, host USB IP
+fell back to a generic 169.254/16).
+
+The research proxy and any custom client are deliberately kept out of the repo
+for now; the devuser channel (`connect.sh`, `q20ssh`, qconn 8000) is unchanged.
