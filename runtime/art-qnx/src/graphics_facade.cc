@@ -1,16 +1,17 @@
 /*
  * QNX graphics facade: the Paint, Path, Matrix, RenderNode, ColorFilter and
  * EmojiFactory natives a View tree reaches while it is built, measured and
- * laid out, with nothing drawn (A6). There is no Skia, minikin or hwui on the
- * Q20 yet, so these natives keep plain state; text metrics come from FreeType
- * (QNX sysroot) reading $ANDROID_ROOT/fonts/Roboto-Regular.ttf.
+ * laid out (A6), plus the Canvas and Surface natives that then draw it (A7).
+ * There is no Skia, minikin or hwui on the Q20, so these natives keep plain
+ * state; text metrics come from FreeType (QNX sysroot) reading
+ * $ANDROID_ROOT/fonts/Roboto-Regular.ttf, and drawing goes to the software
+ * rasterizer in raster.cc over the QNX Screen window in screen_window.cc.
  *
  * Typeface and FontFamily natives are deliberately absent: /system/etc/fonts.xml
  * is unreadable here, so Typeface.<clinit> leaves every Typeface null and Paint
  * only ever sees typeface handle 0, the default font.
  *
- * ponytail: measure and layout only, replaced by the real Skia backed JNI when
- * A7 brings Skia. No HarfBuzz shaping, kerning or hinting (widths differ from a
+ * ponytail: no Skia. No HarfBuzz shaping, kerning or hinting (widths differ from a
  * real phone by a few percent); Roboto Regular stands in for every family, bold
  * and medium included; left to right only; Path keeps points for
  * approximate() and nothing else; Matrix is real 3x3 math for the operations
@@ -24,6 +25,9 @@
 #include <utils/Log.h>
 
 #include "JNIHelp.h"
+
+#include "raster.h"
+#include "screen_window.h"
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -86,27 +90,35 @@ FPaint* paintOf(JNIEnv* env, jobject paint) {
 }
 FPaint* paintAt(jlong handle) { return reinterpret_cast<FPaint*>(handle); }
 
-// Advance in pixels of UTF-16 text[start, end).
-float advance(const FPaint* p, const jchar* text, int start, int end) {
-  pthread_mutex_lock(&gFontLock);
-  FT_Face f = face();
-  double units = 0;
-  int glyphs = 0;
-  for (int i = start; f != nullptr && i < end; i++) {
+// UTF-16 text[start, end) to code points, decoding surrogate pairs. Shared by
+// the measure path (advance) and the draw path (drawRun).
+void decodeUtf16(const jchar* text, int start, int end, std::vector<uint32_t>* out) {
+  for (int i = start; i < end; i++) {
     uint32_t c = text[i];
     if (c >= 0xD800 && c < 0xDC00 && i + 1 < end && text[i + 1] >= 0xDC00 && text[i + 1] < 0xE000) {
       c = 0x10000 + ((c - 0xD800) << 10) + (text[i + 1] - 0xDC00);
       i++;
     }
+    out->push_back(c);
+  }
+}
+
+// Advance in pixels of UTF-16 text[start, end).
+float advance(const FPaint* p, const jchar* text, int start, int end) {
+  std::vector<uint32_t> cps;
+  decodeUtf16(text, start, end, &cps);
+  pthread_mutex_lock(&gFontLock);
+  FT_Face f = face();
+  double units = 0;
+  for (size_t i = 0; f != nullptr && i < cps.size(); i++) {
     FT_Fixed a = 0;
-    FT_Get_Advance(f, FT_Get_Char_Index(f, c), FT_LOAD_NO_SCALE, &a);
+    FT_Get_Advance(f, FT_Get_Char_Index(f, cps[i]), FT_LOAD_NO_SCALE, &a);
     units += a;
-    glyphs++;
   }
   double upem = f != nullptr ? f->units_per_EM : 1;
   pthread_mutex_unlock(&gFontLock);
   double scale = p->textSize * p->textScaleX;
-  return units * scale / upem + glyphs * p->letterSpacing * scale;
+  return units * scale / upem + cps.size() * p->letterSpacing * scale;
 }
 
 struct Metrics { float top, ascent, descent, bottom, leading; };
@@ -748,6 +760,253 @@ JNINativeMethod gEmojiFactoryMethods[] = {
   { "newInstance", "(Ljava/lang/String;)Landroid/emoji/EmojiFactory;", reinterpret_cast<void*>(Emoji_newInstance) },
 };
 
+// ---- Canvas and Surface: the A7 draw pass ----
+//
+// android.graphics.Canvas forwarded onto the software engine in raster.cc,
+// plus the four android.view.Surface natives that hand it the window buffer.
+// Together they turn A6's laid out View tree into pixels: lockCanvas maps the
+// Q20 window into the Canvas, one decor.draw(canvas) pass runs, then
+// unlockCanvasAndPost posts it.
+//
+// Surface is the registration host on purpose: JNI_OnLoad can only FindClass
+// boot classpath types, so a facade owned native class would never resolve,
+// and Surface already declares exactly this contract.
+//
+// ponytail: fills, rects and glyph runs. Scale, rotate, skew, matrix concat
+// and draw filters are accepted and ignored; round rects lose their corners;
+// saveLayer loses its alpha; clipPath does not clip. The Prober's tree needs
+// none of it, and each is a small addition to raster.cc when a tree does.
+
+jfieldID gCanvasNative;
+struct { jfieldID left, top, right, bottom; } gRect;
+
+// Q20_DRAW_TRACE=1 logs every draw call with its colour and geometry. The
+// frame is one pass over a tree nobody can see while it renders, so this is
+// the only way to tell "drew nothing" from "drew it in the wrong colour".
+bool traceOn() {
+  static int on = -1;
+  if (on < 0) {
+    const char* e = getenv("Q20_DRAW_TRACE");
+    on = (e != nullptr && e[0] != '\0' && e[0] != '0') ? 1 : 0;
+  }
+  return on == 1;
+}
+#define DTRACE(...) do { if (traceOn()) ALOGI(__VA_ARGS__); } while (0)
+
+raster::Canvas* canvasAt(jlong h) { return reinterpret_cast<raster::Canvas*>(h); }
+
+// Draw coordinates round like the engine's own; reject tests round outward so
+// a partially visible rect is never dropped.
+raster::Rect rectOf(jfloat l, jfloat t, jfloat r, jfloat b) {
+  return raster::Rect{(int)lroundf(l), (int)lroundf(t), (int)lroundf(r), (int)lroundf(b)};
+}
+raster::Rect outerRectOf(jfloat l, jfloat t, jfloat r, jfloat b) {
+  return raster::Rect{(int)floorf(l), (int)floorf(t), (int)ceilf(r), (int)ceilf(b)};
+}
+
+jlong Canvas_initRaster(JNIEnv*, jclass, jobject /*bitmap*/) {
+  // The no argument Canvas() passes null, which is the only case here: there
+  // is no Bitmap native layer. Surface.lockCanvas re-points this canvas at the
+  // window buffer, so it starts with an empty surface and draws nothing.
+  return reinterpret_cast<jlong>(new raster::Canvas(raster::Surface{}));
+}
+void Canvas_finalizer(JNIEnv*, jclass, jlong h) { delete canvasAt(h); }
+void Canvas_setBitmap(JNIEnv*, jclass, jlong, jobject) {}
+jboolean Canvas_isOpaque(JNIEnv*, jclass, jlong) { return JNI_TRUE; }
+jint Canvas_getWidth(JNIEnv*, jclass, jlong h) { return canvasAt(h)->width(); }
+jint Canvas_getHeight(JNIEnv*, jclass, jlong h) { return canvasAt(h)->height(); }
+
+jint Canvas_save(JNIEnv*, jclass, jlong h, jint) { return canvasAt(h)->save(); }
+jint Canvas_saveLayer(JNIEnv*, jclass, jlong h, jfloat, jfloat, jfloat, jfloat, jlong, jint) {
+  return canvasAt(h)->save();
+}
+jint Canvas_saveLayerAlpha(JNIEnv*, jclass, jlong h, jfloat, jfloat, jfloat, jfloat, jint, jint) {
+  return canvasAt(h)->save();
+}
+void Canvas_restore(JNIEnv*, jclass, jlong h, jboolean) { canvasAt(h)->restore(); }
+void Canvas_restoreToCount(JNIEnv*, jclass, jlong h, jint count, jboolean) {
+  canvasAt(h)->restoreToCount(count);
+}
+jint Canvas_getSaveCount(JNIEnv*, jclass, jlong h) { return canvasAt(h)->saveCount(); }
+void Canvas_translate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) {
+  canvasAt(h)->translate(dx, dy);
+}
+
+// Accepted and ignored: no transform beyond translate in this engine.
+void Canvas_ignore_ff(JNIEnv*, jclass, jlong, jfloat, jfloat) {}
+void Canvas_ignore_f(JNIEnv*, jclass, jlong, jfloat) {}
+void Canvas_ignore_j(JNIEnv*, jclass, jlong, jlong) {}
+
+jboolean Canvas_clipRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b, jint) {
+  return canvasAt(h)->clipRect(rectOf(l, t, r, b)) ? JNI_TRUE : JNI_FALSE;
+}
+// Path and region clips leave the clip alone: reporting non empty is the safe
+// lie, since over drawing is visible and under drawing is a missing widget.
+jboolean Canvas_clipHandle(JNIEnv*, jclass, jlong, jlong, jint) { return JNI_TRUE; }
+
+jboolean Canvas_getClipBounds(JNIEnv* env, jclass, jlong h, jobject bounds) {
+  const raster::Rect c = canvasAt(h)->localClip();
+  env->SetIntField(bounds, gRect.left, c.l);
+  env->SetIntField(bounds, gRect.top, c.t);
+  env->SetIntField(bounds, gRect.right, c.r);
+  env->SetIntField(bounds, gRect.bottom, c.b);
+  return c.empty() ? JNI_FALSE : JNI_TRUE;
+}
+
+jboolean Canvas_quickRejectRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b) {
+  return canvasAt(h)->localClip().intersect(outerRectOf(l, t, r, b)).empty() ? JNI_TRUE : JNI_FALSE;
+}
+jboolean Canvas_quickRejectPath(JNIEnv*, jclass, jlong, jlong) { return JNI_FALSE; }
+
+void Canvas_drawColor(JNIEnv*, jclass, jlong h, jint color, jint /*mode*/) {
+  const raster::Rect& c = canvasAt(h)->deviceClip();
+  DTRACE("drawColor #%08x clip %d,%d %dx%d", color, c.l, c.t, c.width(), c.height());
+  canvasAt(h)->drawColor(static_cast<uint32_t>(color));
+}
+void Canvas_drawPaint(JNIEnv*, jclass, jlong h, jlong paint) {
+  canvasAt(h)->drawColor(paintAt(paint)->color);
+}
+void Canvas_drawRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b, jlong paint) {
+  DTRACE("drawRect %.0f,%.0f %.0fx%.0f #%08x style=%d", l, t, r - l, b - t,
+         paintAt(paint)->color, paintAt(paint)->style);
+  canvasAt(h)->drawRect(rectOf(l, t, r, b), paintAt(paint)->color);
+}
+void Canvas_drawRoundRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b,
+                          jfloat /*rx*/, jfloat /*ry*/, jlong paint) {
+  // ponytail: square corners. The Prober's Button is the stock Material shape
+  // at control_corner_material, 2dp, which does not read at 176x96; corner
+  // coverage is a loop in raster.cc the day a design needs it.
+  DTRACE("drawRoundRect %.0f,%.0f %.0fx%.0f #%08x", l, t, r - l, b - t, paintAt(paint)->color);
+  canvasAt(h)->drawRect(rectOf(l, t, r, b), paintAt(paint)->color);
+}
+
+// One glyph run at a baseline origin. textScaleX and letterSpacing are in the
+// measure path but not here: both are default for every Prober run, and a
+// mismatch would show as text wider than its measured box.
+void drawRun(jlong canvas, const jchar* text, int start, int end, jfloat x, jfloat y, jlong paint) {
+  const FPaint* p = paintAt(paint);
+  std::vector<uint32_t> cps;
+  decodeUtf16(text, start, end, &cps);
+  DTRACE("drawRun %d glyphs at %.0f,%.0f #%08x size=%.1f first=U+%04X", (int)cps.size(), x, y,
+         p->color, p->textSize, cps.empty() ? 0 : cps[0]);
+  pthread_mutex_lock(&gFontLock);
+  canvasAt(canvas)->drawGlyphs(face(), cps.data(), (int)cps.size(), x, y, p->color, p->textSize);
+  pthread_mutex_unlock(&gFontLock);
+}
+
+void Canvas_drawText_C(JNIEnv* env, jclass, jlong h, jcharArray text, jint index, jint count,
+                       jfloat x, jfloat y, jint, jlong paint, jlong) {
+  if (!checkRange(env, index, index + count, env->GetArrayLength(text))) return;
+  jchar* chars = env->GetCharArrayElements(text, nullptr);
+  drawRun(h, chars, index, index + count, x, y, paint);
+  env->ReleaseCharArrayElements(text, chars, JNI_ABORT);
+}
+void Canvas_drawText_String(JNIEnv* env, jclass, jlong h, jstring text, jint start, jint end,
+                            jfloat x, jfloat y, jint, jlong paint, jlong) {
+  if (!checkRange(env, start, end, env->GetStringLength(text))) return;
+  const jchar* chars = env->GetStringChars(text, nullptr);
+  drawRun(h, chars, start, end, x, y, paint);
+  env->ReleaseStringChars(text, chars);
+}
+void Canvas_drawTextRun_C(JNIEnv* env, jclass, jlong h, jcharArray text, jint start, jint count,
+                          jint, jint, jfloat x, jfloat y, jboolean, jlong paint, jlong) {
+  if (!checkRange(env, start, start + count, env->GetArrayLength(text))) return;
+  jchar* chars = env->GetCharArrayElements(text, nullptr);
+  drawRun(h, chars, start, start + count, x, y, paint);
+  env->ReleaseCharArrayElements(text, chars, JNI_ABORT);
+}
+void Canvas_drawTextRun_String(JNIEnv* env, jclass, jlong h, jstring text, jint start, jint end,
+                               jint, jint, jfloat x, jfloat y, jboolean, jlong paint, jlong) {
+  if (!checkRange(env, start, end, env->GetStringLength(text))) return;
+  const jchar* chars = env->GetStringChars(text, nullptr);
+  drawRun(h, chars, start, end, x, y, paint);
+  env->ReleaseStringChars(text, chars);
+}
+
+JNINativeMethod gCanvasMethods[] = {
+  { "initRaster", "(Landroid/graphics/Bitmap;)J", reinterpret_cast<void*>(Canvas_initRaster) },
+  { "native_setBitmap", "(JLandroid/graphics/Bitmap;)V", reinterpret_cast<void*>(Canvas_setBitmap) },
+  { "finalizer", "(J)V", reinterpret_cast<void*>(Canvas_finalizer) },
+  { "native_isOpaque", "(J)Z", reinterpret_cast<void*>(Canvas_isOpaque) },
+  { "native_getWidth", "(J)I", reinterpret_cast<void*>(Canvas_getWidth) },
+  { "native_getHeight", "(J)I", reinterpret_cast<void*>(Canvas_getHeight) },
+  { "native_save", "(JI)I", reinterpret_cast<void*>(Canvas_save) },
+  { "native_saveLayer", "(JFFFFJI)I", reinterpret_cast<void*>(Canvas_saveLayer) },
+  { "native_saveLayerAlpha", "(JFFFFII)I", reinterpret_cast<void*>(Canvas_saveLayerAlpha) },
+  { "native_restore", "(JZ)V", reinterpret_cast<void*>(Canvas_restore) },
+  { "native_restoreToCount", "(JIZ)V", reinterpret_cast<void*>(Canvas_restoreToCount) },
+  { "native_getSaveCount", "(J)I", reinterpret_cast<void*>(Canvas_getSaveCount) },
+  { "native_translate", "(JFF)V", reinterpret_cast<void*>(Canvas_translate) },
+  { "native_scale", "(JFF)V", reinterpret_cast<void*>(Canvas_ignore_ff) },
+  { "native_skew", "(JFF)V", reinterpret_cast<void*>(Canvas_ignore_ff) },
+  { "native_rotate", "(JF)V", reinterpret_cast<void*>(Canvas_ignore_f) },
+  { "native_concat", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
+  { "native_setMatrix", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
+  { "native_getCTM", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
+  { "nativeSetDrawFilter", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
+  { "native_clipRect", "(JFFFFI)Z", reinterpret_cast<void*>(Canvas_clipRect) },
+  { "native_clipPath", "(JJI)Z", reinterpret_cast<void*>(Canvas_clipHandle) },
+  { "native_clipRegion", "(JJI)Z", reinterpret_cast<void*>(Canvas_clipHandle) },
+  { "native_getClipBounds", "(JLandroid/graphics/Rect;)Z", reinterpret_cast<void*>(Canvas_getClipBounds) },
+  { "native_quickReject", "(JFFFF)Z", reinterpret_cast<void*>(Canvas_quickRejectRect) },
+  { "native_quickReject", "(JJ)Z", reinterpret_cast<void*>(Canvas_quickRejectPath) },
+  { "native_drawColor", "(JII)V", reinterpret_cast<void*>(Canvas_drawColor) },
+  { "native_drawPaint", "(JJ)V", reinterpret_cast<void*>(Canvas_drawPaint) },
+  { "native_drawRect", "(JFFFFJ)V", reinterpret_cast<void*>(Canvas_drawRect) },
+  { "native_drawRoundRect", "(JFFFFFFJ)V", reinterpret_cast<void*>(Canvas_drawRoundRect) },
+  { "native_drawText", "(J[CIIFFIJJ)V", reinterpret_cast<void*>(Canvas_drawText_C) },
+  { "native_drawText", "(JLjava/lang/String;IIFFIJJ)V", reinterpret_cast<void*>(Canvas_drawText_String) },
+  { "native_drawTextRun", "(J[CIIIIFFZJJ)V", reinterpret_cast<void*>(Canvas_drawTextRun_C) },
+  { "native_drawTextRun", "(JLjava/lang/String;IIIIFFZJJ)V", reinterpret_cast<void*>(Canvas_drawTextRun_String) },
+};
+
+// ---- Surface: the window buffer behind lockCanvas ----
+
+raster::Surface gLocked;        // what the canvas is pointed at right now
+std::vector<uint8_t> gFallback; // used when Screen gives us no window
+bool gPostable;
+
+jlong Surface_lockCanvas(JNIEnv* env, jclass, jlong handle, jobject canvas, jobject /*dirty*/) {
+  raster::Canvas* c = canvasAt(env->GetLongField(canvas, gCanvasNative));
+  raster::Surface s;
+  gPostable = q20screen::acquire(&s);
+  if (!gPostable) {
+    // No window to post (the open A7 compositor question). Draw into our own
+    // memory anyway so the pass is still verifiable: Q20_DRAW_PNG writes it
+    // out on post, which is the device evidence that does not need a
+    // compositor.
+    const char* sz = getenv("Q20_DRAW_SIZE");
+    const int n = (sz != nullptr && sz[0] != '\0') ? atoi(sz) : 720;
+    gFallback.assign((size_t)n * n * 4, 0);
+    s = raster::Surface{gFallback.data(), n, n, n * 4};
+    ALOGI("no Screen window, drawing into a %dx%d heap surface", n, n);
+  }
+  c->setSurface(s);
+  gLocked = s;
+  return handle != 0 ? handle : 1;  // echo it back: Surface warns if they differ
+}
+
+void Surface_unlockCanvasAndPost(JNIEnv*, jclass, jlong, jobject) {
+  if (gPostable) q20screen::post();
+  const char* png = getenv("Q20_DRAW_PNG");
+  if (png != nullptr && png[0] != '\0') {
+    ALOGI("write_png %s ok=%d", png, raster::write_png(png, gLocked));
+  }
+}
+
+// Called after every post, so it must tolerate being a no op.
+void Surface_release(JNIEnv*, jclass, jlong) {}
+jboolean Surface_isValid(JNIEnv*, jclass, jlong h) { return h != 0 ? JNI_TRUE : JNI_FALSE; }
+
+JNINativeMethod gSurfaceMethods[] = {
+  { "nativeLockCanvas", "(JLandroid/graphics/Canvas;Landroid/graphics/Rect;)J",
+    reinterpret_cast<void*>(Surface_lockCanvas) },
+  { "nativeUnlockCanvasAndPost", "(JLandroid/graphics/Canvas;)V",
+    reinterpret_cast<void*>(Surface_unlockCanvasAndPost) },
+  { "nativeRelease", "(J)V", reinterpret_cast<void*>(Surface_release) },
+  { "nativeIsValid", "(J)Z", reinterpret_cast<void*>(Surface_isValid) },
+};
+
 }  // namespace
 
 void register_qnx_graphics(JNIEnv* env) {
@@ -765,7 +1024,16 @@ void register_qnx_graphics(JNIEnv* env) {
   gFmi.descent = env->GetFieldID(fmi, "descent", "I");
   gFmi.bottom = env->GetFieldID(fmi, "bottom", "I");
   gFmi.leading = env->GetFieldID(fmi, "leading", "I");
+  jclass canvas = env->FindClass("android/graphics/Canvas");
+  gCanvasNative = env->GetFieldID(canvas, "mNativeCanvasWrapper", "J");
+  jclass rect = env->FindClass("android/graphics/Rect");
+  gRect.left = env->GetFieldID(rect, "left", "I");
+  gRect.top = env->GetFieldID(rect, "top", "I");
+  gRect.right = env->GetFieldID(rect, "right", "I");
+  gRect.bottom = env->GetFieldID(rect, "bottom", "I");
   jniRegisterNativeMethods(env, "android/graphics/Paint", gPaintMethods, NELEM(gPaintMethods));
+  jniRegisterNativeMethods(env, "android/graphics/Canvas", gCanvasMethods, NELEM(gCanvasMethods));
+  jniRegisterNativeMethods(env, "android/view/Surface", gSurfaceMethods, NELEM(gSurfaceMethods));
   jniRegisterNativeMethods(env, "android/graphics/Path", gPathMethods, NELEM(gPathMethods));
   jniRegisterNativeMethods(env, "android/graphics/Matrix", gMatrixMethods, NELEM(gMatrixMethods));
   jniRegisterNativeMethods(env, "android/view/RenderNode", gRenderNodeMethods, NELEM(gRenderNodeMethods));

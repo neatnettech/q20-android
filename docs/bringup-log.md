@@ -709,3 +709,109 @@ block A6.
 
 Full suite on device, AOT and `-Xint`: prober 7/7, props 3/3, res 4/4, looper
 6/6, gfx 5/5, activity 6/6.
+
+### 2026-10-20: A7 phase 1: the software rasterizer, host-verified
+
+A6 measures and lays out the View tree but draws nothing. A7's first step is a
+drawing engine that turns the laid-out tree into pixels in an RGBA8888 surface
+— the exact format of the CPU-mappable window buffer A4 proved posts to the
+panel (R,G,B,A bytes, stride 2944 for 720 wide).
+
+`runtime/art-qnx/src/raster.{h,cc}` is that engine: a software canvas with a
+save/restore stack (translate + rect clip), src-over blending, solid fills, and
+FreeType glyph runs measured and rendered from the same face the A6 metrics
+path uses. No Skia, no JNI, no ART — portable C++ + FreeType, so it compiles
+into the device facade beside graphics_facade.cc AND builds on the host, where
+`raster_test.cc` renders the Prober's A6 layout (DecorView 720x720, counter
+TextView at 273,279 173x65 "count: 0" at 48px, bump Button at 272,344 176x96)
+and asserts the pixels. It also carries a dependency-free PNG writer (stored
+DEFLATE, no zlib) to eyeball the output; PIL decodes it clean.
+
+`make -f runtime/art-qnx/src/raster.mk test` builds and runs host-side: 11/11
+assertions pass (blend to mid-gray, clip containment, padded-stride equality,
+the three layout fills at exact colors, >150 glyph pixels inside the counter
+box, none above it). The rendered PNG shows the layout correctly; the host
+font (DejaVu) is wider than Roboto so "count: 0" overflows the Roboto-measured
+173px box and the clipRect cuts the "0" — correct behavior, and it fits on
+device with Roboto.
+
+Deliberately NOT done here: the android.graphics.Canvas JNI that forwards onto
+this engine, and any change to art-qnx.mk. That binding is mechanical (each
+Canvas native is a one-line forward, mapped at the foot of raster.h) but
+untestable without the device, so per the project rule it waits for the
+on-device A7 session, which wraps a posted window buffer in a Surface, runs one
+decor.draw(canvas) pass, and posts.
+
+### 2026-10-20: A7 phase 2: the Prober's View tree rasterized on the phone
+
+The drawing half of A7 is done and confirmed on hardware. The compositor half
+is not, and the two are now cleanly separable.
+
+**What runs.** `sh run_core.sh facade draw` takes the laid out tree from A6,
+locks a Surface, draws it, and posts. 8/8 checks pass in AOT and in `-Xint`.
+The frame it produces is the Prober's own window: the Material dark background
+at `#ff303030`, "count: 0" in Roboto at its laid out position in 70 percent
+white, and the Button's Material shape inset by 4dp horizontal and 6dp
+vertical inside its 176x96 bounds, exactly as the theme specifies.
+
+**How it is wired.** 35 Canvas natives and 4 Surface natives live in
+`graphics_facade.cc`, the same translation unit as the FreeType face and the
+Paint state they read, which is why no accessor header was needed.
+`android.view.Surface` is the registration host because `JNI_OnLoad` can only
+`FindClass` boot classpath types, so a facade owned native class would never
+resolve; Surface already declares `nativeLockCanvas` and
+`nativeUnlockCanvasAndPost`, which is precisely this contract. The launcher
+constructs a Surface through its reflection door (the no argument constructor
+is hidden from `android-23.jar`), forces `mNativeObject` non zero, locks,
+calls `decor.draw(canvas)`, and posts.
+
+Every native signature was read out of
+`frameworks/base/graphics/java/android/graphics/Canvas.java` rather than
+recalled, and **nothing was missing on the first device run**: no
+UnsatisfiedLinkError, in either mode.
+
+**One real portability bug.** The device build is `gnu++11`, where a struct
+with default member initializers is not an aggregate, so `raster::Rect{a,b,c,d}`
+and `raster::Surface{...}` compiled on the host (c++14) and failed on the
+target. Both now have explicit constructors. Host test: 20/20.
+
+**The buffer refusal, and that it is intermittent.** The first device run got
+`screen_create_window_buffers: Operation not permitted` and fell back to a
+heap surface; the next two runs allocated a real window buffer (720x720,
+stride 2944) and posted with rc=0. Same binary, same user, no state change we
+made. Treat it as a flaky allocation rather than a privilege wall until it is
+reproduced; `screen_get_window_property_iv(BUFFER_SIZE)` returns rc=-1 before
+allocation, so it tells us nothing in advance, and `SCREEN_PROPERTY_POWER_MODE`
+reads back junk (30336) with rc=0 on this build, so the power poke is now
+conditional and effectively pointless.
+
+Because the fallback exists, a missing window costs the panel and not the
+proof: `Q20_DRAW_PNG=<path>` writes the frame through the engine's own PNG
+writer either way, and that file is how both frames above were read back.
+
+**Two defects the frame shows, both outside the drawing path.**
+`Q20_DRAW_TRACE=1` logs every draw call with its colour and geometry:
+
+```text
+drawRect 0,0 720x720 #ff303030 style=0
+drawRun 8 glyphs at 0,51 #b3ffffff size=48.0 first=U+0063
+drawRoundRect 8,12 160x72 #ffffffff
+drawRun 4 glyphs at 25,30 #ffffffff size=28.0 first=U+0042
+```
+
+The label is drawn (4 glyphs, starting 'B', so `textAllCaps` works), and the
+text colours are the correct Material dark values. The button fill arrives as
+pure white, which no Material palette contains, and the white label then
+vanishes into it. The theme attributes themselves resolve correctly:
+`colorButtonNormal` comes back `type=3` (string) pointing at framework
+resource `0x10600f4`, which is what a colour state list XML looks like. So the
+loss is downstream, in loading that colour state list, and it belongs to the
+resources work, not to A7. Next probe: walk `bump.getBackground()` and print
+the GradientDrawable's resolved `mSolidColors`.
+
+**Compositing is still unanswered**, for a mundane reason: the phone was
+password locked for this whole session, so nothing composites regardless and
+there was no foreground app to borrow a window group from. See
+docs/token-wall-and-device-access.md section 11 for the privilege sweep
+(devuser gets APPLICATION, is refused WINDOW_MANAGER, DISPLAY_MANAGER and
+INPUT_PROVIDER) and for the one experiment left to run.

@@ -344,3 +344,457 @@ sessions.
 
 Next session starts with (1): disassemble qconnDoor, find the service spawn
 and its credential source.
+
+## 10. The compositor gate re-examined: A4 tested CREATE, not JOIN (2026-10-20)
+
+Re-reading `runtime/qnx-shims/screen_probe.c` against the BB10 windowing model
+shows A4's negative result was over-interpreted. The probe called
+`screen_create_window_group(win, "q20probe-group")` (screen_probe.c:47): it
+made itself the **parent** of a brand-new group the Navigator has never heard
+of. On BB10 the Navigator is the window manager that actually composites app
+windows, and it composites the groups **it** owns. An app does the opposite of
+what the probe did: it **joins** a group the Navigator already manages
+(`screen_join_window_group`), and rides the Navigator's compositing of that
+group.
+
+So "bare process windows never composite" is explained by the self-created,
+Navigator-unknown group alone. It is **not** evidence of a signing or root
+gate on compositing. The app-launch/BAR/token conclusion was reached a rung
+early: the JOIN path was never tested, and it needs no root to try.
+
+What the model predicts (confidence: Likely for the mechanism, Guessing for
+whether 10.3.3 lets a non-launched devuser process join a foreign group):
+
+1. A window joined to the **live foreground** group the Navigator is already
+   drawing should be composited as a child, no privilege change.
+2. If joining a foreign group is denied, the next question is whether devuser
+   can obtain a `SCREEN_WINDOW_MANAGER_CONTEXT` (force-composite route). EPERM
+   there means that specific route is root-gated; it does not close path 1.
+3. Only if both fail cleanly is "A7 needs app-launch/root" actually earned.
+
+### Experiments, in order (all devuser, no root, run on the owned device)
+
+1. `runtime/qnx-shims/nav_recon.sh` — zero build. Dumps the Navigator PPS
+   registry (`/pps/services/navigator/*`), the foreground app's window-group
+   name, and this process's (absent) windowing environment. Run it first: the
+   live group name is the input to the probe. Drive it over the existing qconn
+   channel (`qconn_exec.py`) or `q20ssh`.
+2. `runtime/qnx-shims/navigator_probe.c` — links the device's own
+   `/base/usr/lib/libscreen.so`, same build line as screen_probe. It (a) sweeps
+   the four Screen context types and logs which the kernel grants devuser, then
+   (b) `navigator_probe join <GROUP>` creates an app window and JOINS the group
+   nav_recon found, fills solid magenta, posts, holds 60s. Magenta on the panel
+   = A7 display route open without root. `navigator_probe` with no args
+   reproduces the A4 CREATE baseline for comparison.
+
+This is the productive, device-reachable half of the display work. The root
+track (qconnDoor RE, section 9) is unchanged and remains gated on the saved
+binary + device, i.e. a session with the hardware attached.
+
+## 11. The experiments, run (2026-10-20, device attached)
+
+Both experiments from section 10 ran on the phone over `q20ssh`. The results
+narrow the A7 display route to one remaining variant, and they close two
+routes for good.
+
+### What the privilege sweep says
+
+`navigator_probe` with no arguments, as devuser:
+
+```text
+=== context privilege sweep (devuser)
+  APPLICATION      rc=0  errno=0 (granted)
+  WINDOW_MANAGER   rc=-1 errno=1 (Operation not permitted)
+  DISPLAY_MANAGER  rc=-1 errno=1 (Operation not permitted)
+  INPUT_PROVIDER   rc=-1 errno=1 (Operation not permitted)
+```
+
+So **devuser cannot be the compositor.** Section 10's experiment 2 is
+answered: the force composite route is privilege gated, exactly as predicted,
+and it does not become available by trying harder. Owning the presentation
+layer ourselves (the facade charter end state) needs root or a different
+process identity, not a cleverer Screen call.
+
+The CREATE baseline reproduced A4 exactly: group created, `USAGE WRITE|NATIVE`
+accepted, display 0 attached, CPU mapped 720x720 buffer at stride 2944,
+magenta filled, `screen_post_window` and `screen_flush_context` both rc=0, and
+nothing on the panel. One new detail: the probe set `SCREEN_PROPERTY_ZORDER`
+to 200 and the window read back `zorder=0`. The z order we ask for is not the
+z order we get, which is consistent with a window whose group no compositor
+owns.
+
+### What the recon says
+
+`nav_recon.sh` dumped the live Navigator state. The useful parts:
+
+* `/pps/services/navigator/state` is world readable and names the Navigator's
+  own z order, `navzorder:n:100`. Anything meant to land above the homescreen
+  has to beat that, which is why the probe's z order is now a knob
+  (`navigator_probe <mode> <GROUP> <Z>`, default 200).
+* The per app `rundata_*` objects are world readable, and they carry
+  `window_id`, which is the group handle we need. **Every one of them was
+  empty or `none`**, because the phone was locked: `state` also showed
+  `isDeviceLocked::passwordLocked`, `curr_window::none` and `windows_size:n:0`.
+  Nothing was in the foreground to join.
+* `/pps/services/navigator/windowgroup` and `/pps/system/navigator/groups` are
+  **not readable** by devuser (`apps:nto`). The authoritative group registry
+  is closed to us.
+* `/pps/services/window_manager` and `/pps/services/screen` do not exist on
+  this build.
+
+### The env leak is closed too
+
+On BB10 the Navigator mints the group name and hands it to the app it launches
+through its environment, which is why a bare SSH process has no windowing
+environment at all (the recon confirms that). Reading it out of a launched app
+instead does not work either: devuser cannot open any other process's
+address space.
+
+```text
+$ pidin -F "%b %N"
+couldn't open /proc/1/as: Operation not permitted
+couldn't open /proc/15196162/as: Operation not permitted
+... every pid, same answer
+```
+
+### What is left
+
+One variant, and it is still untried for a mundane reason: **the phone was
+locked**. With the device unlocked and an app in the foreground, that app's
+world readable `rundata_*` should publish a real `window_id`, and that is a
+group name to try:
+
+```sh
+runtime/art-qnx/device/q20ssh 'cat /pps/services/navigator/state'          # curr_window
+runtime/art-qnx/device/q20ssh 'cat /pps/services/navigator/rundata_<app>'  # window_id
+runtime/art-qnx/device/q20ssh 'cd /accounts/devuser && ./navigator_probe join <GROUP> 200'
+```
+
+If a joined child window does composite, A7's display route is open with no
+root. If the join is refused, the display half of A7 is genuinely gated on
+root or the app launch path, and the qconnDoor track (section 9) becomes the
+critical path for pixels.
+
+Either way the *drawing* half of A7 no longer waits on this: the facade
+renders the real View tree through its own Canvas JNI into the window buffer,
+and `Q20_DRAW_PNG` writes the same frame to a PNG when Screen gives us no
+composited window. A missing compositor now costs us the panel, not the proof.
+
+### Probe builds
+
+Both probes now build from the checked in Makefile instead of a remembered
+command line, and link the dynamic sysroot `libscreen` with `/base/usr/lib`
+baked as the runtime path, which is what the working A4 binary did:
+
+```sh
+docker compose run --rm --entrypoint /bin/bash aosp6 -c \
+  '. toolchains/playbook-gcc9/env.sh && make -C runtime/qnx-shims probes'
+```
+
+`nav_recon.sh` also lost its last section: it opened
+`/pps/services/navigator/control?wait`, and a `?wait` open blocks until the
+object changes, which never happens on a locked idle device. It reads `state`
+now.
+
+## 12. The JOIN route is closed (2026-10-20, device unlocked, owner watching)
+
+Section 10 set the bar for calling the display question settled: "Only if both
+fail cleanly is A7 needs app-launch/root actually earned." Both have now
+failed cleanly, on an unlocked phone with an app in the foreground and the
+owner watching the panel.
+
+### The foreground group was found, and it was the right one
+
+With the device unlocked and the File Manager open,
+`/pps/services/navigator/state` gives the live group directly:
+
+```text
+[n]curr_window::sys.perimeterbrowser.gYABgMgpl40MVrFkZvPEXRuQTGE
+[n]windows_size:n:1
+```
+
+`sys.perimeterbrowser` is the File Manager. So `curr_window` is the group name
+source we were missing in section 11, and `window_id` in the per app
+`rundata_*` is empty even for the live fullscreen app, on this build.
+
+### screen_join_window_group lies
+
+It returns rc=0 for any string, including a deliberately bogus one:
+
+```text
+JOIN group "sys.perimeterbrowser.gYABgMgpl40MVrFkZvPEXRuQTGE" rc=0 (joined)
+JOIN group "42672382"                                        rc=0 (joined)
+JOIN group "sys.perimeterbrowser"                            rc=0 (joined)
+```
+
+The return value is worthless. What settles it is reading the membership back
+after the post, and the control run proves the read itself works:
+
+| path | `SCREEN_PROPERTY_GROUP` reads back | `BUFFER_SIZE` | on the panel |
+|---|---|---|---|
+| CREATE own group | `"q20probe-group"` | 720x720 | nothing (A4 baseline) |
+| JOIN foreground group | `""` | 0x0 | nothing |
+
+The joined window is in no group at all. The call is accepted at the API
+boundary and dropped. The `0x0` buffer size is the same fact seen from the
+other side: with no parent group there is nothing to inherit a size from.
+
+### Two probe bugs that were hiding this
+
+Both are fixed, and both mattered, because each one independently produces
+"nothing on screen" for a reason that is not the compositor:
+
+1. The probe filled `bdims[1]` rows using a `BUFFER_SIZE` read taken **before**
+   allocation. For a joined window that read is `0x0`, so it filled zero rows
+   and posted an unfilled buffer while printing "filled magenta". It now takes
+   the size from the allocated buffer.
+2. The probe never set `SCREEN_PROPERTY_SIZE`. A window that creates its own
+   group inherits the display size; a joined one does not. It is set
+   explicitly now (`NAV_SIZE`, default 720), and reads back 720x720 even on
+   the joined window.
+
+With both fixed the probe posts a genuinely filled, correctly sized 720x720
+magenta buffer, `post` and `flush` both return 0, and the panel does not
+change. Confirmed visually by the owner, twice.
+
+### What this earns
+
+* devuser gets a Screen `APPLICATION` context and nothing else (section 11).
+* devuser cannot join a group it does not own.
+* devuser cannot read the group registry, and cannot read any other process's
+  environment to steal a name that would not work anyway.
+
+So compositing requires either root (the `SCREEN_WINDOW_MANAGER_CONTEXT` that
+the facade charter's "be the presentation layer" end state needs anyway) or
+being launched by the Navigator (the app launch path, behind the dead debug
+token servers of sections 1 to 8). The qconnDoor track in section 9 is now the
+critical path for pixels on the panel.
+
+This does not block the rest of A7 or the ladder above it: the drawing half is
+done and verified on hardware (docs/bringup-log.md, A7 phase 2), and
+`Q20_DRAW_PNG` reads every rendered frame back off the device without a
+compositor.
+
+## 13. Root quest, session two: the door's root branch is a client flag (2026-10-20)
+
+Static RE of `runtime/qnx-shims/qconnDoor.bin` (34 KB, stripped ARM/Thumb-2,
+analyzed with the toolchain's objdump/readelf in the container). The daemon is
+far more legible than "string-obfuscated" suggested: the dynamic import table
+plus the `.rodata` literals reconstruct the whole protocol. This is the
+BlackBerry qconnDoor, the dev-mode door that provisions sshd/qconn, on an owned
+Q20 running end-of-life 10.3.3.
+
+### The daemon provisions sshd two ways, from the same binary
+
+The `.rodata` carries both an sshd config for **root** and one for **devuser**,
+at adjacent addresses, and the code picks between them line by line:
+
+| line | root branch | devuser branch (what Connect.jar uses) |
+|---|---|---|
+| keyfile | `AuthorizedKeysFile=/var/qconndoor/.ssh/authorized_keys2` | `.../accounts/devuser/.ssh/authorized_keys2` |
+| users | `AllowUsers=root` | `AllowUsers=devuser` |
+| root login | `PermitRootLogin=yes` | `DenyUsers=root` |
+
+All four `posix_spawn` sites in the binary call
+`posix_spawnattr_setcred(attr, 0, 0)` first: every service the door spawns
+(qconn, sshd) runs as uid 0. The devuser outcome we use today is not a
+privilege ceiling in the spawn; it is the sshd config the devuser branch
+writes.
+
+### The branch is selected by a client-supplied field
+
+The config-building function at `0x2f44` keys every choice above off one
+boolean, a field at offset `0xf0` of the per-connection session struct
+(`ldr.w r3, [r0, #0xf0]; cbz r3, <devuser>`). That field is written in the
+command handler at `0x33c8`:
+
+```
+33c0  ldr   r3, [r4, #16]      ; session state
+33c2  cmp   r3, #2             ; must be state 2 (authenticated)
+33c4  bne   <error>
+33c8  ldrh  r6, [sp, #64]      ; a 16-bit field from the client's request
+33cc  mov   r9, #1
+33d0  cbnz  r6, <devuser>      ; r6 != 0  -> devuser
+33d2  str   r9, [r4, #0xf0]    ; r6 == 0  -> ROOT (flag = 1)
+33d6  blx   RTAS_LoadQconnKeyExV2
+```
+
+So **root versus devuser is a client flag**: a 16-bit value in the
+authenticated key-upload request, `0` for root. The session constructor at
+`0x27c4` zeroes the flag, so devuser is only the default; the client chooses.
+Connect.jar evidently sends a non-zero value. This is the heart of the finding:
+the debug-token wall (sections 1 to 8) governs BAR/APK **installation**; it does
+not gate this branch.
+
+### What still has to be true, and the one unknown
+
+The root branch is reachable only from session state 2, which is set after the
+authentication challenge, and the auth is the **device password**, not a RIM
+debug token: the challenge handler decodes `passwordExists` / `challenge` over
+PPS and rejects with `Password not valid. Authentication failed` and `The
+device password you provided is incorrect`. The owner has the password (it is
+already what `connect.sh` feeds as `$BBPW`).
+
+The root path does one extra thing the devuser path does not: at `0x33d6` it
+calls `RTAS_LoadQconnKeyExV2`, and the challenge is checked by the QNX library
+routine `VerifyEncryptionChallenge` (`0x349c`) against the loaded key. The open
+question is purely **which key**: if the root branch verifies the challenge
+against the RTAS **device-specific** key, a client needs the matching private
+key (debug-token grade) and password alone is not enough; if it accepts the
+password-derived challenge like the devuser branch, the password is enough. The
+binary logs both `Using the device specific RTAS key %s` and `Using the
+fallback RTAS key`, so the device-specific key is **not** a hard requirement at
+load time: there is a fallback. Whether the fallback key also satisfies the
+root-branch verify is the single thing static analysis cannot settle.
+
+### The experiment that settles it (no new primitives, owner + device)
+
+Drive the door protocol directly instead of through Connect.jar:
+
+1. Open the qconndoor port over USB (wired is enforced: the daemon rejects
+   non-wired with `Attempted to connect via non-wired connection`).
+2. Complete the password challenge with the known device password, exactly as
+   Connect.jar does, to reach session state 2. jqconnDoor.jar is the protocol
+   reference; the wire format is the PPS-framed challenge above.
+3. Send the key-upload command with the root selector `0` and our existing
+   RSA-4096 public key, and watch for two outcomes:
+   * sshd comes up with `PermitRootLogin=yes` and our key at
+     `/var/qconndoor/.ssh/authorized_keys2` -> `ssh root@<ip>` works, root
+     achieved, and A7 compositing (and the whole facade charter) unblocks.
+   * the daemon rejects at `VerifyEncryptionChallenge` -> the root branch is
+     bound to a device-specific key after all, and root stays behind the token;
+     the finding then is a clean negative, not a guess.
+
+Either way this is the next session's first action, and it is cheap: no new
+crypto to break, just the protocol spoken correctly with the password we have.
+The devuser channel (`q20ssh`, qconn 8000) is unaffected and stays the daily
+tool.
+
+## 14. Root quest, session three: the client confirms local password auth (2026-10-20)
+
+Decompiled the vendor client (`Connect.jar` + `jqconnDoor.jar`, the
+`blackberry-connect` tool, with javap) to settle section 13's open question
+from the client side. It confirms the important half.
+
+### Authentication is local and password-only, no RIM server
+
+`AbstractSecureTargetConnection.authenticate()` runs the whole handshake
+against a `LocalRTASConnection` (created by `ConnectionRegistry` whenever no
+RTAS server setting is supplied, which is the default):
+
+1. `SecureTargetChallengeRequest` with `rtas.getPublicEncryptionKey()` from the
+   **local** RTAS object.
+2. Target returns an encrypted challenge; the client decrypts it **locally**
+   (`rtas.decrypt(challenge)`), logs `RTAS credentials verified.`, and returns a
+   `SecureTargetDecryptedChallengeResponse`.
+3. `SecureTargetAuthenticateChallengeRequest` -> target returns algorithm,
+   iterations, salt, challenge.
+4. `SecureTargetAuthenticate` carries `hashAndEncode(devicePassword, algo, salt,
+   iterations, challenge)`: SHA1 or SHA512 of the device password with the
+   salt, iterated, hex-encoded, then AES-wrapped with the session key.
+5. `SecureTargetSendSSHKey`, then start services.
+
+No network RTAS server and no debug token anywhere in the path. Identity is the
+device password, which the owner has. This confirms, from the client side, that
+the dead RIM infrastructure (sections 1 to 8) does not gate the door.
+
+### The root selector is a client setting the stock tool pins to false
+
+`TargetSetting` has a boolean `authenticateAsRoot` with
+`setAuthenticateAsRoot` / `isAuthenticateAsRoot`. `Connect.createConnection`
+calls `addTargetSetting(host, 4455, version, password, false)`: the stock tool
+hardwires it **false**, and in this jar version no outgoing frame reads it, so
+`blackberry-connect` can only ever provision devuser. Driving the daemon's root
+branch (section 13) therefore needs a client that sets the flag and serializes
+it into the frame the daemon reads, i.e. a small custom client built on the
+jar's own frame and `LocalRTASConnection` classes, not the stock CLI.
+
+### Harness and the one thing still unverified
+
+A frame-logging TCP proxy (host `127.0.0.1:4455` -> device `4455`, since
+`Connect.jar` hardcodes the port and takes only a host arg) captures the wire
+format; the device still sees the USB peer, so the wired-connection check
+holds. A first run captured the client HELLO (`len=6 ver=2 code=1`, empty
+payload) before the device dropped off USB.
+
+Still unverified, and it is the same single unknown as section 13: whether the
+daemon's root branch accepts this local password auth or additionally binds the
+challenge verify to the device-specific RTAS key. The next action is a custom
+client with the selector set, run against the door, watching for sshd with
+`PermitRootLogin=yes` versus a challenge rejection. It needs the device back on
+USB (this session it disconnected: no ARP entry, all ports closed, host USB IP
+fell back to a generic 169.254/16).
+
+The research proxy and any custom client are deliberately kept out of the repo
+for now; the devuser channel (`connect.sh`, `q20ssh`, qconn 8000) is unchanged.
+
+## 15. Root quest, session four: the root branch is reachable but RTAS-key gated (2026-10-20, device on WiFi)
+
+Ran the experiment from sections 13 and 14 against the live door. Clean,
+decisive result: the root branch is reachable with the password, but the root
+challenge is bound to the device's own RTAS key, which the password does not
+provide. Root via the door is not achievable with the password alone.
+
+### Setup
+
+Dev mode over WiFi (owner enabled "discoverable", same password). The Q20 came
+up at `192.168.1.184` with the door on 4455; USB stayed stuck in mass-storage
+mode, so WiFi was the usable channel. The door accepts WiFi connections with
+dev mode's WiFi discovery on: no wired-only rejection.
+
+The client is `runtime/qnx-shims/door/Q20Door.java`, built on the vendor
+`jqconnDoor.jar` classes so all crypto is stock. Baseline `user` mode ran the
+full vendor handshake and **re-provisioned devuser**: port 22 opened and
+`q20ssh` logged in as `devuser` (`uid`, `home=/accounts/devuser`). So the
+password `drstone` and the whole harness are correct over WiFi.
+
+### The root probe and its result
+
+`root` mode sends HELLO, then a ChallengeRequest with an **empty** public key,
+the selector proven in section 14 (the daemon's zeroed receive buffer reads the
+empty key as 0 and takes the root branch). The wire:
+
+```
+HELLO ->
+  feedback <- code=2 (FEEDBACK) payload 0000 0000   (OK)
+CHALLENGE_REQUEST (empty key = root selector) ->
+  challenge response <- code=4 (ENCRYPTED_CHALLENGE_RESPONSE) len=168
+  challenge: version=0x100 sessionKeyType=3 containerKeyVersion=1
+             sourceName="QCONN-r144" sigType=1
+  local RTAS decrypt => FAIL
+```
+
+Two facts, both decisive:
+
+1. **The daemon took the root branch.** The empty-key ChallengeRequest was not
+   rejected; the daemon answered with a real 168-byte encrypted challenge. So
+   the root selector works exactly as the static analysis predicted, and root
+   is not gated by the client being unable to *ask*.
+2. **The root challenge is bound to `QCONN-r144`, not to us.** In the devuser
+   flow the daemon encrypts the challenge to the client's own public key (which
+   `LocalRTASConnection` generated, so the client decrypts it). For root, with
+   no client key, the daemon encrypts to its own RTAS key named `QCONN-r144`,
+   and `LocalRTASConnection.decrypt` fails. Answering it needs the `QCONN-r144`
+   private key, which is RTAS/debug-token grade and is not derived from the
+   device password.
+
+### Where this leaves root
+
+The password unlocks devuser; it does not unlock root. The door's root branch
+is a real, reachable code path, but its challenge is cryptographically gated by
+the `QCONN-r144` RTAS key. The only ways past it:
+
+* **Recover the `QCONN-r144` private key.** Whether it is the OS-shipped
+  "fallback RTAS key" the daemon logs (potentially static and extractable) or a
+  per-device key in protected storage is unknown and untested; probing for the
+  key on the device is credential extraction and is left as an explicit owner
+  decision, not pursued here.
+* A QNX-side privilege path independent of the door (section 9 list items 2 to
+  4), still open.
+
+So A7 compositing, which needs root (section 12), stays blocked, and the
+drawing half of A7 remains the delivered result. The devuser channel is fully
+working over WiFi now, which is a simpler path than the USB dance for everyday
+work: `Q20_IP=192.168.1.184 q20ssh`.
+
+The experiment client and proxy live in `runtime/qnx-shims/door/` (gitignored).

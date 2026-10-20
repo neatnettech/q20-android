@@ -187,6 +187,14 @@ JAVACORE_OBJS += build/javacore/graphics_facade.o build/javacore/android_animati
 JCFLAGS += -I$(QNX_INC)/freetype2
 JAVACORE_EXTRA_LIBS += $(ICU_LIBS)/libfreetypeS.a
 
+# A7 pixels: the software rasterizer (src/raster.cc, host tested by
+# src/raster.mk) behind the Canvas JNI in the facade, and the QNX Screen window
+# it posts to (src/screen_window.cc). libscreen is DYNAMIC and resolved on the
+# device from /base/usr/lib: the sysroot's static libscreenS.a speaks an
+# incompatible protocol and dies on array properties (A4, bringup-log.md).
+JAVACORE_OBJS += build/javacore/raster.o build/javacore/screen_window.o
+JAVACORE_EXTRA_LIBS += -L$(ICU_LIBS) -lscreen -Wl,-rpath,/base/usr/lib
+
 build/javacore/androidfw/%.o: $(FWBASE)/libs/androidfw/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(JCFLAGS) -O2 -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
