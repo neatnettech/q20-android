@@ -47,3 +47,6 @@ runtime/art-qnx/src/raster_out.png
 # qnx-shims probe binaries (make -C runtime/qnx-shims probes)
 runtime/qnx-shims/navigator_probe
 runtime/qnx-shims/screen_probe
+
+# Door root-track research tooling (dual-use, kept local)
+runtime/qnx-shims/door/
