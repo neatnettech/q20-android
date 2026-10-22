@@ -1083,3 +1083,106 @@ The catch is `/q` availability: the mount is applied at the first boot after
 each flash only (it did not survive the slot switch), so exercising
 `u_navigator` needs one more re-flash first. That is the next concrete step
 for A7; the autoroot persistence question remains open behind it.
+
+## 20. Session seven: boot0 write lane closed, KGSL uid-311 exec works, the join is accepted but never composited (2026-10-22)
+
+### The boot0 marker test: F7 lane does not reach the hardware boot0
+
+* The RAM loader (0x8001) and the fresh loader (boot ROM uploaded) both
+  leave the `F7` block write **unacknowledged** (timeouts, even with the
+  4x10s retry mirroring bb10mt's SafeChannel2). The `20EE PreFlash` from the
+  session13 protocol notes (resp $39, data[0]=$15 Classic / $40 Passport) is
+  the missing stage the bblink `preflash()` provides but the probe runs
+  lacked; the marker never landed and nothing was wiped. The boot0 is a
+  separate eMMC hardware partition and the user-area F7 stream cannot
+  address it. The boot-slot commit (which needs boot0's MCT copy) is a dead
+  end on this lane without an EXT_CSD partition switch, which the loader
+  does not expose.
+* Boot ROM entry ritual learned: **unplug + one brief power press + plug**
+  reliably produces the fresh 0x0001. Powering off with the cable in lands
+  in the resident loader (0x8001), which speaks only D9/D7 and ignores F7.
+  A 0x0001 that has been parked for minutes is stale (the ping0 write times
+  out); only a fresh entry handshakes.
+* The research repo's prebuilt `bb10mt_aarch64_darwin` cannot see the boot
+  ROM on this host ("Failed to connect after maximum attempts": its static
+  libusb enumeration is broken on macOS 26). The working binary was the
+  locally built one, and both the build tree and the Lazarus/FPC toolchain
+  are gone; only the patched sources remain in
+  `runtime/qnx-shims/door/reflash/bb10mt-patches/`. A rebuild needs Lazarus
+  4.8 + FPC 3.2.4 + the mormot/cli_fp/synapse/LGenerics/pas-libusb deps.
+
+### The KGSL exploit: uid 311 execution works, but 311 buys nothing for A7
+
+* `bb10root/kgsl-exploit` (2026-09-01, for the Leap 10.3.3.2137) abuses
+  `/dev/kgsl-3D` ioctl read/write primitives to redirect the GSLKernel
+  GOT entry `kos_memcpy` to `system()`. Built with the new docker toolchain
+  (below) it runs **end to end on the Classic 10.3.3.3216 unchanged**: the
+  GSLKernel-A225.so base is found by the e_entry=0x3e20 link_map walk, the
+  libc e_entry=0x48918, `system()` verified byte-for-byte, the GOT patched
+  and the trigger fired. Result: arbitrary single command execution as
+  uid 311 (screen).
+* The context sweep run as uid 311: `WINDOW_MANAGER`,
+  `DISPLAY_MANAGER`, `INPUT_PROVIDER` all **EPERM**, `APPLICATION` granted.
+  The window-manager context is root-gated, not uid-gated, so the
+  `u_navigator` impersonation plan from section 19 is obsolete: even the
+  navigator uid would not get the force-composite context. The force
+  composite route needs uid 0, full stop.
+* The exploit is single-shot and wedges the device: with `kos_memcpy`
+  patched, every subsequent copy in the screen service calls `system()`
+  and the device degrades into a watchdog reboot. The GOT cannot be
+  restored: `/proc/<pid>/as` is denied on QNX procfs, the svcshell child
+  runs in a separate address space (a direct write segfaults), and the
+  kgsl write lane routes through the hijacked memcpy. Reboot after every
+  use.
+* Shell spawning from the uid-311 context fails with ESRCH ("No such
+  process") for both `/bin/sh` (a symlink to ksh) and `/bin/ksh` directly;
+  the bind shell never lands. Untrusted-spawn (pathtrust) is the suspect.
+  Command execution via `system()` itself is unaffected, which is enough
+  for one-shot probes.
+
+### The join test: accepted but never composited, the app-launch path is the route
+
+* Device unlocked with Settings in the foreground:
+  `/pps/services/navigator/state` publishes
+  `curr_window::sys.settings.gYABgFXZghhSmuJ6oBTACT1DwpQ`; the per-app
+  `rundata_*` is world readable but `window_id` is empty even in the
+  foreground.
+* `navigator_probe join sys.settings.<id> 200` as devuser:
+  `screen_join_window_group` returns **rc=0 (joined)**. The device accepts
+  the join. But nothing ever appears on the panel (the z order read back
+  is 0, whatever we ask for). **Verdict: the Navigator composites only the
+  windows of apps it launches itself.** A foreign SSH-spawned process can
+  join a group but is never drawn. The A7 display route is the app-launch
+  path: the facade must arrive as a launched app (BAR), not as a background
+  process.
+* The remaining wall for that path is the install transport. BarDeploy's
+  static-ECDH TLS dead end re-confirmed ("peer not authenticated" on
+  `blackberry-deploy -installApp`). The SSH-based install needs the `/q`
+  `u_upd` queue (first boot after a flash) or root. The
+  `blackberry10-toolchain` repo ships `tools/install-rooted.sh` which does
+  the SSH install via `/base/scripts/sudtools.sh sud_install_package_2`
+  once root exists.
+
+### New toolchain: docker BB10 builds (native + BAR)
+
+* `ghcr.io/xiazy/blackberry10-toolchain:latest` (from
+  `bb10root/blackberry10-toolchain`, clang 19 + binutils + the 10.3.1
+  sysroot, no QNX SDP needed) compiles QNX native binaries on the host:
+  `docker run --rm -v $PWD:/src -w /src <image> bb10-cc -O2 -o x x.c -lsocket`.
+  This built the working `pwnsvc`/`svcshell` (ARM EABI5, `ldqnx.so.2`)
+  and the patched `navigator_probe`.
+* It also builds BARs: `tools/docker-builder.sh build examples/calculator`
+  produced `com.example.bbcalculator.bar` (59 KB Cascades app), the test
+  vehicle for the app-launch display test once the install transport
+  opens.
+
+### Device access notes
+
+* Development Mode has its own password field, separate from the lock
+  password. The door handshake stalls at the challenge question until it
+  matches (set it to `drstone`). The dev services (22, 8000) die when the
+  door process exits, so the door is now patched to hold the session
+  (`Thread.sleep` after the user flow in Q20Door.java) and
+  `runtime/qnx-shims/door/connect.sh` is the one-stop connector (door
+  restart + sshd wait + `--push` file deploy + legacy-flag SSH).
+  `runtime/art-qnx/device/q20ssh` now retries 3x.

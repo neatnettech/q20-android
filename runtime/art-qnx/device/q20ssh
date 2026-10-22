@@ -3,9 +3,18 @@
 # algorithm, kex, cipher and MAC, and it drops the connection on aes-gcm.
 IP=${Q20_IP:-169.254.0.1}
 KEY=${Q20_KEY:-$HOME/.q20/id_rsa_q20}
-exec ssh -i "$KEY" \
-  -o StrictHostKeyChecking=no -o UserKnownHostsFile="${Q20_KNOWN_HOSTS:-$HOME/.q20/known_hosts}" \
-  -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=30 \
-  -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-  -o KexAlgorithms=+diffie-hellman-group14-sha1 -c aes128-ctr -m hmac-sha1 \
-  devuser@"$IP" "$@"
+TRY=${Q20_TRY:-3}
+i=0
+while [ $i -lt "$TRY" ]; do
+  i=$((i+1))
+  if ssh -i "$KEY" \
+    -o StrictHostKeyChecking=no -o UserKnownHostsFile="${Q20_KNOWN_HOSTS:-$HOME/.q20/known_hosts}" \
+    -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=30 \
+    -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+    -o KexAlgorithms=+diffie-hellman-group14-sha1 -c aes128-ctr -m hmac-sha1 \
+    devuser@"$IP" "$@"; then
+    exit 0
+  fi
+  [ "$i" -lt "$TRY" ] && { echo "ssh attempt $i failed, retrying in 5s" >&2; sleep 5; }
+done
+exit 1

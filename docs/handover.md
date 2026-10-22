@@ -267,3 +267,25 @@ M3.
   framework (boot image) frame is missing, in AOT and `-Xint` alike. Find the
   failing framework method from the UnsatisfiedLinkError text or by grep for
   now; fixing the trace is M5 hygiene.
+
+### Session 2026-10-22 (KGSL exploit + join test, section 20)
+
+* The boot0 F7 write lane is closed: the boot0 is a separate eMMC hardware
+  partition the user-area stream cannot reach. The boot-slot commit has no
+  lane on this toolchain; the Windows cap.exe route or an EXT_CSD partition
+  switch would be needed. The macOS bb10mt lane is dead until rebuilt (the
+  prebuilt binary's libusb cannot enumerate the boot ROM here).
+* The kgsl-exploit runs unchanged on the Classic and executes one command
+  as uid 311 per boot. But 311 does not unlock any compositor context
+  (WINDOW_MANAGER is EPERM for it), the host wedges after the trigger, and
+  the shell spawn is blocked. Use it only for one-shot probes; reboot
+  after.
+* The A7 display route is the app-launch path: joins are accepted (rc=0)
+  but never composited. Next: get a BAR installed and launched. The
+  install transport is the open wall (BarDeploy TLS is dead; SSH install
+  needs /q or root).
+* New capability: the docker BB10 toolchain builds native binaries and
+  BARs; a calculator BAR is built and ready to install.
+* connect.sh + the held door + q20ssh retries: the stable device access.
+  Dev mode password must match drstone or the door stalls at the challenge
+  question.
