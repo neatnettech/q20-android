@@ -1050,3 +1050,36 @@ autoroot chain). The first step is reading the deckard installer python on the
 device to learn the links directive format, then re-installing a modified
 getroot package through the installer queue (reachable via the `/q` `u_upd`
 impersonation helper, which returns on the first boot after each flash).
+
+## 19. Installer links format decoded, navigator impersonation found (2026-10-20)
+
+The deckard installer package was pulled from the device
+(`/base/usr/lib/python3.2/site-packages/deckard`, python 3.2 bytecode) and
+decompiled locally. The `assets/links` directive set is:
+
+```
+version:1
+ln:SRC:DST          # pathmgr_symlink(src, dst) under superuser(); dst must not
+                    # exist as a non-symlink (an existing symlink is replaced)
+mount:SRC:DST:FS    # mount SRC at DST, FS in {qnx6, rcfs}, also under superuser()
+```
+
+Both run as root at package-apply (first boot). Consequences:
+
+* The `ln` cannot replace the stock `/base/scripts/ota_info_pps.sh` (a regular
+  file), so the direct autoroot replacement via the installer is blocked.
+* The package `data` tree writes root-owned files under `/var` (that is how
+  getroot installed the sshd_config and the PPS triggers), and the persisted
+  installer queue processes `install_apk` jobs for `andrB` packages without
+  signature checks.
+* **The `/q` impersonation layer includes a per-user setuid helper for every
+  uid, including `u_navigator`.** The navigator uid is the compositor, so a
+  process started through `/q/u_navigator` should be granted the
+  `SCREEN_WINDOW_MANAGER_CONTEXT` that devuser is denied (section 12), which
+  is the A7 force-composite route from section 10. That unblocks A7
+  compositing without uid 0.
+
+The catch is `/q` availability: the mount is applied at the first boot after
+each flash only (it did not survive the slot switch), so exercising
+`u_navigator` needs one more re-flash first. That is the next concrete step
+for A7; the autoroot persistence question remains open behind it.
