@@ -798,3 +798,255 @@ working over WiFi now, which is a simpler path than the USB dance for everyday
 work: `Q20_IP=192.168.1.184 q20ssh`.
 
 The experiment client and proxy live in `runtime/qnx-shims/door/` (gitignored).
+
+## 16. The QCONN key is a public modulus; the door is closed (2026-10-20)
+
+Session five of the root quest extracted the OS image and settled the one open
+question from sections 13 to 15: whether the `QCONN-r144` key the door uses is
+a keypair recoverable from the OS (then root via the door) or a public key
+whose private half never shipped (then the door is closed).
+
+### What was extracted, and how
+
+The official Classic autoloader (`SQC100-1.Classic.BB10_3_3.10.3.3.498.exe`,
+the 10.3.3.3216 release, from archive.org item `blackberry10-autoloaders`,
+md5 `c79f8a390232a9f7a5824f9ab4e21f69`) was parsed with the research tools in
+`Blackberry-Research/tools/`: the exe is `cap.exe` + a ver2 header + three
+`mfcq` containers. The IFS stream (type 0x08, 10.9 MB) was LZO-decompressed
+(`dumpifs.py`) and yielded `proc/boot/librtas.so.1` (332,153 bytes) plus the
+Certicom libs. Byte comparison against the device: the autoloader's
+`libhuapi.so.5` and `libsbgse56.so.0` are identical to the device's
+`/proc/boot` copies, so this image is exactly the firmware the device runs,
+and this `librtas.so.1` is the device's own.
+
+`librtas.so.1` keeps its key table in plaintext while its code is
+kernel-decrypted at load (the `.text` around `GetEncryptionChallengeEx` and
+`RTAS_LoadQconnKeyExV2` is ciphertext in the image; the entry point, string
+tables and the key table are plaintext). The table is the definitive artifact:
+
+```
+entry = name[32] || blob[128] || name[32] || blob[128] || {len=0x80, count=1} || model[32]
+QCONN-r143 -> _CLASSICROW_      QCONN-r144 -> _CLASSICATT_   QCONN-r146 -> _CLASSICVZW_
+QCONN-r113 -> _CLASSICVZWNC_    QCONN-development -> _WINDERMERESPRINT_   ... 68 entries
+```
+
+Every hardware model has one 1024-bit blob, stored twice per entry (identical
+copies), selected by `locateKey` after the log line `No device specific QCONN
+key found.` (the per-device debug-token key does not exist on this device).
+Our device matched `QCONN-r144`, which is exactly the `sourceName` the door
+returned on the wire in section 15. The r144 wire challenge parses as
+`version=0x100, sessionKeyLength=16 (AES-128), sessionKeyType=3,
+containerLength=128, sigType=1, containerKeyVersion=1` with a 128-byte RSA
+container: the challenge is RSA-1024-encrypted to the model's key.
+
+### The verdict
+
+The 128-byte table blobs are **public moduli**, not keypairs. Three
+independent facts pin this:
+
+1. **API contract.** The daemon passes the loaded key blob straight to
+   `GetEncryptionChallengeEx(name, blob, 128, ...)`. In the devuser path that
+   same argument is the client's public modulus from the request, plaintext;
+   in the daemon's own fallback path it is the static blob in the daemon's
+   `.rodata`. Both of those work without any decryption step, so the root path
+   passes a plaintext modulus too.
+2. **The daemon never needs a private half.** It encrypts the challenge and
+   verifies the client's response signature; both are RSA public operations.
+   Shipping private halves for every model in every device's flash would be a
+   pointless secret spread, and the table region is plaintext (the names and
+   model strings beside the blobs are not encrypted), so the blobs are not
+   hiding behind the binary's code encryption either.
+3. **Structure.** All 68 blobs are odd 1024-bit values with no small factors
+   and top bit set; none of them (nor the daemon's `QCONN-R031` fallback blob)
+   appears anywhere else in the image, the vendor jars, or the RFS.
+
+So the door's root branch is cryptographically bound to per-model RSA keys
+whose private halves lived in RIM's RTAS infrastructure and are not on the
+device, not in the OS image, and not in the client tooling. The password
+unlocks devuser; the door root needs a RIM-held key. That closes the door
+track with a clean negative, confirmed from the shipped image rather than
+inferred from behavior.
+
+### What remains for root
+
+* **The pre-rooted autoloader reflash**, the method the research repo already
+  validated on a Classic (`Blackberry-Research/`, finding 1 and
+  `notes/session7o-classic-real-root.md`): bake `btool` + the
+  `ota_info_pps.sh` autoroot symlink + `pathtrust !/base/bin/__root` into the
+  OS image, reflash, get real uid-0 every boot. We now hold the exact
+  autoloader it needs. Cost: full wipe, Windows `cap.exe` (or `bb10mt`, which
+  has the red-blink caveat on the Passport but was not the lane used for the
+  Classic root) and brick risk bounded by the proven cap.exe recovery.
+* The QNX-side privilege paths independent of the door (section 9 items 2 to
+  4), still open and now the only non-reflash candidates.
+
+The artifacts (autoloader, IFS extraction, `librtas.so.1`, table dump) live in
+the gitignored research dir next to the door client
+(`runtime/qnx-shims/door/librtas.so.1.autoloader`).
+
+## 17. Reflash quest: image built and flashed, boot-slot commit outstanding (2026-10-20)
+
+The owner chose the reflash route (the method validated in `Blackberry-Research/`,
+finding 1 and `notes/session7o-classic-real-root.md`). A pre-rooted image was
+built from the stock Classic autoloader and flashed over USB with the macOS
+bb10mt lane. Status: the user-partition payload landed and works; the OS-copy
+(rcfs) modification flashes but the device never boots it. The remaining path
+is the proven Windows cap.exe lane.
+
+### What was built
+
+* **Image changes (both baked into the flash):**
+  * UFS (user partition): the getroot device-configuration package under
+    `/var/android/getroot` (mounts `fs1.rcfs` at `/q` with setuid impersonation
+    helpers `u_*`/`g_*`, one per uid/gid, e.g. `u_upd`, `u_root`),
+    `/root/.ssh/authorized_keys` carrying the owner's q20 public key,
+    `/var/etc/ssh/sshd_config` (root login), and the persisted PPS triggers.
+  * RCFS (OS): `/scripts/ota_info_pps.sh` replaced with an autoroot payload
+    that copies `__root` (compiled from the asroot source, ARM QNX) to
+    `/base/bin`, pathtrust-whitelists it, and restarts sshd with the root
+    config.
+* **Toolchain:** bb10mt v0.6.0.0 built from source on Apple Silicon (Lazarus
+  4.8 + FPC 3.2.4 local prefix, mormot2 + cli_fp + synapse + LGenerics +
+  pas-libusb + pl_ExCompress LZMA units). A local libusb-1.0 Pascal binding and
+  an OOP shim were written because the upstream pas-libusb is the 0.1 API.
+  Patched sources are saved under
+  `runtime/qnx-shims/door/reflash/bb10mt-patches/`.
+* **Artifacts (large, in `~/q20-flash/`):** `stock-autoloader.exe` (the
+  official SQC100-1 autoloader, md5 `c79f8a390232a9f7a5824f9ab4e21f69`),
+  `OS.signed.unsigned` (modified streams + the real 560-byte install seal
+  appended), `radio.signed`, `cap_patched.exe` (3-byte signature-bypass patch,
+  recipe in `Blackberry-Research/notes/session9b-ifs-verify-cap-diff.md`).
+  `rooted.exe` (the cap.exe lane image) is rebuildable from these with
+  `bb10mt autoloader create`. Small artifacts (flash scripts, the RAM loader,
+  the seal, the payloads) live in `runtime/qnx-shims/door/reflash/`.
+
+### Facts learned on the flash lane (worth not rediscovering)
+
+* The Classic's boot ROM enumerates as `0fca:0001`; the password challenge is
+  the device's own lock password via HashPassV2 (the door password works).
+  SetMode answers `0x08` on a fresh session and `0x09` for "already in
+  bootloader mode"; accepting both fixes reconnect after a killed session.
+* A half-open session wedges the boot ROM (challenge reads time out) until a
+  Reboot command (Channel0 cmd 3) + reconnect; the flow needs an explicit
+  retry.
+* The Classic's RAM loader is devID `9400270A` (load address `0x80200000`,
+  gzip-compressed inside cap.exe's `.data` loader table at 213 entries);
+  cap.exe also carries the per-model loader table. The 8D002C0A loader is the
+  Passport's, not the Classic's.
+* The stock OS container ends with the real 560-byte `QNXH-OS-1` install seal
+  (`1f2dc8d7` footer); the bb10mt pack omits it and sends a fake one.
+* UFS modifications survive and take effect (getroot applied on the first
+  boot after each flash). RCFS modifications flash without error but the
+  device always boots `os1` with the stock rcfs; the switchzone PPS job
+  (`/pps/system/installer/upd/current/sz`, `session::1` on this device)
+  returns success but the slot never flips. Conclusion: the macOS lane is
+  missing the flash-time boot-slot commit that Windows cap.exe performs
+  ("cap.exe does more flash-time state than just F9",
+  `Blackberry-Research/README.md` finding 12 and open lead 7).
+
+### Where this leaves root
+
+* **Proven remaining path:** flash `rooted.exe` via patched cap.exe on
+  Windows (the exact lane the research repo used for the Classic; red-blink
+  recovery by re-flashing stock is proven). Needs a Windows machine or a VM
+  with USB passthrough.
+* **Open macOS ideas:** capture the cap.exe USB session to learn the missing
+  commit commands and add them to bb10mt; or, after a fresh flash, use the
+  device's own `g_Disk_Drivers` helper from `/q` to raw-write the modified
+  rcfs into `os1t179` and reboot. In progress: `Blackberry-Research/tools/
+  bblink.py` now has hardened bring-up (reboot-and-retry wedge clearing,
+  mirroring bb10mt's recovery) plus `get_mct`/`set_active_mct` commands, with
+  the idea of flipping the active OS slot through the loader's MCT once the
+  `ACTIVE_OS_OFFSET` is pinned from a live read; the bring-up handshake still
+  failed in its last session (bootrom opened but the loader handshake did not
+  complete).
+
+A7 compositing remains blocked on this; the drawing half and the devuser
+toolchain are unaffected.
+
+### 17a. cap.exe RE: the missing commit is D7 SetActiveMCT (2026-10-21, macOS static RE)
+
+Static RE of `~/q20-flash/cap_patched.exe` (PE32 x86, rizin, no Windows) pinned
+the flash-time state the macOS lane omits. The finalize path is an MCT
+**read-modify-write**:
+
+* `GetMCT` routine at `0x4483f4` ("Retrieving MCT") sends loader command **`D9`**
+  and expects response **`0xC9`** (matches `bblink.py get_mct`).
+* `SetActiveMCT` routine at `0x4499c0` ("SetActiveMCT is complete") sends loader
+  command **`D7`** with the MCT buffer (size-gated to `<= 0x1000`), retrying
+  while the device is busy (devctl `0x6c`, 300 ms backoff).
+* Both go through the channel2 send-wrapper `0x445ad0` ("Re-Sending (0x%02X,%d)").
+* The orchestrator `0x40da30` logs **"Backing up and updating active MCT via
+  device-side command"** and calls `SetActiveMCT(buffer, size)`; it is gated on
+  the device-family field `[this+4] == 6` (this device). cap.exe also tracks
+  `activeMct:` / active-vs-inactive bootrom metrics, i.e. the dual OS-slot state.
+
+The patched bb10mt lane (`ramloader.pas` tail) sends only
+`SendBlock -> SendSignature(F9) -> Complete(40C0) -> Reboot`; it never issues
+`D7`, so the active-OS slot is never committed and the device keeps booting the
+stock `os1`. This is exactly "cap.exe does more flash-time state than just F9".
+
+Ported into `Blackberry-Research/tools/bblink.py` (already speaks channel2 + `D9`
+get_mct): new `set_active_mct` (`D7`, size gate + busy retry), `commit_active_mct`
+(read-modify-write), and CLI verbs `getmct` / `setactivemct`. The one value still
+to pin is the active-OS byte inside the MCT: `BBSession.ACTIVE_OS_OFFSET` is left
+`None` until a live `getmct` diff (stock vs desired) identifies it; until then
+`commit_active_mct()` only writes the MCT back verbatim (proves the `D7` path
+without flipping the slot). `python3 bblink.py selftest` covers the `D7` size gate
+offline.
+
+Next on hardware: `bblink.py getmct -f mct.bin` in a loader session, parse with
+`boot0_flash.py:parse_mct`, pin `ACTIVE_OS_OFFSET`, then flash + `commit_active_mct`
+and confirm the device boots the autoroot rcfs. Red-blink recovery by re-flashing
+`stock-autoloader.exe` is proven.
+
+## 18. Flash lane completed, MCT flip attempted, installer route next (2026-10-20)
+
+Session six of the root quest ran the macOS flash lane end to end and tried
+the boot-slot flip; the lane is now fully mapped, and the next route is a
+runtime installer trick that sidesteps the boot0 wall.
+
+### The bblink lane is fixed and working
+
+`Blackberry-Research/tools/bblink.py` (kept out of git with the rest of the
+research tree) now performs the full bring-up that bb10mt did:
+
+* The bring-up bug was the **CRC flavour**: the wire CRC is the zlib-style
+  CRC32 (init xor + final xor, matching the FPC crc unit), not a raw table
+  CRC. With the raw CRC every channel1 frame was NACKed (response 0x15) and
+  the loader upload silently did nothing.
+* `connect()` now has a 3-attempt outer loop with a wedge-clearing reboot
+  between attempts (mirrors bb10mt's recovery), plus `get_mct` / `set_active_mct`
+  (D9/D7) commands.
+* Verified live: boot ROM 0fca:0001 -> password challenge -> loader 9400270A
+  upload (0x80200000) -> RAM loader 0x8001 -> flash-regions info, PIN/BSN,
+  and the 976-byte MCT read.
+
+### The MCT format (from the live read)
+
+```
+magic 0x92BE564A | version 1.28 (u16 minor,major) | TLV entries [type:1][size:1][body]
+  type 0x39 = partition: [unk:1][flags:1][name:12][start:4][end:4]
+    offset = start<<16, size = (end-start+1)<<16
+  terminator type 9, then a zlib CRC32 over bytes 0..967 at offset 972.
+```
+
+Two OS copies: set A at start 0x0820 (sub-flags os_mbr=0x20, os_sig=0x40,
+system=0x40, os_fsys=0x40) and set B at 0x2820 (all 0x00). The device boots
+`/dev/emmc/os1t179` (set A). A flipped MCT (set A flags zeroed, set B raised,
+CRC recomputed) was accepted by D7 and the loader rebooted, but the device
+still boots set A: the boot-time slot selection lives in the write-protected
+boot0 region (the research repo's central wall), so the D7 path cannot commit
+the flip. This closes the MCT idea with a clean negative.
+
+### The next route: installer links asset (runtime, no boot0 writes)
+
+The device-configuration package machinery applies a `links` asset at install
+time AS ROOT. The shipped getroot package only mounts (`mount:src:dst:type`),
+but the same machinery plausibly creates symlinks, which would let us replace
+`/base/scripts/ota_info_pps.sh` at runtime with a link to a payload on the
+user partition (then the switchzone trigger runs it as root, completing the
+autoroot chain). The first step is reading the deckard installer python on the
+device to learn the links directive format, then re-installing a modified
+getroot package through the installer queue (reachable via the `/q` `u_upd`
+impersonation helper, which returns on the first boot after each flash).

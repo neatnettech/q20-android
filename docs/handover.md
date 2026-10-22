@@ -1,4 +1,4 @@
-# Handover: Android 6 on QNX (Q20), 2026-10-20 (A7 drawing done, root track mapped)
+# Handover: Android 6 on QNX (Q20), 2026-10-20 (A7 drawing done, door root closed, reflash root in progress)
 
 Read `docs/bringup-log.md` for the full history. This file is what to do next.
 
@@ -28,16 +28,56 @@ green.
 A7 compositing is blocked on root, proven on hardware: devuser gets a Screen
 APPLICATION context but not WINDOW_MANAGER, and screen_join_window_group
 accepts any name yet leaves the window in no group (section 12 of
-docs/token-wall-and-device-access.md). So the next real unlock is root, and
-session two of the root quest mapped it: the qconnDoor daemon's root-vs-devuser
-sshd provisioning is a client-supplied flag gated by the device PASSWORD
-challenge, not a debug token (section 13). The next action is the dynamic test
-in section 13: speak the door protocol, pass the password challenge, send the
-root selector 0, see whether sshd comes up with PermitRootLogin=yes.
+docs/token-wall-and-device-access.md). The root quest ran five sessions
+(sections 9 to 16): the qconnDoor daemon's root branch is a client flag gated
+by the device password (13), the vendor client confirmed local-only auth (14),
+the live probe reached the root branch but its challenge is RSA-encrypted to
+the device's QCONN key (15), and extracting the official OS image settled it
+(16): the QCONN table in librtas.so.1 holds per-model **public moduli only**
+(QCONN-r144 for our device), the private halves are RIM-held, so the door path
+is closed with a clean negative. The owner chose the reflash route: a
+pre-rooted image built from the stock Classic autoloader with (a) the getroot
+device-configuration package baked into the user partition, (b)
+/root/.ssh/authorized_keys carrying our q20 key, (c) the root sshd_config, and
+(d) /scripts/ota_info_pps.sh replaced with an autoroot payload (pathtrust
+whitelist for __root + sshd restart). The image is built and the flash is in
+progress, see below.
 
-Two known, non-blocking defects in the A7 frame: the Button fill resolves to
-white (a colour-state-list load issue, not drawing; theme attrs resolve
-correctly), and one non-reproducing screen_create_window_buffers EPERM.
+## Root reflash status (parked)
+
+The reflash quest is parked; the full record is section 17 of
+docs/token-wall-and-device-access.md. In one paragraph: the pre-rooted image
+is built and flashes cleanly over USB with the macOS bb10mt lane (boot ROM
+handshake, device-password challenge, Classic RAM loader 9400270A, real
+install seal), the user-partition payload works (the getroot `/q`
+impersonation layer comes up on the first boot after each flash), but the
+modified OS copy never becomes the booted one: the device always boots os1
+with the stock rcfs, and the switchzone job reports success without flipping
+the slot. The macOS lane is missing the flash-time boot-slot commit that
+Windows cap.exe performs. The proven remaining path is flashing `rooted.exe`
+via the patched cap.exe on Windows (or a VM with USB passthrough); red-blink
+recovery by re-flashing stock is proven.
+
+Artifacts:
+* `~/q20-flash/`: `stock-autoloader.exe`, `OS.signed.unsigned` (+ real seal),
+  `radio.signed`, `cap_patched.exe`. `rooted.exe` is rebuildable from these.
+* `runtime/qnx-shims/door/reflash/` (gitignored): flash scripts, the
+  loader_9600270A-00.bin RAM loader, the 560-byte install seal, the payloads,
+  and the patched bb10mt sources (bbusb.pas/ramloader.pas/libusb.pas/
+  LibUsbOop.pas/pl_ExCompress) with the local Lazarus/FPC build recipe.
+* `Blackberry-Research/` holds the upstream research: the pre-rooted-autoloader
+  method (`notes/session7o-classic-real-root.md`), the cap.exe patch recipe
+  (`notes/session9b-ifs-verify-cap-diff.md`), the btool payloads, and the
+  bb10mt/bblink flash tooling. `tools/bblink.py` carries newer local work:
+  reboot-and-retry bring-up (wedge clearing), the zlib-style CRC fix that made
+  the loader upload work, and `get_mct`/`set_active_mct` (D9/D7). The MCT
+  format is documented (section 18), and the boot-slot flip via D7 is a clean
+  negative (the boot reads the slot from write-protected boot0). The current
+  route is the runtime installer links-asset trick: learn the links directive
+  format from the device's deckard installer python, then re-install a
+  modified getroot package whose links replace /base/scripts/ota_info_pps.sh
+  with a symlink to a payload on the user partition (switchzone then runs it
+  as root).
 
 ## Milestones
 
