@@ -1186,3 +1186,66 @@ for A7; the autoroot persistence question remains open behind it.
   `runtime/qnx-shims/door/connect.sh` is the one-stop connector (door
   restart + sshd wait + `--push` file deploy + legacy-flag SSH).
   `runtime/art-qnx/device/q20ssh` now retries 3x.
+
+## 21. Session 2026-10-23: loader slot machinery mapped, boot0 write lane is dead code, device red-blinking
+
+### The os1 slot selector does not exist (full three-layer negative)
+
+* bb10mt `PreFlash` (RE'd from the x86_64 binary,
+  `unit__bbloader.preflash_byte_tbytes`): fixed 36-byte payload, only
+  `d[0]=family ($15/$40), d[1]=$28, d[6]=$02, d[28]=$01, d[32]=$02`. No
+  region selector.
+* The QCFM container packer (`packmfcq`): per-file "pfcq" subheader with
+  the entry type at +0x0c from the file extension. No slot byte.
+* The RAM loader (`loader_9600270A-00.bin`, Thumb-2 @ 0x80200000) selects
+  the target region from the device MCT: the PreFlash/0xEE handler
+  `fcn.80220a58` reads the MBR entry (kind 0x34) and falls back to the
+  kind-0x35 region-1 OS MCT entry (region byte at entry+3, start at +4,
+  "Unable to find QNX OS MCT entry for region %i"). The F7 stream target
+  is the user area only.
+
+### Loader command map (fcn.80216eec main loop + fcn.80204048 sub-dispatcher)
+
+* Decoded the full switch trees (0xAF..0xF6). Notable handlers:
+  0xDD FLASH_DUMP and 0xE5 CREAD via fcn.802035f0; 0xDC DO_CRC_VERIFY via
+  fcn.802030f0; 0xD7 SetActiveMCT, 0xC4 READVERIFY, 0xC6 FACTORY_WIPE via
+  fcn.80204048; 0xEE PreFlash/ERASE_SECTOR + 0xEF + the F7 container parse
+  (pfcq/rrcq magic checks) via fcn.80220a58; 0xC7/0xC8 wipe ops separate.
+* The boot-slot commit lane for the upload is **automatic**: the loader
+  prepends a `D:00000115` style entry to the **LAL** (Loader Action Log,
+  flash block 0x2033, 0xFA0 bytes, fcn.80218c30/fcn.80200a70) on the
+  first command of every flash session. Command **0xB3** is the explicit
+  LAL update (payload [0]=state, [8..]=data, response 0xB4), mislabeled
+  "Loader Action Log" in ramloadercommands.txt. Our macOS lane already
+  wrote the LAL each flash; the missing commit was never the LAL.
+
+### Boot0 write lane: dead code in the Classic loader
+
+* `SDSendMMCSpecialVendorCmdWithDataWrite` (VA 0x80238920) and
+  `SDSendMMCSpecialVendorCmdWithDataRead` (0x8020fd60) have zero
+  references in `loader_9600270A-00.bin`. The SDCC vendor-cmd write path
+  is compiled but unreachable. The live bootrom machinery is CREAD
+  (E4/E5) reading via fcn.80219a34 + HASH_BOOTROM (0xB7).
+* Boot0 write remains the wall, and it is not hardware-closed: the
+  Classic's eMMC has `ext_csd[173]=0x04` (B_PWR_WP_EN only, power-on
+  period protection), `BOOT_CONFIG_PROT=0`. A CMD6 SWITCH (arg 0x03AD0000)
+  clears it per session (session 7q). Options: a loader whose vendor-cmd
+  write is live (check the 0x2E0A/Passport loaders), OS-side raw MMC once
+  uid 0 exists, or the official-updater path gated by NV 0x2019 bits
+  (session 15).
+* Full note: `Blackberry-Research/notes/session41-loader-boot0-write-path.md`
+  (research tree, gitignored).
+
+### Device red blink 1-3-2 (open incident)
+
+* The device now red-blinks (reported as 1-3-2) after sitting offline. Red
+  blink on BB10 = deep-discharge or a boot error code; both recoverable
+  (reflash recovery proven, session 9b). Bootrom blink table (session 20
+  note): `11` no OS, `101111` flash write failure, `11011` flash erase
+  failure, `1011101` NAND failure, and vendor tables at
+  chimeratool.com/docs/blackberry-bootrom-error-blink-codes.
+* First action: charge 30 to 60 min on a wall charger and watch for the
+  pattern to clear. Then boot ROM ritual + USB enumeration; recovery lane
+  is bblink (needs the final flash verb: F7 stream + 0x40F9 seal + 0x40C0
+  complete) or a rebuilt bb10mt, with `OS.signed.unsigned` + `radio.signed`
+  at hand.
