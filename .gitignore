@@ -50,3 +50,5 @@ runtime/qnx-shims/screen_probe
 
 # Door root-track research tooling (dual-use, kept local)
 runtime/qnx-shims/door/
+__pycache__/
+*.pyc
