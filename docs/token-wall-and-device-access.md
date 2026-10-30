@@ -1407,3 +1407,38 @@ Run our payload as root once. Blocked on redirecting /base/scripts/ota_info_pps.
 
 Artifacts: tools/qrun.sh (clean helper runner); q20prober.bar install flow;
 deckard tree pulled to /tmp analysis (link/mount semantics).
+
+## 25. Session 2026-10-30 late: rfs_validator decoded - the rcfs route reopens
+
+rfs_validator (pulled from /proc/boot, world-readable, 30KB ARM) decoded:
+
+- Mounts /dev/emmc/os%ut179 (and radio0t17%u, dmi0t179), reads an
+  `os_signature_file` (signed hash block) and an in-image "RCFS hash header
+  block" with per-inode+fname metadata hashes.
+- Graceful absence handling: "Did not find any signatures (normal for
+  non-signed builds)" -> returns SUCCESS; "RCFS hash header block doesn't
+  have hash verification data" -> skips. The verify function (fcn.00003c94)
+  returns 1 on zero signatures.
+- Consequence: an UNSIGNED rcfs without RIM hash structures PASSES boot
+  validation. That is exactly how community pre-rooted autoloaders boot.
+- Our session-17 rcfs is an in-place patch of stock, so it keeps the stale
+  hash structures: the changed ota_info_pps.sh inode (size 0x887 -> 0x166)
+  mismatches its metadata hash -> it would fail. The fix is to patch the
+  hash structures (or neuter them), not the rcfs content itself.
+
+Also this session: nvram0 is GROUP-WRITABLE via g_Disk_Drivers (write probe
+passed). Live NV reads: @0x2002 = 0x000C2040 (device code the loader
+validator table-checks), @0x2819 = 0xFFFFFFFF, @0x2852 = 0xFFFFFFFF (both
+must be 0 for the Complete commit gate), @0x2019 BitFlags record present
+(NVRE magic), oleksandr updater bits 42/43 clear. The commit gate is now
+manipulable: zero 0x2819/0x2852 via g_Disk_Drivers.
+
+Dead ends re-confirmed: unlock_path_trust.c needs /proc/1/as (root-only,
+session 7t); persisted /var/pps job dir is root-only.
+
+Revised root recipe (rcfs route, all within reach):
+1. Zero NV 0x2819/0x2852 (g_Disk_Drivers, one command).
+2. RE cap_patched.exe's Complete payload (TLV 0x85, magic 0xe276ca03) and
+   send it in bblink's 40C0.
+3. Patch the rcfs hash structures or strip them so rfs_validator skips.
+4. Flash the rooted OS container with :none (unsigned) + radio with its seal.
