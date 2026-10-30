@@ -5,8 +5,8 @@ It currently boots to **`bb10-0015`** — the bootloader found no bootable OS.
 
 ## The hardware case
 
-- Model: **SQM100-2** (Porsche Design Q10). Hardware-identical to the Q10
-  (**SQN100-1/2/3**): MSM8960 SoC, 3.1" 720×720 AMOLED, 35-key QWERTY.
+- Model: **SQK100-1** (8F00270A) (Porsche Design Q10). Hardware-identical to the Q10
+  (**SQN100-1..5** + **SQK100-1/2**): MSM8960 SoC, 3.1" 720×720 AMOLED, 35-key QWERTY.
 - Same platform generation as the Classic (SQC100) we rooted 2026-10-30 —
   same PBL bootrom, same bb10mt flash protocol, same macOS flash lane
   (`tools/flash/bblink.py`), same runtime root chain (`tools/root/chain.sh`).
@@ -42,11 +42,11 @@ It currently boots to **`bb10-0015`** — the bootloader found no bootable OS.
 
 - [ ] Does the loader's `Complete` validator (NV 0x2819/0x2852 + TLV-0x85
       struct) check the device *model*? If a Q10 build is refused, the
-      fallbacks are: an actual SQM100 autoloader (none in the archive.org
+      fallbacks are: an actual SQK100 autoloader (none in the archive.org
       item), or zeroing the NV items via `g_Disk_Drivers` (we have the RE,
       docs/token-wall-and-device-access.md section 23).
 - [ ] Does the P'9983 theme survive a Q10 flash? (Expected: no — it becomes
-      a Q10 in software. The PD skin may be restorable from an SQM100 dump
+      a Q10 in software. The PD skin may be restorable from an SQK100 dump
       if one surfaces.)
 - [ ] Root persistence work (boot0 writes, session 7t) applies identically —
       two devices = two targets, one chain.

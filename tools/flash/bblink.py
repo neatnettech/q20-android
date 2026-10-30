@@ -127,6 +127,14 @@ class BBSession:
                 try:
                     self.dev = d
                     self.upid = int(d.idProduct)
+                    # some bootroms leave the device unconfigured when the RAM
+                    # loader takes over; without config 1 the endpoints are
+                    # dead and every read times out (bb10mt does the same)
+                    try:
+                        if d.get_active_configuration().bConfigurationValue != 1:
+                            d.set_configuration(1)
+                    except Exception:
+                        pass
                     self._claim(d)
                     if self.upid in (1, 0x8001, 0x8017):
                         self.ep_in = 0x82 if self.upid != 0x8017 else 0x87
@@ -628,10 +636,16 @@ def _bringup_once(sess, opts, pw):
         raise RuntimeError("RAM-loader did not appear (PID 8001)")
     if opts.verbose:
         print("  RAM-loader online (PID 8001)")
+    if opts.verbose:
+        print("  -> set_mode(2)")
     if not sess.set_mode(2):
         raise RuntimeError("set Mode(2) (RAMLoader) failed")
+    if opts.verbose:
+        print("  -> password_info(b'')")
     if not sess.password_info(b''):
         raise RuntimeError("password exchange failed at RAM-loader")
+    if opts.verbose:
+        print("  -> bugdisp")
     sess.bugdisp()
     return model_id
 
