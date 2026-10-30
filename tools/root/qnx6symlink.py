@@ -22,7 +22,9 @@ def crc32_be(data, crc=0):
     return crc
 
 def main(out, linkspecs):
-    d = bytearray(open('stage.qnx6', 'rb').read())
+    import os
+    stage = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'stage.qnx6')
+    d = bytearray(open(stage, 'rb').read())
     specs = []
     for spec in linkspecs:
         name, target = spec.split('=', 1)

