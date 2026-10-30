@@ -1476,3 +1476,38 @@ runtime-only). Re-root = flash + first boot + chain.sh (~15 min, scripted).
 Boot-persistence is the open follow-up (persisted /var/pps jobs now
 root-writable, but a boot-time /base/scripts shadow risks hiding startup.sh
 mid-boot - ordering experiment needed).
+
+## 27. Session 2026-10-30 (later): A7 compositing wall DOWN, and the trusted-inode exec channel
+
+### The Screen context gate falls with root
+
+`navigator_probe`'s context sweep, run as uid-0 (via the section-26 root
+sshd): **WINDOW_MANAGER, DISPLAY_MANAGER and INPUT_PROVIDER all GRANTED**
+(rc=0) — as devuser all three were EPERM (sections 12/20). The A7 display
+route is definitively root-gated, and root now holds every context. The
+full window test also ran clean as root: context, window, group, display
+attach, 720x720 buffer, magenta fill, post, visible.
+
+### The trusted-inode exec channel (bigger than A7)
+
+Exec of binaries on untrusted inodes is denied EVEN FOR ROOT (EPERM — the
+pathtrust gate applies to our switchzone-spawned root shell too), and
+`pathtrust !file` after boot fails with EPERM (the boot-time LOCKDOWN in
+`/proc/boot/pathtrust.sh`). But the trust list itself is readable:
+`/base/etc/rootfs.trusted` — and the pathtrust.sh ROOTFS branch includes an
+exfat hack that creates `/var/exfat/fs-exfat.so` (0-byte stub) and trusts
+ITS INODE when the exfat databar is absent. That file is:
+- on a WRITABLE fs (/var), and
+- permanently on the trusted list (until next flash).
+Overwrite it IN PLACE (`cat bin > /var/exfat/fs-exfat.so`, same dev/ino)
+and the content execs as root. General-purpose root-binary channel: build
+any QNX/ARM ELF on the host, drop it into the trusted inode, run it. This
+is also the missing `__root` helper the payload wanted (/base is ro and
+pathtrust is locked, so /base/bin/__root was never going to land).
+
+### Re-arm procedure (any time the root sshd dies)
+
+The sz switchzone re-fire re-runs the v5 payload (carriers + symlink +
+pubkey write + sshd 2225) as long as /q is alive (first boot after flash;
+no reboot). The root sshd (2225) dies on dev-mode toggles; re-fire sz,
+then re-toggle dev mode to restore devuser SSH.
