@@ -1249,3 +1249,161 @@ for A7; the autoroot persistence question remains open behind it.
   is bblink (needs the final flash verb: F7 stream + 0x40F9 seal + 0x40C0
   complete) or a rebuilt bb10mt, with `OS.signed.unsigned` + `radio.signed`
   at hand.
+
+## 22. bblink flash verb: the recovery lane is complete (2026-10-29, offline)
+
+The missing final verb (section 21) is implemented: `bblink.py flash
+OS.signed.unsigned radio.signed` runs the exact bb10mt FlashFile sequence per
+container (PreFlash -> F7 stream -> 40F9 -> 40C0). Semantics were verified
+against `bb10mt_aarch64_darwin` (rizin), not assumed:
+
+* `SendBlock` (0x10009e060) is ONE `channel2(0xF7)` send expecting ack `0xDF`,
+  no retry and no resend; bb10mt's `channel2` framing/CRC/drain is byte-identical
+  to bblink's. New `flash_block()` follows suit: single send, fail hard on
+  timeout (a resent block would duplicate in the loader's container-stream
+  parse). The old `f7_write` resend loop stays for raw probes only.
+* The session-20/40c "F7 never acked" result is most likely a probe artifact:
+  the loader parses the F7 stream as a container (pfcq/rrcq magic checks,
+  section 21) and the probes sent non-container data at nonzero block numbers.
+* bb10mt ignores the PreFlash response entirely (`fBBLdr.PreFlash($15)` return
+  discarded), so the observed 0x20DE vs documented 0x39 is a non-issue.
+* Seal chain verified offline against the real artifacts: `OS.signed.unsigned`
+  ends with the real 560-byte `QNXH-OS-1` seal (== `install-seal-560.bin`),
+  stripped from the payload and sent via 40F9; `radio.signed` carries its own
+  QNXH trailer. Counts: OS = 135,638 F7 blocks, radio = 3,345.
+
+`selftest` covers the seal strip, block math, and F7 framing offline. Next is
+the live recovery flash (bootrom ritual, then the flash verb) - which also
+re-tests the slot-commit question, since the rooted rcfs is what's in
+`OS.signed.unsigned`.
+
+## 23. Session 2026-10-30: macOS flash lane completed live, loader Complete() validator decoded, test-matrix red-blink
+
+### The flash lane works (the day's big win)
+
+`bblink.py flash` ran the full containers on hardware: Extra(IFS) + OS + radio,
+2.2 GB in ~5 min at 7.4 MB/s. The blocker that killed every prior bblink F7
+attempt was NOT erase timing: bb10mt's `SendBlock` (disassembled from
+`bb10mt_aarch64_darwin`) is ONE `channel2(0xF7)` expecting ack `0xDF`, and its
+channel2 always performs a SECOND drain read after the response. The loader
+pre-acks 0xDF mid-handler (0x80220d24 in fcn.80220a58) then queues a post-ack
+packet whose send stalls until collected; without the drain the next OUT write
+NAKs forever (the false "erase stall" of sections 20-21). `flash_block()` now
+sends once (no resend — a duplicate block would corrupt the stream parse),
+drains, and tolerates late packets. Bring-up session prelude must include
+`FlashRegionsInfo` (0xB4), mirroring bb10mt's initializeloaderinterface.
+
+### The Complete(40C0) validator (loader RE, ARM not Thumb-2)
+
+The loader is ARM-mode (session 41's Thumb-2 note was wrong; disassemble with
+`rizin -a arm -b 32 -m 0x80200000`). 40C0 dispatches via branch table to
+fcn.802046e4: response 0x4006 = commit, 0x402E = reject. The validator reads
+NV items 0x2002 (fcn.80208dd8), 0x2819 and 0x2852 (fcn.80208c1c), requires
+0x2819==0 and 0x2852==0 and a device-state word in {0,3}, plus a TLV-0x85
+payload struct check (fcn.80204680: magic 0xe276ca03, size<=0xdac, version 1).
+Observed: radio (valid own seal) -> 4006; OS (stock seal over modified rcfs)
+-> 40F9 4006 then Complete 402E (rolled back); Extra (zero sig) -> 402E.
+This is the mechanism behind "rcfs flashes but never lands" (sections 17-21):
+the loader never committed it. UFS lands because the user partition is not
+signature-gated. The NV items are the official-updater gate from session 15;
+nvram0 is group-writable from the OS (/dev/emmc/nvram0 brw-rw---- root:
+Disk_Drivers) - the NV flip is the next route.
+
+### Live OS-side facts collected
+
+- Dev-mode sshd is hardcoded `-f /dev/null -o AllowUsers=devuser -o
+  DenyUsers=root` - the /var/etc/ssh/sshd_config root-login payload is inert
+  unless something restarts sshd with -f (autoroot's job).
+- /q helpers exec as devuser but setuid-ROOT exec is EPERM (pathtrust gates
+  privilege escalation, same-uid/gid impersonation works).
+- g_Disk_Drivers works (stdin command form): egid=132, and os0t179 (inactive,
+  blank) accepts raw writes; os1t179 (active) is EROFS-gated by the driver.
+- os0t179 is fully erased (all zeros) - the loader erases the inactive slot
+  but the rcfs stream never lands there either.
+- MCT decode (976 bytes, magic 0x92BE564A, TLV from offset 8, terminator 9):
+  named active layout: os @0x28200000 (os_mbr +0, os_sig +0xF0000, system(IFS)
+  +0x100000, os_fsys +0xC00000, 500 MB), radio @0x48200000, user @0x58200000.
+- A UFS reflash wipes /accounts/devuser (pushed tools must be re-pushed).
+
+### The red-blink trigger and cure hypothesis
+
+Test-matrix flash (4x 64KB fake-rcfs containers, seal variants :none/:dummy/
+:seal) ended every container with 402E and the device red-blinked afterward,
+while the morning's extra+OS+radio flash (ending with radio -> 4006) booted
+fine. Matches session 9b's "flashing radio cleared it": a session ending on a
+rejected Complete appears to leave the boot state blocked; ending one with a
+successful commit clears it. Recovery lane: flash radio.signed alone.
+
+### 23a. The rcfs route was doubly doomed; the real root chain is runtime-only
+
+From bb10.root.sx (Oleksandr's notes, fetched 2026-10-30): the 0xC040 COMPLETE
+checks the QCFM signature and sets a GLOBAL no-boot flag when invalid; flashing
+original data clears it (our red-blink cause + radio cure). AND rfs_validator
+in the IFS checks os/radio partitions at boot: a modified rcfs can never boot
+even if committed. Sections 16-22's reflash-root strategy was therefore dead
+at two levels; only UFS modifications are bootable.
+
+The actual root chain (all runtime, no OS-partition modification):
+getroot helpers (impersonate any non-root uid/gid; /q mounted at first boot
+after a UFS flash) -> edit/extend the Android subsystem's
+start-android-core.sh with `ln -sPf <payload> /base/scripts/ota_info_pps.sh`
+(android_launcher installs arbitrary pathmgr symlinks; works despite read-only
+rcfs because pathmgr symlinks are in-memory) -> trigger the switchzone job via
+u_upd write to /pps/system/installer/upd/current/sz -> switchzone runs
+ota_info_pps.sh as root -> payload whitelists __root in pathtrust + restarts
+sshd with the root config. On our device the switchzone slot flip is a no-op
+(boot0 WP), so the blank os0 is not a hazard.
+
+## 24. Session 2026-10-30 pm: runtime root chain mapped end to end, one wall left
+
+After the flash lane worked (section 23), the root attempt moved to the
+Oleksandr runtime chain (no rcfs modification - rfs_validator in the IFS makes
+any rcfs change unbootable; the reflash-root strategy of sections 16-22 is
+formally dead).
+
+### Proven on this device (live)
+
+- getroot helpers work on the first boot after a UFS flash: u_*/g_* impersonate
+  any non-root uid/gid (u_apps=89, u_upd=88, g_nto, g_Disk_Drivers...).
+- The installer queue is LIVE and processes jobs at runtime: our
+  `dev.q20.prober` andrB bar installed via a /pps/system/installer/upd/current
+  job (u_upd writes it). This also breaks the A7 app-launch install-transport
+  wall (section 20): the queue path works without BarDeploy.
+- Deviceconfig packages apply at runtime: /scripts symlink replaced (points to
+  our package), qnx6 image mounts at /qstage, /q remounted. ln: refuses dst
+  that pre-exists as a regular file AND resolves src only as a package member
+  (relative path); mount: src likewise. deckard calls
+  /base/scripts/ota_info_pps.sh (absolute) at switchzone AND startup.sh calls
+  ${BASEFS}/scripts/ota_info_pps.sh (BASEFS=/base) at boot - both absolute
+  /base paths.
+- sz job: "result::failure 531 inactive session '0' (req 0 act 1)" with
+  session::0; session::1 -> "result::success" (flip itself blocked by boot0 WP,
+  harmless).
+
+### The one remaining wall
+
+Run our payload as root once. Blocked on redirecting /base/scripts/ota_info_pps.sh:
+- android_launcher ln -sPf path (Oleksandr): the android core does NOT start on
+  app launch via these scripts on this device (UI taps never invoke them; only
+  my direct helper run as uid 89 did, EPERM). The core-start path here does not
+  run the scripts, or the launcher service context differs. Unresolved.
+- deckard ln over /base/scripts/ota_info_pps.sh: blocked by the pre-existing
+  check even after a mount-shadow (the check sees through the mount / the
+  shadow drops).
+- mount over /base/scripts with a populated image: package mounts come up
+  read-only so the image can't be populated on-device; no host qnx6/rcfs writer
+  (docker lacks qnx6; mkrcfs absent).
+
+### Next routes
+
+1. Build a populated qnx6/rcfs image with the payload (host qnx6 writer or a
+   python writer against the stage.qnx6 template) -> package mounts it over
+   /base/scripts -> sz -> payload as root at the trusted path. Persistent.
+2. RE why the launcher service never fires android_launcher on app taps here
+   (slog silent after the taps) -> the Oleksandr ln -sPf then works.
+3. The NV updater bits (nvram0 0x2019 bits 42/43, g_Disk_Drivers can write
+   nvram0) open the official-updater path - but rfs_validator still gates any
+   rcfs change at boot, so this does NOT yield root by itself.
+
+Artifacts: tools/qrun.sh (clean helper runner); q20prober.bar install flow;
+deckard tree pulled to /tmp analysis (link/mount semantics).
