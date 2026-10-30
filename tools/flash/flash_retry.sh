@@ -2,6 +2,9 @@
 # Retry wrapper for the bblink flash lane: flash; on failure wait for a fresh
 # bootrom edge (device must leave 0001, then reappear) and retry immediately,
 # so the bootrom never sits parked long enough to go stale.
+# usage: flash_retry.sh [files...]   (default: Classic OS+radio; P'9983:
+#   flash_retry.sh ~/q20-flash/p9983/ifs.signed ~/q20-flash/p9983/os.signed \
+#                 ~/q20-flash/p9983/radio.signed)
 cd "$(dirname "$0")"
 LOG=/private/var/folders/03/bdcsj20x1q372qfxl9pbffz40000gn/T/opencode/q20-flash.log
 LOADER="$(dirname "$0")/loader_9600270A-00.bin"
@@ -18,7 +21,7 @@ for attempt in 1 2 3 4 5; do
   fi
   echo "=== flash attempt $attempt $(date +%T) ===" >> "$LOG"
   if python3 -u bblink.py --loader "$LOADER" --password drstone flash \
-       ~/q20-flash/OS.signed.unsigned ~/q20-flash/radio.signed >> "$LOG" 2>&1; then
+       "$@" >> "$LOG" 2>&1; then
     echo "FLASH-OK $(date +%T)" >> "$LOG"
     exit 0
   fi
