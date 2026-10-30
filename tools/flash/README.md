@@ -1,0 +1,52 @@
+# tools/flash — Q20 (BlackBerry Classic) macOS flash lane
+
+The macOS-native USB flash lane for the BlackBerry Classic (SQC100, MSM8960,
+BB10/QNX). Replaces the Windows `cap.exe` autoloader path. Reverse-engineered
+from bb10mt's binaries and the 9600270A RAM loader; proven on hardware
+(2.2 GB OS+radio in ~5 min at 7.4 MB/s).
+
+## Files
+
+- `bblink.py` — raw USB link to the BootROM / RAM-loader (bootrom bring-up,
+  password, loader upload, channel0/1/2, the `flash` verb). Requires `pyusb`
+  (`pip install pyusb`); libusb via `brew install libusb`.
+- `qcfm_unpack.py` — extract streams from an mfcq/.signed container.
+- `flash_retry.sh` — flash with fresh-bootrom edge detection + retry (the
+  robust one; auto-fires the instant a fresh `0001` appears).
+- `flash_recovery.sh` — stock-rcfs recovery flash (no-seal path).
+- `flash_radiofix.sh` — radio-only flash; cures the red-blink boot block.
+- `flash_test.sh` — the seal-behavior test matrix (needs the t1..t4 containers).
+- `resume_flash.py` — reuse an already-uploaded loader (8001) after an
+  interrupted flash.
+- `qrun.sh` — run a command file on the device via the getroot /q helpers
+  (needs the door/ device-access tooling, which stays local).
+- `loader_9600270A-00.bin` — the Classic's signed RAM loader (from cap.exe's
+  table).
+
+## The bootrom ritual (fresh 0001)
+
+unplug USB → one brief power press → plug back in. A powered-off-with-cable
+device lands in the resident loader (0x8001, ignores F7); only a fresh 0001
+handshakes. A 0001 parked for minutes goes stale.
+
+## Flash
+
+```sh
+# from the repo root; images live in ~/q20-flash/
+python3 tools/flash/bblink.py --loader tools/flash/loader_9600270A-00.bin \
+    --password <device-password> \
+    flash OS.signed.unsigned radio.signed
+```
+
+Per-container seal control: `file.signed:none` (skip 40F9), `:dummy` (560 zero
+bytes), `:seal=<file>` (explicit 560-byte install seal), default = the QNXH
+trailer if present else zeros.
+
+**Always end a session with a container that commits cleanly** (radio.signed
+returns 4006). A session ending on a rejected `Complete` (402E) sets a global
+no-boot flag = red blink; flashing radio clears it.
+
+The OS `rcfs` stream never commits when modified (loader validator
+`fcn.802046e4`: NV items 0x2819/0x2852 + TLV-0x85 payload struct; and
+`rfs_validator` in the IFS rejects a modified rcfs at boot anyway). UFS/user
+partition is ungated. See `docs/token-wall-and-device-access.md` sections 22-24.
