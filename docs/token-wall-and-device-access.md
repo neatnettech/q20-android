@@ -1442,3 +1442,37 @@ Revised root recipe (rcfs route, all within reach):
    send it in bblink's 40C0.
 3. Patch the rcfs hash structures or strip them so rfs_validator skips.
 4. Flash the rooted OS container with :none (unsigned) + radio with its seal.
+
+## 26. Session 2026-10-30 night: REAL UID-0 ACHIEVED via the runtime chain
+
+`ssh root@192.168.1.184 -p 2225` answers from a uid-0 shell (proof: touch
+/root/q20-proof -> root:nto). The complete working chain, all from macOS:
+
+1. UFS flash (bblink flash verb, section 23) -> first boot brings /q helpers.
+2. Host-written QNX6 image (qnx6inject.py/qnx6symlink.py: qnx6 on-disk layout
+   decoded empirically from a device-made image - sb @0x2000+backup @0x1FF000,
+   crc32_be init 0, inode table @0x3800, block ptrs relative to 0x3000,
+   dir entries 32B) carries SYMLINK entries: /base/scripts/ota_info_pps.sh
+   and migration_logging.sh -> the Android subsystem's scripts (trusted
+   dev/ino). Pathtrust trusts by dev/ino: content in OUR mounted fs or NEW
+   files in the android dir are untrusted; only EXISTING android-dir inodes
+   with overwritten content pass (Oleksandr's ls-oom-adj.sh trick).
+3. Deviceconfig package (mount:assets/data/pop.qnx6:/base/scripts:qnx6)
+   installs via the u_upd queue -> the shadow mount lands.
+4. sz job (action::switchzone, session::1) -> deckard runs
+   /base/scripts/ota_info_pps.sh as root -> symlink resolves to the trusted
+   carrier -> payload runs as root. Switchzone drops dev-mode+SSH each time
+   (session 7o) - expected, re-toggle Dev Mode to restore.
+5. Payload writes our pubkey to /root/.ssh/authorized_keys (root-owned,
+   StrictModes) and starts sshd on 2225 with explicit -o flags:
+   AuthorizedKeysFile=/root/.ssh/authorized_keys, PermitRootLogin=yes,
+   AllowUsers=root, HostKey=/etc/ssh/ssh_host_rsa_key. Iterations that
+   failed: 0644 mode (EACCES), mount-own files as root-exec (pathtrust
+   dev/ino EPERM), missing AuthorizedKeysFile (root $HOME != /root),
+   devuser-owned key file (StrictModes).
+
+Root lives until reboot (shadow mount + pathmgr symlinks + sshd are
+runtime-only). Re-root = flash + first boot + chain.sh (~15 min, scripted).
+Boot-persistence is the open follow-up (persisted /var/pps jobs now
+root-writable, but a boot-time /base/scripts shadow risks hiding startup.sh
+mid-boot - ordering experiment needed).
