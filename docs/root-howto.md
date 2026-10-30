@@ -87,3 +87,22 @@ boot0-write path (session 7t + 7o: as root, patch the sdmmc driver's
 partition-attached flag via `/proc/<pid>/as`, clear `B_PWR_WP_EN`, write
 `bbss.insecure` at boot0 `0x35a98`). See
 `docs/token-wall-and-device-access.md` sections 22-26 for the full history.
+
+## Persistence (v7 self-healing, 2026-10-30 night)
+
+The boot chain: three persisted installer jobs (job.q20final = the mount
+package, job.q20sz0/job.q20sz1 = switchzone session::0/::1 - both fired to
+cover the boot-time active-session race) -> deckard re-processes them at
+every boot -> the mount lands -> the sz runs /base/scripts/ota_info_pps.sh
+as root -> the v7 payload runs. The payload is self-healing: it re-arms the
+three jobs fresh (no results), rebuilds the deckard unpack tree at
+/var/android/q20final from /accounts/devuser/q20final_dir (deckard consumes
+the tree on every install), and starts a kill-proof root sshd: the sshd
+binary lives in the TRUSTED inode /var/exfat/fs-exfat.so (process name
+"fs-exfat.so" - immune to `slay sshd` and the switchzone cleanup that kept
+killing the plain sshd).
+
+Sequencing gotcha that cost a reflash: the unpack tree must exist BEFORE
+the first payload run (push /accounts/devuser/q20final_dir + cp to
+/var/android/q20final right after chain.sh), otherwise the first boot's
+install fails and the chain never self-heals.
