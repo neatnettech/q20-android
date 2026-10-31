@@ -4,7 +4,8 @@
 # make qnx       cross compile the shims for QNX armle-v7 (requires the
 #                playbook gcc toolchain, see toolchains/playbook-gcc/README.md)
 # make check-qnx validate the QNX ELF ABI (needs the toolchain's readelf)
-# make probes    cross compile the Screen probes (screen_probe, navigator_probe)
+# make probes    cross compile the Screen probes (screen_probe,
+#                navigator_probe, facade_compositor)
 
 CC ?= cc
 QNXCC ?= arm-blackberry-qnx8eabi-gcc
@@ -34,9 +35,9 @@ proc_qnx.o: proc.c proc.h
 # incompatible protocol and dies on array properties (bringup-log.md, A4).
 SCREEN_LIBS ?= -L$(QNX_PREBUILT)/usr/lib -lscreen -lsocket -Wl,-rpath,/base/usr/lib
 
-probes: screen_probe navigator_probe
+probes: screen_probe navigator_probe facade_compositor
 
-screen_probe navigator_probe: %: %.c
+screen_probe navigator_probe facade_compositor: %: %.c
 	$(QNXCC) $(CFLAGS) -o $@ $< $(SCREEN_LIBS)
 
 check-qnx: futex_qnx.o
@@ -44,4 +45,4 @@ check-qnx: futex_qnx.o
 	$(QNXREADELF) -d futex_qnx.o | grep -E "NEEDED" || true
 
 clean:
-	rm -f test_futex screen_probe navigator_probe *.o
+	rm -f test_futex screen_probe navigator_probe facade_compositor *.o

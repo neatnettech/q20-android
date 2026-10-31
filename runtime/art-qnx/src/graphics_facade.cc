@@ -36,6 +36,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <string>
@@ -991,6 +992,24 @@ void Surface_unlockCanvasAndPost(JNIEnv*, jclass, jlong, jobject) {
   const char* png = getenv("Q20_DRAW_PNG");
   if (png != nullptr && png[0] != '\0') {
     ALOGI("write_png %s ok=%d", png, raster::write_png(png, gLocked));
+  }
+  // Q20_DRAW_RAW: the same frame as tightly packed w*h*4 RGBA8888 (stride
+  // padding dropped), for the root compositor to post. One static frame is
+  // deliberate here (A7); the file handoff upgrades to a shared-memory
+  // framebuffer + semaphore when A8 needs live per-frame redraw.
+  const char* raw = getenv("Q20_DRAW_RAW");
+  if (raw != nullptr && raw[0] != '\0' && gLocked.px != nullptr) {
+    FILE* f = fopen(raw, "wb");
+    if (f == nullptr) {
+      ALOGE("Q20_DRAW_RAW fopen %s failed", raw);
+    } else {
+      size_t rowBytes = (size_t)gLocked.w * 4;
+      size_t wrote = 0;
+      for (int y = 0; y < gLocked.h; y++)
+        wrote += fwrite(gLocked.px + (size_t)y * gLocked.stride, 1, rowBytes, f);
+      fclose(f);
+      ALOGI("Q20_DRAW_RAW %s %dx%d wrote=%zu", raw, gLocked.w, gLocked.h, wrote);
+    }
   }
 }
 
