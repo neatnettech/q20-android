@@ -82,3 +82,21 @@ handshakes for a flash. Same ritual expected here.
       then `flash_retry.sh ifs.signed os.signed radio.signed` (family 0x15,
       the Classic loader 9600270A — same MSM8960 bootrom).
 - [ ] Boot, Dev Mode, `chain.sh` root.
+
+## 2026-10-31: FLASHED - the Q10 loader was the answer
+
+`loader_8700080A-00.bin` (bb10mt's LDR_67, the community's probed Q10-3
+loader - byte-identical in the Q10 autoloader's own table) answers
+SetMode(2) on the 8F00270A bootrom; the Classic's 9400270A loader (and
+every other 8960-region loader probed) runs, enumerates USB, then hangs
+mid-init. The earlier set_configuration(1) theory was wrong - the loader
+is genuinely hwid-gated after USB init.
+
+Full flash 2026-10-31: IFS 669 blocks + OS 134957 blocks (2.2 GB) + radio
+1867 blocks, all three Complete 40C0 commits clean (stock containers,
+ended on the radio). Device now boots the Q10 10.3.3.498 OS.
+
+Loader kept at tools/flash/loaders/loader_8F00270A-00.bin (==
+loader_8700080A-00.bin). probe_loaders.py (tools/flash/) was the tool that
+found it: bb10mt's own probe never uploads anything - its validator just
+rejects every loader for unknown hwids.
