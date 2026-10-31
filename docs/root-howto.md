@@ -106,3 +106,18 @@ Sequencing gotcha that cost a reflash: the unpack tree must exist BEFORE
 the first payload run (push /accounts/devuser/q20final_dir + cp to
 /var/android/q20final right after chain.sh), otherwise the first boot's
 install fails and the chain never self-heals.
+
+## Persistence verified (v8.1, sustained)
+
+Verified 2026-10-31: two consecutive cold reboots both returned root with
+zero intervention (2225 up within ~90s of boot). The deckard consumption
+semantics that broke v7: switchzone jobs are consumed at fire time AND the
+install job's same-boot re-write gets re-processed and consumed - the fix
+is a detached `sh -c 'sleep 90; re-write all three jobs'` helper (inline,
+because an untrusted helper script hits the pathtrust exec gate even for
+the interpreter path). The kill-proof sshd lives in the trusted inode
+/var/exfat/fs-exfat.so under the name "fs-exfat.so".
+
+Observed boot dance: 2225 up at ~+70s, one bounce at ~+2min (the second
+sz job's payload run slaying+restarting sshd), one bounce at ~+3.5min
+(the re-armed jobs getting one more deckard pass), then stable.

