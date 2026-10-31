@@ -37,3 +37,21 @@ battery is flat). Everything needed for the recovery is ready:
   (docs section 23) — unlikely, the containers are stock.
 - `probe_loaders.py` (tools/flash/) remains the tool for any future
   unknown-hwid device: it tests every candidate loader end-to-end.
+
+## Update (same day, later): pre-rooted user-partition image built + flashed; first boot hangs
+
+Built the full pre-rooted user image host-side (a complete QNX6 writer in
+qnx6patch.py: sb @0x2000 crc32_be, DataStart 0x3000, inode table chain via
+the sb's L2/L1 blocks, dir entries 32B + longnames via the lnames table,
+block bitmap chain at block 25493). Injections: the payload carriers, 3
+persisted installer jobs, the unpack tree (x2), /root/.ssh/authorized_keys,
+the sshd in /var/exfat/fs-exfat.so, and (attempt 2) the WiFi profile + PSK
+from the Classic's /var/etc/netsecure/. bb10mt fsck passes clean.
+
+Flashed twice (Q10 loader 8700080A; the OS container's Complete = 402E as
+expected, the UFS stream lands). BOTH boots stuck at "Verifying and
+securing device" - the first attempt had the wizard-skip flag (suspect #1),
+the second didn't (so the flag was NOT the culprit). Prime suspect now: the
+persisted sz job fires a switchzone DURING the first-boot security phase.
+Next attempt: inject everything except the sz jobs; after the first boot
+completes, trigger the chain once via a later mechanism.
