@@ -6,27 +6,43 @@ usage: makepkg.py <out.bar> <links.txt> <image.qnx6>
 The links file is the assets/links content (e.g.
 "version:1\\nmount:assets/data/<image>:/base/scripts:qnx6\\n").
 """
-import zipfile, hashlib, base64, random, os, sys
+
+import base64
+import hashlib
+import os
+import random
+import sys
+import zipfile
+
 
 def rid(prefix):
-    return prefix + ''.join(random.choice(
-        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_')
-        for _ in range(22))
+    return prefix + "".join(
+        random.choice(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        )
+        for _ in range(22)
+    )
+
 
 def main():
     out, linksf, imgf = sys.argv[1], sys.argv[2], sys.argv[3]
-    links = open(linksf, 'rb').read()
-    img = open(imgf, 'rb').read()
+    links = open(linksf, "rb").read()
+    img = open(imgf, "rb").read()
     imgname = os.path.basename(imgf)
-    perms = ("assets/data/%s:0:0:666\nassets/data:0:0:777\n"
-             "assets:0:0:777\n.:0:0:777\n" % imgname).encode()
+    perms = (
+        "assets/data/%s:0:0:666\nassets/data:0:0:777\n"
+        "assets:0:0:777\n.:0:0:777\n" % imgname
+    ).encode()
 
     def dig(b):
         return base64.b64encode(hashlib.sha512(b).digest()).decode()
 
-    assets = [('links', links), ('perms', perms), ('data/' + imgname, img)]
-    ae = ''.join("\nArchive-Asset-Name: /assets/%s\nArchive-Asset-SHA-512-Digest: %s\n"
-                 % (n, dig(b)) for n, b in assets)
+    assets = [("links", links), ("perms", perms), ("data/" + imgname, img)]
+    ae = "".join(
+        "\nArchive-Asset-Name: /assets/%s\nArchive-Asset-SHA-512-Digest: %s\n"
+        % (n, dig(b))
+        for n, b in assets
+    )
     mf = """Archive-Manifest-Version: 1.5
 Archive-Created-By: q20
 
@@ -44,12 +60,13 @@ System-Data-Requires-System: os/10.0.0.8
 System-Data-Persistence: permanent
 Device-Configuration-Type: root
 %s
-""" % (rid('andrA'), rid('andrB'), rid('andrC'), ae)
-    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
-        z.writestr('META-INF/MANIFEST.MF', mf)
+""" % (rid("andrA"), rid("andrB"), rid("andrC"), ae)
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("META-INF/MANIFEST.MF", mf)
         for n, b in assets:
-            z.writestr('assets/' + n, b)
+            z.writestr("assets/" + n, b)
     print("wrote", out, os.path.getsize(out))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

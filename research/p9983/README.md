@@ -54,3 +54,4 @@ It currently boots to **`bb10-0015`** — the bootloader found no bootable OS.
 ## Sessions
 
 - [session-2026-10-30-first-contact.md](sessions/2026-10-30-first-contact.md) — first probe, USB state, plan.
+- [session-2026-10-31-resume-plan.md](sessions/2026-10-31-resume-plan.md) — the resume plan after charging.

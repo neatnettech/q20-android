@@ -50,3 +50,22 @@ The OS `rcfs` stream never commits when modified (loader validator
 `fcn.802046e4`: NV items 0x2819/0x2852 + TLV-0x85 payload struct; and
 `rfs_validator` in the IFS rejects a modified rcfs at boot anyway). UFS/user
 partition is ungated. See `docs/token-wall-and-device-access.md` sections 22-24.
+
+## Tools added 2026-10-30/31 (P'9983 + general)
+
+- `extract_autoloader.py <autoloader.exe> [outdir]` — extracts
+  ifs/radio/os.signed from both autoloader header variants (the 10.3.3.498
+  builds prefix the ver2 header with a 0x3C-byte table).
+- `probe_loaders.py <loaders-dir> [password]` — probes every candidate
+  RAM-loader against a device end-to-end (upload → run → SetMode(2)); the
+  winner is the one whose handshake answers. Use bb10mt
+  (`bb10root/bb10mt` on GitHub, `autoloader loaders`) to extract a
+  candidate set from an autoloader.
+- `watch_flash.py [files...]` — 50ms bootrom edge watcher that fires the
+  flash the instant a fresh 0001 appears (for devices with short bootrom
+  windows).
+- `flash_retry.sh` takes the file list as arguments (defaults unchanged).
+- bblink now calls `libusb_set_configuration(1)` on reopen — REQUIRED for
+  the Q10-family (8F00270A) bootrom, whose device comes up unconfigured
+  when the RAM loader takes over (every loader appeared to hang at
+  SetMode(2) without it).
