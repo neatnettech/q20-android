@@ -17,6 +17,7 @@ Three layers:
 | [common/flash-lane.md](common/flash-lane.md) | bootrom ritual, the bb10mt protocol, the Complete validator |
 | [common/root-chain.md](common/root-chain.md) | the carriers/sz/persisted-jobs root technique |
 | [common/trusted-inode.md](common/trusted-inode.md) | pathtrust and the /var/exfat trusted-inode exec channel |
+| [common/security-feasibility.md](common/security-feasibility.md) | which Android/GrapheneOS security features port to QNX, the ceiling, the first slice |
 
 ## History (the long-form record)
 
