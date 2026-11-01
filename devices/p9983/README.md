@@ -1,7 +1,16 @@
 # P'9983 (Porsche Design Q10) — research & recovery
 
 Second device on the bench: a **P'9983** (Porsche Design variant of the Q10).
-It currently boots to **`bb10-0015`** — the bootloader found no bootable OS.
+The stock Q10 10.3.3.498 OS boots to the setup wizard; the wizard's
+"Verifying and securing device" step (BlackBerry Infrastructure enrollment)
+hangs because the BB infra is dead (2026). Wizard-skip work in progress —
+see the sessions.
+
+## Sessions
+
+- [session-2026-10-30-first-contact.md](sessions/2026-10-30-first-contact.md) — first probe, USB state, plan.
+- [session-2026-10-31-resume-plan.md](sessions/2026-10-31-resume-plan.md) — the resume plan after charging.
+- [session-2026-11-01-image-swap-plan.md](sessions/2026-11-01-image-swap-plan.md) — image-swap ruled out; enrollment reframe; the QNX6 wizard-skip injection (tools + flash lesson + the flag not working on the Q10 build).
 
 ## The hardware case
 
@@ -40,18 +49,20 @@ It currently boots to **`bb10-0015`** — the bootloader found no bootable OS.
 
 ## Open questions
 
-- [ ] Does the loader's `Complete` validator (NV 0x2819/0x2852 + TLV-0x85
-      struct) check the device *model*? If a Q10 build is refused, the
-      fallbacks are: an actual SQK100 autoloader (none in the archive.org
-      item), or zeroing the NV items via `g_Disk_Drivers` (we have the RE,
-      docs/token-wall-and-device-access.md section 23).
-- [ ] Does the P'9983 theme survive a Q10 flash? (Expected: no — it becomes
-      a Q10 in software. The PD skin may be restorable from an SQK100 dump
-      if one surfaces.)
+- [x] ~~Does the loader's `Complete` validator (NV 0x2819/0x2852 + TLV-0x85
+      struct) check the device *model*?~~ **Resolved 2026-11-01**: the SQK100
+      autoloaders that exist (archive.org: 10.3.1.997, 10.3.2.159 only) are
+      byte-identical in payload to the SQN100 (Q10) builds of the same
+      version — verified with HTTP Range slices: same PE stub, same
+      containers, only a 4-byte difference in a scrambled name table.
+      CrackBerry owners confirm: the P'9983's official 10.3.3 autoloaders
+      (2205/3216) are "totally the same" as the Q10 ones; the PD clock/theme
+      was an add-on, not a different OS. So the Q10 10.3.3.498 build we
+      flashed IS the P'9983 image, and the first-boot hang is not a
+      model/variant rejection.
+- [ ] Does the P'9983 theme survive a Q10 flash? **Resolved 2026-11-01**: no —
+      CrackBerry owners report losing the PD clock/theme on 10.3.3; it was
+      an add-on, not baked into the SQK100 OS variant (which is byte-identical
+      to the Q10 build anyway).
 - [ ] Root persistence work (boot0 writes, session 7t) applies identically —
       two devices = two targets, one chain.
-
-## Sessions
-
-- [session-2026-10-30-first-contact.md](sessions/2026-10-30-first-contact.md) — first probe, USB state, plan.
-- [session-2026-10-31-resume-plan.md](sessions/2026-10-31-resume-plan.md) — the resume plan after charging.
