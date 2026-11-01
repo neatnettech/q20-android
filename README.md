@@ -27,9 +27,9 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
 | Hello DEX execution | done on device: prints `Hello from ART 6 on QNX! gc ok` in both AOT (Quick-compiled hello.oat) and `-Xint`, exit 0 |
 | Q20 device SSH access | done, reproducible: `runtime/art-qnx/device/connect.sh` plus `q20ssh`/`q20put` |
 | APK ladder A1 to A5 (docs/apk-milestones.md) | done on device: Q20 Prober APK built on the host, headless self test 7/7 AOT and `-Xint` |
-| A6 Activity headless | done on device: our launcher (`apps/q20facade`) runs the Prober Activity through onCreate, onStart, onResume and lays its window out at 720x720 (`sh run_core.sh facade all`) |
-| A7 drawing | done on device: `sh run_core.sh facade draw` rasterizes the real View tree through our own Canvas JNI onto a software engine, 8/8 in AOT and `-Xint`; the frame is read back with `Q20_DRAW_PNG` |
-| A7 compositing | **unblocked**: as uid-0 the Screen WINDOW_MANAGER/DISPLAY_MANAGER/INPUT_PROVIDER contexts are all GRANTED (devuser got EPERM on all three) and a full window draw test passed as root. Remaining: the Prober's app-launch path running with a WM context. |
+| A6 Activity headless | done on device: my launcher (`apps/q20facade`) runs the Prober Activity through onCreate, onStart, onResume and lays its window out at 720x720 (`sh run_core.sh facade all`) |
+| A7 drawing | done on device: `sh run_core.sh facade draw` rasterizes the real View tree through my own Canvas JNI onto a software engine, 8/8 in AOT and `-Xint`; the frame is read back with `Q20_DRAW_PNG` |
+| A7 compositing | **done**: the Prober's real View tree renders on the Q20 panel - dalvikvm draws (Q20_DRAW_RAW frame) and the root compositor (WM + power-manager contexts, Navigator retired) posts it; the decor stays on screen. Next: A8 (the live loop - resident compositor, shared-memory framebuffer, input). See devices/classic/sessions/a7-compositing.md |
 | Root (uid-0) | **done on device + persistent**: `ssh -p 2225 root@<q20>` from macOS. Runtime chain: UFS flash (getroot /q helpers) -> host-built QNX6 symlink image -> deviceconfig package mounts it over /base/scripts -> switchzone sz job runs /base/scripts/ota_info_pps.sh as root -> payload (trusted Android-subsystem inode) starts a kill-proof root sshd (binary in the trusted inode /var/exfat/fs-exfat.so). **Self-healing across reboots**: three persisted installer jobs (mount + sz session::0/::1) + the v8.1 payload re-arm the chain at every boot - verified over consecutive cold reboots with zero intervention. A full UFS flash wipes the persistence (re-root = flash + chain.sh). Full story: docs/token-wall-and-device-access.md sections 22-27, runbook: docs/common/runbook.md, common technique: docs/common/, devices: devices/, tooling: tools/flash/ + tools/root/. |
 
 ## What blocked Hello World
@@ -55,11 +55,11 @@ hardware:
    at -O2 (art-qnx.mk) fixed it.
 
 Background on why a foreign boot image can never work: the factory boot.oat
-holds absolute pointers into the hammerhead libart.so, so under our libart.so
-the first managed call jumps to NULL. The image has to come from our own
+holds absolute pointers into the hammerhead libart.so, so under my libart.so
+the first managed call jumps to NULL. The image has to come from my own
 dex2oat, which is why the compiler was ported.
 
-Next: A7's second half. The Prober's own window now renders through our stack
+Next: A8 - the live facade. The Prober's window renders through my stack
 (docs/bringup-log.md, 2026-10-20), so what is left is getting a window the BB10
 compositor will actually draw.
 
@@ -96,7 +96,7 @@ and VIXL is arm64 only.
 1. Build compiler infrastructure: `art/compiler` (driver, oat_writer,
    image_writer, elf_writer, dex layout)
 2. Build the ARM Quick backend: `compiler/dex/quick/arm`
-3. Build a real `libziparchive` from `system/core` plus FileMap (our current
+3. Build a real `libziparchive` from `system/core` plus FileMap (my current
    zip stubs return failure, and dex2oat must read dex containers)
 4. Get the `dex2oat` executable running on the Q20 (done, on-device
    hello.dex -> hello.oat works)
@@ -137,7 +137,7 @@ Before calling zygote done, resolve how processes share runtime state:
 * Path B: skip the fork based zygote and preload each app process
   independently. Note this is not what the factory did: its `init.cfg` starts
   `app_process -Xzygote --zygote --start-system-server`, so BlackBerry did
-  make fork based zygote work on QNX. Path B is our shortcut, not a
+  make fork based zygote work on QNX. Path B is my shortcut, not a
   precedent.
 
 Path B unblocks APK execution fastest; Path A stays the long term target.
@@ -171,7 +171,7 @@ Factory primitives that become testable: `defineAppSandbox`,
 `dropWriteAndExecSystemCapabilities`, UID/GID mapping, Pathtrust,
 filesystem boundaries. Optional shortcut: link against the factory
 `libbionic.so` binary itself (265 exported functions, including the whole
-sandbox and capability family, already a QNX ARM ELF on the device) so we test the existing boundary instead of
+sandbox and capability family, already a QNX ARM ELF on the device) so I test the existing boundary instead of
 reimplementing it. Deliberate attack probes: filesystem escape, raw device
 access, process signalling, privileged binder, memory access.
 
@@ -204,7 +204,7 @@ infrastructure.
 ### Phase 7: selective modernization
 
 Do not upgrade for its own sake. Upgrade a component only when a concrete
-reason exists: our QNX platform abstraction can support component X and a
+reason exists: my QNX platform abstraction can support component X and a
 newer Android gives a specific property that materially improves the
 result. The stanw47 repo already contains an Android 11 binder for QNX plus
 AOSP 11 framework material as the eventual trajectory.
@@ -247,8 +247,8 @@ Android 11  -> selectively backport security fixes
 * Reverse engineering research on BB10/QNX and the factory Android runtime
   comes from stanw47's Blackberry-Research:
   https://github.com/stanw47/Blackberry-Research
-  (our own derived tooling - the flash lane, the qnx6 patcher, the loader
-  table extraction - lives in `tools/`; the two session notes we authored
+  (my own derived tooling - the flash lane, the qnx6 patcher, the loader
+  table extraction - lives in `tools/`; the two session notes I authored
   there live in `devices/classic/sessions/`).
 * The full Android runtime BARs (`sys.android-10.3.3.213`,
   `sys.android.shell-10.3.3.213`) come from ProjectBerry's BB10-Resources
@@ -260,11 +260,11 @@ Android 11  -> selectively backport security fixes
 
 * https://github.com/acmiyaguchi/bbnix
   from-source cross-build userland for BlackBerry 10 / QNX 8 (armle-v7)
-  expressed as Nix derivations; a ready made toolchain pipeline for our
+  expressed as Nix derivations; a ready made toolchain pipeline for my
   target ABI
 * https://github.com/Psyden57/BB-PlayBook-gcc-9.3.0
   GCC 9.3.0 cross toolchain for BlackBerry PlayBook (QNX 6.5 armle-v7);
-  the toolchain we use, via `toolchains/playbook-gcc9/`
+  the toolchain I use, via `toolchains/playbook-gcc9/`
 * https://github.com/D-os/libbinder
   standalone build of android/platform/frameworks/native/libs/binder
   outside the AOSP tree; useful for building libbinder against QNX libc
@@ -280,7 +280,7 @@ Android 11  -> selectively backport security fixes
   continuation of Berry Much OS; BB10/QNX userland tooling and build
   knowledge
 * https://github.com/BerryFarm/berrymuch
-  power user Unix distribution for BlackBerry 10; running our own binaries
+  power user Unix distribution for BlackBerry 10; running my own binaries
   on the Q20
 * https://github.com/ZElfeheil/qvm-android-rpi4
   Android Automotive as a guest VM on the QNX 8 hypervisor; alternative
