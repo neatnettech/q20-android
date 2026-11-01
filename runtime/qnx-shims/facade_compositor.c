@@ -80,6 +80,15 @@ int main(int argc, char** argv) {
     crc, errno, crc == 0 ? "ok" : strerror(errno));
   if (crc != 0) return 1;
 
+  /* Claim the power-manager role (as root this context is granted): the
+   * navigator holds it normally, and killing the navigator powers the panel
+   * off (black screen). A WM that replaces the navigator must keep the
+   * display powered itself. */
+  screen_context_t pm = 0;
+  int pmc = screen_create_context(&pm, SCREEN_POWER_MANAGER_CONTEXT);
+  P("create_context POWER_MANAGER rc=%d errno=%d (%s)\n", pmc, errno,
+    pmc == 0 ? "ok" : strerror(errno));
+
   screen_window_t win = 0;
   if (screen_create_window(&win, ctx) != 0) {
     P("create_window failed errno=%d (%s)\n", errno, strerror(errno));
@@ -111,6 +120,12 @@ int main(int argc, char** argv) {
       screen_get_context_property_pv(ctx, SCREEN_PROPERTY_DISPLAYS, (void**)disps);
       P("attach display rc=%d\n",
         screen_set_window_property_pv(win, SCREEN_PROPERTY_DISPLAY, (void**)&disps[0]));
+      /* keep the panel powered via the power-manager context */
+      if (pm != 0) {
+        int mode = SCREEN_POWER_MODE_ON;
+        int prc2 = screen_set_display_property_iv(disps[0], SCREEN_PROPERTY_POWER_MODE, &mode);
+        P("set display POWER_MODE=ON rc=%d errno=%d\n", prc2, errno);
+      }
       free(disps);
     }
   }
