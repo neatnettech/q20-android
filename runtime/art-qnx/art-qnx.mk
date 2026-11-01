@@ -124,6 +124,7 @@ ICU_LIBS ?= $(abspath ../../toolchains/playbook-gcc9/qnx650/arm-blackberry-qnx8e
 JAVACORE_SRCS := android_system_OsConstants.cpp java_io_File.cpp \
                  java_io_FileDescriptor.cpp java_lang_System.cpp \
                  libcore_io_Memory.cpp libcore_io_Posix.cpp \
+                 java_nio_ByteOrder.cpp \
                  AsynchronousCloseMonitor.cpp ExecStrings.cpp JniException.cpp \
                  NetworkUtilities.cpp canonicalize_path.cpp readlink.cpp \
                  valueOf.cpp libcore_io_AsynchronousCloseMonitor.cpp \

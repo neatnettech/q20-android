@@ -29,6 +29,7 @@ extern void register_java_lang_Float(JNIEnv*);
 extern void register_java_lang_Double(JNIEnv*);
 extern void register_qnx_android_os(JNIEnv*);
 extern void register_qnx_graphics(JNIEnv*);
+extern void register_java_nio_ByteOrder(JNIEnv*);
 namespace android {
 extern void register_android_util_Log(JNIEnv*);
 extern void register_android_os_Parcel(JNIEnv*);
@@ -55,6 +56,7 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     register_java_lang_System(env);
     register_libcore_io_Memory(env);
     register_libcore_io_Posix(env);
+    register_java_nio_ByteOrder(env);
     register_qnx_icu_stubs(env);
     register_java_lang_Math(env);
     register_java_util_regex_Pattern(env);
