@@ -7,6 +7,18 @@
   src: url("fonts/DepartureMono-Regular.woff2") format("woff2");
   font-display: swap;
 }
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/JetBrainsMono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/JetBrainsMono-700.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
 
 :root {
   /* color */
@@ -19,9 +31,11 @@
   --phos: #39ff7a;      /* accent, use sparingly */
   --muted: #4d524b;     /* secondary text on --win (AA) */
 
-  /* type: Departure Mono is drawn on an 11px grid, so big sizes are multiples of 11 */
-  --font: "Departure Mono", ui-monospace, Menlo, Consolas, monospace;
-  --t1: 12px;
+  /* type: JetBrains Mono for reading, Departure Mono (pixel, 11px grid) only for
+     display sizes and title bars, always at multiples of 11 */
+  --font: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-px: "Departure Mono", ui-monospace, monospace;
+  --t1: 13px;
   --t2: 16px;
   --t3: 22px;
   --t4: 33px;
@@ -47,8 +61,7 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   color: var(--ink);
-  font: 400 var(--t2)/1.5 var(--font);
-  -webkit-font-smoothing: none;
+  font: 400 var(--t2)/1.6 var(--font);
   background:
     radial-gradient(circle, var(--dot) 1px, transparent 1.5px) 0 0 / 6px 6px,
     var(--bg);
@@ -93,7 +106,8 @@ code { font: inherit; background: var(--win-2); padding: 0 var(--s1); }
 .win__bar {
   background: var(--ink);
   color: var(--paper);
-  font-size: var(--t1);
+  font: 11px/1.6 var(--font-px);
+  -webkit-font-smoothing: none;
   letter-spacing: .06em;
   text-transform: uppercase;
   padding: 2px var(--s2);
@@ -113,12 +127,14 @@ code { font: inherit; background: var(--win-2); padding: 0 var(--s1); }
   background: var(--ink);
   color: var(--paper);
   padding: 0 var(--s2);
-  line-height: 1.25;
+  line-height: 1.4;
+  font-weight: 700;
 }
+.tag--xl, .tag--l, .btn { font-family: var(--font-px); font-weight: 400; -webkit-font-smoothing: none; }
 .tag--xl { font-size: var(--t5); line-height: 1; padding: var(--s2) var(--s3); }
 .tag--l { font-size: var(--t4); line-height: 1.1; padding: var(--s1) var(--s2); }
 
-.lead { font-size: var(--t3); line-height: 1.35; max-width: 34ch; }
+.lead { font-size: 19px; line-height: 1.5; max-width: 38ch; }
 .muted { color: var(--muted); }
 
 /* ---- chip ---- */
@@ -211,9 +227,9 @@ code { font: inherit; background: var(--win-2); padding: 0 var(--s1); }
   :root { --t2: 15px; }
   .desk > .win { margin-right: 14px; }
   .desk > .win:nth-of-type(even) { margin-left: 14px; margin-right: 4px; }
-  .lead { font-size: 18px; }
-  .tag--xl { font-size: 40px; }
-  .tag--l { font-size: 26px; }
+  .lead { font-size: 17px; }
+  .tag--xl { font-size: 44px; }
+  .tag--l { font-size: 22px; }
 
   /* hero: title first, phone below in its own panel */
   .win__body--split { grid-template-columns: 1fr; }
