@@ -24,7 +24,7 @@ battery is flat). Everything needed for the recovery is ready:
    the first boot after the flash, exactly as on the Classic.
 5. **Optional**: run the persistence setup (v8.1 payload + three persisted
    jobs + the tree staging) — identical to the Classic flow documented in
-   `docs/root-howto.md`.
+   `docs/common/runbook.md`.
 
 ## Notes
 

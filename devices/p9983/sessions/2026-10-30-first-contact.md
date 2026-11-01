@@ -24,7 +24,7 @@ handshakes for a flash. Same ritual expected here.
 2. Probed USB: `0fca:8001` present (no `0001`).
 3. Q10 10.3.3.498 autoloader downloaded (2.26 GB → `~/q20-flash/p9983/`,
    md5 `ec869d48...` = archive.org metadata match).
-4. Repo: `research/p9983/` created; this note.
+4. Repo: `devices/p9983/` created (was research/p9983); this note.
 5. Autoloader parsed: the 10.3.3.498 builds prefix the ver2 header with a
    0x3C-byte table (the old check_autoloader.py only handled the Classic's
    unprefixed variant). Three containers, same shape as the Classic:
