@@ -57,6 +57,9 @@ installer jobs ([root-chain.md](root-chain.md)) together form a textbook persist
 implant. That is fine for development. A hardened build must ship with it disabled or
 gated: key only, off by default, with a documented re-arm path.
 
+Same for the **devmode QCONN door**: development mode exposes the token based door
+access. Hardened build: devmode off, QCONN not listening.
+
 ## Signal risks (check early)
 
 * Signal's current minSdk: if it rises above 23, Android 6 is out.
@@ -73,7 +76,8 @@ gated: key only, off by default, with a documented re-arm path.
    process, endpoint, how to kill it.
 2. **Signal native lib probe**: pull the Signal APK, list the undefined symbols of its
    arm .so files (`readelf`/`nm`) and diff them against the symbols my bionic exports.
-3. **Threat model**: the ceiling above plus the root door policy.
+3. **Threat model**: the ceiling above plus the root door policy (sshd implant and
+   devmode QCONN).
 4. Then the Phase 4 sandbox probes as already planned in the README.
 
 No porting code until the inventory and the Signal gap list show real targets.
