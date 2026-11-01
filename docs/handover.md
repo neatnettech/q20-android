@@ -65,10 +65,12 @@ Artifacts:
   loader_9600270A-00.bin RAM loader, the 560-byte install seal, the payloads,
   and the patched bb10mt sources (bbusb.pas/ramloader.pas/libusb.pas/
   LibUsbOop.pas/pl_ExCompress) with the local Lazarus/FPC build recipe.
-* `Blackberry-Research/` holds the upstream research: the pre-rooted-autoloader
-  method (`notes/session7o-classic-real-root.md`), the cap.exe patch recipe
-  (`notes/session9b-ifs-verify-cap-diff.md`), the btool payloads, and the
-  bb10mt/bblink flash tooling. `tools/bblink.py` carries newer local work:
+* The upstream stanw47 research (Blackberry-Research) was dropped from the
+  tree on 2026-11-01; it remains at
+  https://github.com/stanw47/Blackberry-Research. Our own derived tooling
+  moved into `tools/` (flash lane, qcfm_pack/dumpifs, vendored bb10mt) and
+  our authored notes into `devices/classic/sessions/` (session40/41).
+  `tools/flash/bblink.py` carries newer local work:
   reboot-and-retry bring-up (wedge clearing), the zlib-style CRC fix that made
   the loader upload work, and `get_mct`/`set_active_mct` (D9/D7). The MCT
   format is documented (section 18), and the boot-slot flip via D7 is a clean

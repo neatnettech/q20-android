@@ -33,3 +33,9 @@ Three layers:
 
 See [../devices/](../devices/) - Classic (rooted, persistent, A7 done) and
 P'9983 (flashed with the Q10 OS, recovery in progress).
+
+> The upstream stanw47 reference repo (Blackberry-Research) was dropped from
+> the tree on 2026-11-01: our derived tooling moved into `tools/`, our two
+> authored notes into `devices/classic/sessions/`. The upstream stays at
+> https://github.com/stanw47/Blackberry-Research. Some narrative citations
+> below still name its old local paths - they are historical record.

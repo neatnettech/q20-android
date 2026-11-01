@@ -3,7 +3,7 @@
 attempt. Verifies channel2 framing integrity (get_mct round-trip) before
 committing to the stream. Exits 1 if the loader is dead -> needs the ritual."""
 import sys, time, types
-sys.path.insert(0, '/Users/piotrpestka/github/q20-android/Blackberry-Research/tools')
+sys.path.insert(0, '/Users/piotrpestka/github/q20-android/tools/flash')
 import bblink
 
 s = bblink.BBSession(verbose=True)

@@ -219,8 +219,11 @@ Android 11  -> selectively backport security fixes
 
 * `art/` `bionic/` `libcore/` `frameworks/` `system/` AOSP 6.0.1 source
   snapshots (gitignored, downloaded, not committed)
-* `Blackberry-Research/` upstream research reference (gitignored), see
-  credits below
+* `devices/` per-device knowledge: `classic/` (rooted, A7 done) and
+  `p9983/` (recovery in progress)
+* `docs/common/` the platform-common technique (flash lane, root chain,
+  trusted-inode channel, runbook)
+* `tools/` the flash lane, the root chain, the vendored bb10mt
 * `q20-runtime/` complete factory Android 4.3 runtime unpacked from the
   signed `sys.android` and `sys.android.shell` BARs for OS 10.3.3.3216
   (gitignored), see credits below
@@ -244,9 +247,9 @@ Android 11  -> selectively backport security fixes
 * Reverse engineering research on BB10/QNX and the factory Android runtime
   comes from stanw47's Blackberry-Research:
   https://github.com/stanw47/Blackberry-Research
-  The extracted Q20 runtime specimens, binder on QNX port, graft layer, and
-  session notes used by our analysis live in that repo (cloned locally as
-  `Blackberry-Research/`, not committed here).
+  (our own derived tooling - the flash lane, the qnx6 patcher, the loader
+  table extraction - lives in `tools/`; the two session notes we authored
+  there live in `devices/classic/sessions/`).
 * The full Android runtime BARs (`sys.android-10.3.3.213`,
   `sys.android.shell-10.3.3.213`) come from ProjectBerry's BB10-Resources
   release "Fix/Update Android Runtime":
