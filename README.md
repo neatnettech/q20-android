@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00.svg?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/neatnettech)
 
-Android 6.0 on the BlackBerry Classic (Q20), which runs QNX.
+Android 6.0 on the BlackBerry Classic (Q20), which runs QNX. Site: https://neatnettech.github.io/q20-android/ (source in `site/`).
 
 ## Status
 

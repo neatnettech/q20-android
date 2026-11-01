@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex">
+  <title>q20-android social card</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* 1200x630 social card, screenshot to og.png */
+    body { width: 1200px; height: 630px; overflow: hidden; }
+    .desk { max-width: none; padding: 40px 56px; }
+    .chips { align-items: start; }
+    .a-hero { grid-column: 1 / 10; grid-row: 1; }
+    .a-root { grid-column: 9 / 13; grid-row: 1; margin-top: 300px; z-index: 3; }
+    .nowrap { white-space: nowrap; font-size: var(--t1); }
+  </style>
+</head>
+<body>
+<main class="desk">
+  <section class="win win--white a-hero">
+    <div class="win__bar"><span>Q20</span><span>android 6.0.1 / qnx armle</span></div>
+    <div class="win__body win__body--split">
+      <figure class="shot"><img src="q20.png" alt=""><figcaption class="tag">BlackBerry Classic</figcaption></figure>
+      <div class="win__body">
+        <h1 class="tag tag--xl">ANDROID 6<br>ON QNX</h1>
+        <p class="lead">Marshmallow ART running on the BlackBerry Classic.</p>
+        <ul class="chips"><li class="chip">ART 6.0.1</li><li class="chip">dex2oat on device</li><li class="chip">uid 0</li></ul>
+      </div>
+    </div>
+  </section>
+  <section class="win a-root">
+    <div class="win__bar"><span>STATUS</span><span>next: A8</span></div>
+    <div class="win__body"><p class="tag tag--l">A7 done</p><p>Real Android Views on the Q20 panel.</p><p class="muted nowrap">neatnettech.github.io/q20-android</p></div>
+  </section>
+</main>
+</body>
+</html>
