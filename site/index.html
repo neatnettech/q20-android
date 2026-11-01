@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>q20-android: Android 6 on the BlackBerry Classic</title>
+  <meta name="description" content="I am porting Android 6.0 (ART, dex2oat, the View stack) to the BlackBerry Classic Q20, which runs QNX. Real apps now draw on the real panel.">
+  <meta name="theme-color" content="#0b0d0b">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="q20-android: Android 6 on the BlackBerry Classic">
+  <meta property="og:description" content="Marshmallow ART running on QNX. dex2oat on device, root, and real Android Views on the Q20 panel.">
+  <meta property="og:url" content="https://neatnettech.github.io/q20-android/">
+  <meta property="og:image" content="https://neatnettech.github.io/q20-android/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230b0d0b'/%3E%3Crect x='3' y='3' width='4' height='4' fill='%2339ff7a'/%3E%3Crect x='9' y='3' width='4' height='4' fill='%2339ff7a'/%3E%3Crect x='3' y='9' width='4' height='4' fill='%2339ff7a'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/DepartureMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="desk">
+
+  <aside class="win a-qnx" aria-hidden="true">
+    <div class="win__bar"><span>QNX</span></div>
+    <div class="win__body">
+      <p class="tag tag--l">QNX</p>
+      <p>microkernel</p>
+      <ul class="chips"><li class="chip">BB10</li><li class="chip">armle</li></ul>
+    </div>
+  </aside>
+
+  <section class="win win--white a-hero" aria-labelledby="h-hero">
+    <div class="win__bar"><span>Q20</span><span>android 6.0.1 / qnx armle</span></div>
+    <div class="win__body win__body--split">
+      <figure class="shot">
+        <img src="q20.png" width="180" height="300" alt="Dithered drawing of a BlackBerry Classic whose screen shows the count: 0 frame my Android stack drew on device">
+        <figcaption class="tag">BlackBerry Classic</figcaption>
+      </figure>
+      <div class="win__body">
+        <h1 id="h-hero" class="tag tag--xl">ANDROID 6<br>ON QNX</h1>
+        <p class="lead">Marshmallow ART running on the BlackBerry Classic. My own dex2oat, my own boot image, real Android Views on the real panel.</p>
+        <ul class="chips" aria-label="Highlights">
+          <li class="chip">ART 6.0.1</li>
+          <li class="chip">dex2oat on device</li>
+          <li class="chip">uid 0</li>
+          <li class="chip">open source</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="win a-root" aria-labelledby="h-root">
+    <div class="win__bar"><span>ROOT</span><span>#</span></div>
+    <div class="win__body">
+      <h2 id="h-root" class="tag tag--l">uid 0</h2>
+      <p>Persistent root over SSH. The chain re arms itself on every cold boot.</p>
+    </div>
+  </section>
+
+  <section class="win a-gc" aria-labelledby="h-gc">
+    <div class="win__bar"><span>GC BUG</span><span>patch 0060</span></div>
+    <div class="win__body">
+      <h2 id="h-gc" class="tag tag--l">CardTable</h2>
+      <p>Upstream <code>ClearCardRange</code> wiped the heap, not the cards, on every non Linux target. Found and fixed on hardware.</p>
+    </div>
+  </section>
+
+  <section class="win win--white a-status" aria-labelledby="h-status">
+    <div class="win__bar"><span>STATUS</span><span>the ladder</span></div>
+    <div class="win__body"><h2 id="h-status" class="tag">bring up, step by step</h2></div>
+    <ol class="tracks">
+      <li class="track" style="--p:4"><span class="tag">ART 6.0.1</span><span class="track__value">libart.so links for QNX</span><span class="track__state">sep</span></li>
+      <li class="track" style="--p:14"><span class="tag">dalvikvm</span><span class="track__value">runs on the Q20</span><span class="track__state">sep</span></li>
+      <li class="track" style="--p:24"><span class="tag">dex2oat</span><span class="track__value">Quick ARM compiler on device</span><span class="track__state">sep 23</span></li>
+      <li class="track" style="--p:34"><span class="tag">GC fix</span><span class="track__value">card table root cause</span><span class="track__state">sep 28</span></li>
+      <li class="track" style="--p:44"><span class="tag">boot image</span><span class="track__value">boot.oat 84.8 MB, built on device</span><span class="track__state">oct 01</span></li>
+      <li class="track" style="--p:54"><span class="tag">A1 to A5</span><span class="track__value">Hello DEX, APK self test 7/7</span><span class="track__state">oct 01</span></li>
+      <li class="track" style="--p:64"><span class="tag">A6 Activity</span><span class="track__value">onCreate to onResume, 720x720</span><span class="track__state">oct 18</span></li>
+      <li class="track" style="--p:74"><span class="tag">A7 drawing</span><span class="track__value">View tree through my Canvas JNI</span><span class="track__state">oct 20</span></li>
+      <li class="track" style="--p:84"><span class="tag">A7 compositing</span><span class="track__value">frame on the Q20 panel</span><span class="track__state">nov 01</span></li>
+      <li class="track track--next" style="--p:96"><span class="tag">A8 live loop</span><span class="track__value">resident compositor, input</span><span class="track__state cursor">next </span></li>
+    </ol>
+    <div class="dither" aria-hidden="true"></div>
+  </section>
+
+  <aside class="win a-art" aria-hidden="true">
+    <div class="win__bar"><span>ART</span></div>
+    <div class="win__body">
+      <p class="tag tag--l">ART</p>
+      <p>ahead of time</p>
+      <ul class="chips"><li class="chip">Quick</li><li class="chip">-Xint</li></ul>
+    </div>
+  </aside>
+
+  <section class="win a-icu" aria-labelledby="h-icu">
+    <div class="win__bar"><span>ICU</span><span>patch 0100</span></div>
+    <div class="win__body">
+      <h2 id="h-icu" class="tag tag--l">ICU 4.6</h2>
+      <p>Real libcore ICU natives on the stock QNX sysroot ICU.</p>
+    </div>
+  </section>
+
+  <section class="win win--white a-how" aria-labelledby="h-how">
+    <div class="win__bar"><span>HOW</span><span>dex to pixels</span></div>
+    <div class="win__body">
+      <h2 id="h-how" class="tag">how a frame gets on screen</h2>
+      <ol class="steps">
+        <li>.dex</li>
+        <li>my dex2oat</li>
+        <li>boot.oat</li>
+        <li>my Canvas JNI</li>
+        <li>BB10 compositor</li>
+      </ol>
+      <p class="muted">A foreign boot image can never work: the factory boot.oat holds absolute pointers into another libart.so. So I ported the compiler too.</p>
+    </div>
+  </section>
+
+  <section class="win a-coffee" aria-labelledby="h-coffee">
+    <div class="win__bar"><span>COFFEE</span><span>support</span></div>
+    <div class="win__body">
+      <h2 id="h-coffee" class="tag tag--l">fuel the port</h2>
+      <p>This runs on evenings, a serial cable and coffee. If you want Android on your Classic, buy me one.</p>
+      <a class="btn" href="https://buymeacoffee.com/neatnettech">buy me a coffee &#9749;</a>
+    </div>
+  </section>
+
+  <footer class="win win--white a-me" aria-labelledby="h-me">
+    <div class="win__bar"><span>NEATNET</span><span>Zurich</span></div>
+    <div class="win__body">
+      <h2 id="h-me" class="tag">made by Piotr Pestka</h2>
+      <p>I build, rescue and run software products at <a href="https://neatnet.tech">neatnet.tech</a>. This port is what I do after hours. Source is MIT.</p>
+      <ul class="chips">
+        <li class="chip"><a href="https://neatnet.tech">neatnet.tech</a></li>
+        <li class="chip"><a href="https://github.com/neatnettech/q20-android">source</a></li>
+        <li class="chip"><a href="https://github.com/neatnettech/q20-android/blob/main/docs/bringup-log.md">bring up log</a></li>
+        <li class="chip"><a href="https://www.linkedin.com/in/piotr-pestka">LinkedIn</a></li>
+        <li class="chip"><a href="https://www.instagram.com/neatnet.tech/">Instagram</a></li>
+      </ul>
+    </div>
+  </footer>
+
+</main>
+</body>
+</html>
