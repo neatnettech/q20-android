@@ -121,3 +121,16 @@ the interpreter path). The kill-proof sshd lives in the trusted inode
 Observed boot dance: 2225 up at ~+70s, one bounce at ~+2min (the second
 sz job's payload run slaying+restarting sshd), one bounce at ~+3.5min
 (the re-armed jobs getting one more deckard pass), then stable.
+
+## A7 achieved + the navigator-kill recovery note
+
+A7 (the app's first pixels on the Q20 display) is done end-to-end:
+dalvikvm draws the Prober's real View tree -> Q20_DRAW_RAW frame file ->
+facade_compositor (root, WM + power-manager contexts) posts it. With the
+navigator retired, the decor stays on the panel (the "blink" under a live
+navigator = its per-frame composition excludes unregistered windows; the
+black screen after killing it = the navigator also holds the power role).
+Killing the navigator trips the launcher's crash-loop protection: the next
+boot may come up with no navigator (black UI). A CLEAN reboot restores it
+(the navigator starts normally on a fresh boot). So: retire the navigator
+only for the kiosk experiment, and always reboot cleanly afterwards.
