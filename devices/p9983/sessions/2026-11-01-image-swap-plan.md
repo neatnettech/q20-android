@@ -104,7 +104,7 @@ marker).
 2. OR just pass the wizard on-device: option B (leave it 20-30 min at the
    enrollment step — never actually tried) or option A (blackhole DNS so
    the enrollment fails fast and the wizard offers continue/skip).
-3. Once the home screen is reached: Dev Mode (drstone) -> WiFi ->
+3. Once the home screen is reached: Dev Mode (<device_password>) -> WiFi ->
    chain.sh — the proven Classic flow, /q helpers on the first boot.
 
 

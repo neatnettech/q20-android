@@ -39,6 +39,6 @@ while True:
     time.sleep(0.05)
 
 r = subprocess.run([sys.executable, '-u', os.path.join(HERE, 'bblink.py'),
-                    '--loader', LOADER, '--password', 'drstone',
+                    '--loader', LOADER, '--password', os.environ['Q20_PW'],
                     'flash', *FILES])
 sys.exit(r.returncode)

@@ -289,5 +289,5 @@ M3.
 * New capability: the docker BB10 toolchain builds native binaries and
   BARs; a calculator BAR is built and ready to install.
 * connect.sh + the held door + q20ssh retries: the stable device access.
-  Dev mode password must match drstone or the door stalls at the challenge
+  Dev mode password must match <device_password> or the door stalls at the challenge
   question.

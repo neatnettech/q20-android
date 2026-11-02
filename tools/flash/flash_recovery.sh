@@ -15,7 +15,7 @@ for attempt in 1 2 3; do
     while ! have_bootrom; do sleep 1; done
   fi
   echo "=== recovery attempt $attempt $(date +%T) ===" >> "$LOG"
-  if python3 -u bblink.py --loader "$LOADER" --password drstone flash "$IMG:none" >> "$LOG" 2>&1; then
+  if python3 -u bblink.py --loader "$LOADER" --password "${Q20_PW:?set Q20_PW}" flash "$IMG:none" >> "$LOG" 2>&1; then
     echo "RECOVERY-FLASH-OK $(date +%T)" >> "$LOG"
     exit 0
   fi

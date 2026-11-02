@@ -17,6 +17,6 @@ if ! have_bootrom; then
   while ! have_bootrom; do sleep 1; done
 fi
 echo "fresh 0001 at $(date +%T), flashing test matrix" >> "$LOG"
-python3 -u bblink.py --loader "$LOADER" --password drstone flash \
+python3 -u bblink.py --loader "$LOADER" --password "${Q20_PW:?set Q20_PW}" flash \
   "$T/t1.signed:none" "$T/t2.signed:dummy" "$T/t3.signed:seal=$SEAL" "$T/t4.signed:none" \
   >> "$LOG" 2>&1 && echo "TESTFLASH-OK $(date +%T)" >> "$LOG" || echo "TESTFLASH-FAILED" >> "$LOG"

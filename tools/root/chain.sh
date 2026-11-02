@@ -4,12 +4,12 @@
 # Android-subsystem carriers, installs the shadow+symlink deviceconfig
 # package via the installer queue, fires the switchzone sz job, verifies.
 #
-# env: Q20_IP (default 192.168.1.184), Q20_PW (default drstone),
+# env: Q20_IP (default 192.168.1.184), Q20_PW (required),
 #      AND (android scripts dir hash), DOOR (path to the local door tooling).
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 IP=${Q20_IP:-192.168.1.184}
-PW=${Q20_PW:-drstone}
+PW=${Q20_PW:?set Q20_PW}
 AND=${AND:-/apps/sys.android.gYABgKAOw1czN6neiAT72SGO.ns/native/scripts}
 DOOR=${DOOR:-$HERE/../../runtime/qnx-shims/door}
 PORT=${Q20_ROOTPORT:-2225}
