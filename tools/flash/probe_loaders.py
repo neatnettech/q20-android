@@ -22,7 +22,7 @@ import bblink
 from bblink import BBSession, load_loader, PID_BOOTROM, PID_RAMLOADER
 
 LOADER_DIR = sys.argv[1] if len(sys.argv) > 1 else 'loaders'
-PW = sys.argv[2] if len(sys.argv) > 2 else 'drstone'
+PW = sys.argv[2] if len(sys.argv) > 2 else os.environ['Q20_PW']
 
 def have(pid):
     return usb.core.find(idVendor=0x0FCA, idProduct=pid) is not None

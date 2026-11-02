@@ -16,7 +16,7 @@ for attempt in 1 2 3; do
     while ! have_bootrom; do sleep 1; done
   fi
   echo "=== radio flash attempt $attempt $(date +%T) ===" >> "$LOG"
-  if python3 -u bblink.py --loader "$LOADER" --password drstone flash ~/q20-flash/radio.signed >> "$LOG" 2>&1; then
+  if python3 -u bblink.py --loader "$LOADER" --password "${Q20_PW:?set Q20_PW}" flash ~/q20-flash/radio.signed >> "$LOG" 2>&1; then
     echo "RADIO-FLASH-OK $(date +%T)" >> "$LOG"
     exit 0
   fi

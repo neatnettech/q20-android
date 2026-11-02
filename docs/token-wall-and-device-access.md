@@ -746,7 +746,7 @@ The client is `runtime/qnx-shims/door/Q20Door.java`, built on the vendor
 `jqconnDoor.jar` classes so all crypto is stock. Baseline `user` mode ran the
 full vendor handshake and **re-provisioned devuser**: port 22 opened and
 `q20ssh` logged in as `devuser` (`uid`, `home=/accounts/devuser`). So the
-password `drstone` and the whole harness are correct over WiFi.
+password `<device_password>` and the whole harness are correct over WiFi.
 
 ### The root probe and its result
 
@@ -1180,7 +1180,7 @@ for A7; the autoroot persistence question remains open behind it.
 
 * Development Mode has its own password field, separate from the lock
   password. The door handshake stalls at the challenge question until it
-  matches (set it to `drstone`). The dev services (22, 8000) die when the
+  matches (set it to `<device_password>`). The dev services (22, 8000) die when the
   door process exits, so the door is now patched to hold the session
   (`Thread.sleep` after the user flow in Q20Door.java) and
   `runtime/qnx-shims/door/connect.sh` is the one-stop connector (door

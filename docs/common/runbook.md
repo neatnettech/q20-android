@@ -26,7 +26,7 @@ from macOS; the only Windows-era tool left behind is cap.exe.
   OS container with the getroot package baked in), `radio.signed`, and the
   Classic RAM loader (also in `tools/flash/`).
 - The local door tooling (`runtime/qnx-shims/door/`) for device SSH; the
-  device's Dev-Mode password (default `drstone`).
+  device's Dev-Mode password (default `<device_password>`).
 
 ## Step 0 — flash (needed once per root session)
 

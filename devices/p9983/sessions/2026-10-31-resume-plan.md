@@ -18,7 +18,7 @@ battery is flat). Everything needed for the recovery is ready:
    (ritual: unplug → power off until dark → plug, touch nothing). The
    `set_configuration(1)` fix is already in bblink.py — the handshake
    issue that stalled every loader is solved.
-3. **Boot** → setup wizard → WiFi → Dev Mode (password `drstone`).
+3. **Boot** → setup wizard → WiFi → Dev Mode (password `<device_password>`).
 4. **Root** — the same runtime chain as the Classic: `tools/root/chain.sh`
    with `Q20_IP` set to the P'9983's IP. The getroot `/q` helpers appear on
    the first boot after the flash, exactly as on the Classic.

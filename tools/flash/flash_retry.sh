@@ -20,7 +20,7 @@ for attempt in 1 2 3 4 5; do
     echo "fresh 0001 at $(date +%T)" >> "$LOG"
   fi
   echo "=== flash attempt $attempt $(date +%T) ===" >> "$LOG"
-  if python3 -u bblink.py --loader "$LOADER" --password drstone flash \
+  if python3 -u bblink.py --loader "$LOADER" --password "${Q20_PW:?set Q20_PW}" flash \
        "$@" >> "$LOG" 2>&1; then
     echo "FLASH-OK $(date +%T)" >> "$LOG"
     exit 0
