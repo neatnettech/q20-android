@@ -76,6 +76,17 @@ Note the root sshd has a bare PATH - prefix
 `export PATH=/base/bin:/base/sbin:/base/usr/bin:/base/usr/sbin:/bin:/sbin:$PATH`
 in remote commands.
 
+If the devmode sshd (port 22) is down, start a devuser one as root (not
+persistent - dies at reboot):
+
+```sh
+q20ssh-root 'export PATH=...; /usr/sbin/sshd -p 2222 -o AllowUsers=devuser \
+    -o AuthorizedKeysFile=/accounts/devuser/.ssh/authorized_keys \
+    -o HostKey=/etc/ssh/ssh_host_rsa_key -o PasswordAuthentication=no \
+    -o Protocol=2 -o StrictModes=no'
+# plus: install ~/.q20/id_rsa_q20.pub as /accounts/devuser/.ssh/authorized_keys
+```
+
 The payload embeds the pubkey from `~/.q20/id_rsa_q20.pub`; edit
 `tools/root/ota_info_pps.sh` if your key differs.
 

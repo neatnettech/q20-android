@@ -29,10 +29,16 @@
  *                     (fallback if an own-group APPLICATION window is not drawn)
  *   FACADE_ZORDER=n   window z order, default 200 (Navigator publishes 100)
  *   NAV_HOLD=n        seconds to hold the frame on screen, default 60
+ *   FACADE_WATCH=1    A8 resident mode: never exit; poll <frame>.seq and
+ *                     re-post the frame every time the seq content changes.
+ *                     (The seq file, not mtime: QNX stat granularity is too
+ *                     coarse for 30Hz, and the tmp+rename writer side makes
+ *                     every update atomic. See graphics_facade.cc.)
  *
- * ponytail: one static frame over a file is the deliberate corner (no live
- * redraw). Upgrade path: a shared-memory framebuffer + named semaphore when A8
- * wires input -> invalidate -> redraw.
+ * ponytail: the A8 transport is deliberately the tmp+rename file pair, not
+ * the shared-memory framebuffer + semaphore from the original plan - the
+ * frame file lives on RAM-backed /tmp and a 33ms poll is free. Upgrade to
+ * shm when input latency or a resident app loop actually demands it.
  */
 #include <screen/screen.h>
 #include <errno.h>
@@ -40,12 +46,34 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #define P(...) do { printf(__VA_ARGS__); fflush(stdout); } while (0)
 
 static int envInt(const char* name, int fallback) {
   const char* v = getenv(name);
   return (v != NULL && v[0] != '\0') ? atoi(v) : fallback;
+}
+
+/* (Re)load the frame file into the window buffer and post it. Reuses the
+ * caller's scratch buffer and the already-mapped window buffer. */
+static int show_frame(const char* path, int size, unsigned char* frame,
+                      void* ptr, int stride, screen_buffer_t buf,
+                      screen_window_t win, screen_context_t ctx) {
+  const size_t rowBytes = (size_t)size * 4;
+  const size_t want = rowBytes * (size_t)size;
+  FILE* f = fopen(path, "rb");
+  if (f == NULL) return -1;
+  size_t got = fread(frame, 1, want, f);
+  fclose(f);
+  if (got != want) return -2;
+  const size_t copyBytes = ((size_t)stride < rowBytes) ? (size_t)stride : rowBytes;
+  for (int y = 0; y < size; y++)
+    memcpy((unsigned char*)ptr + (size_t)y * stride, frame + (size_t)y * rowBytes, copyBytes);
+  int rect[4] = {0, 0, size, size};
+  int prc = screen_post_window(win, buf, 1, rect, 0);
+  screen_flush_context(ctx, 0);
+  return prc;
 }
 
 int main(int argc, char** argv) {
@@ -58,17 +86,11 @@ int main(int argc, char** argv) {
   const int size = (argc > 2) ? atoi(argv[2]) : 720;
   if (size <= 0) { P("bad size %d\n", size); return 64; }
 
-  /* Load the frame: tightly packed size*size*4 RGBA8888. */
+  /* Scratch buffer for frame loads (filled per show_frame call). */
   const size_t rowBytes = (size_t)size * 4;
   const size_t want = rowBytes * (size_t)size;
   unsigned char* frame = malloc(want);
   if (frame == NULL) { P("oom %zu\n", want); return 71; }
-  FILE* f = fopen(path, "rb");
-  if (f == NULL) { P("open %s failed errno=%d (%s)\n", path, errno, strerror(errno)); return 66; }
-  size_t got = fread(frame, 1, want, f);
-  fclose(f);
-  if (got != want) { P("short read: %zu of %zu bytes\n", got, want); return 65; }
-  P("loaded %s: %dx%d (%zu bytes)\n", path, size, size, got);
 
   const int ctx_type = envInt("FACADE_WM", 0)
       ? SCREEN_WINDOW_MANAGER_CONTEXT : SCREEN_APPLICATION_CONTEXT;
@@ -156,21 +178,34 @@ int main(int argc, char** argv) {
   P("buf=%p ptr=%p stride=%d\n", (void*)buf, ptr, stride);
   if (ptr == NULL || stride <= 0) { P("no cpu buffer\n"); return 4; }
 
-  /* Copy the frame in, honoring the window buffer's real stride (the panel
-   * uses 2944 for 720 wide, not 2880). Clamp to whichever width is smaller. */
-  const size_t copyBytes = ((size_t)stride < rowBytes) ? (size_t)stride : rowBytes;
-  for (int y = 0; y < size; y++)
-    memcpy((unsigned char*)ptr + (size_t)y * stride, frame + (size_t)y * rowBytes, copyBytes);
-  P("copied frame into window buffer (copyBytes=%zu/row)\n", copyBytes);
-  free(frame);
+  /* Initial frame: same failure semantics as the one-shot A7 mode. */
+  int src = show_frame(path, size, frame, ptr, stride, buf, win, ctx);
+  if (src == -1) { P("open %s failed errno=%d (%s)\n", path, errno, strerror(errno)); return 66; }
+  if (src == -2) { P("short read on %s\n", path); return 65; }
+  P("initial frame posted rc=%d\n", src);
 
-  int rect[4] = {0, 0, size, size};
-  int prc = screen_post_window(win, buf, 1, rect, 0);
-  int frc = screen_flush_context(ctx, 0);
-  P("post rc=%d flush rc=%d errno=%d (%s)\n", prc, frc, errno, strerror(errno));
+  if (envInt("FACADE_WATCH", 0)) {
+    /* A8 resident mode: poll <path>.seq (content, not mtime) and re-post on
+     * every change. Never exits; slay to stop. */
+    char seqpath[520];
+    snprintf(seqpath, sizeof(seqpath), "%s.seq", path);
+    char last[64] = {0};
+    P("watching %s (33ms poll), slay to stop\n", seqpath);
+    for (;;) {
+      char cur[64] = {0};
+      FILE* sf = fopen(seqpath, "rb");
+      if (sf != NULL) { (void)fread(cur, 1, sizeof(cur) - 1, sf); fclose(sf); }
+      if (cur[0] != '\0' && strcmp(cur, last) != 0) {
+        memcpy(last, cur, sizeof(last));
+        int rc = show_frame(path, size, frame, ptr, stride, buf, win, ctx);
+        P("redraw rc=%d seq=%.32s\n", rc, cur);
+      }
+      usleep(33333);
+    }
+  }
 
   const int hold = envInt("NAV_HOLD", 60);
   P("holding %ds, look at the phone for the Prober decor frame\n", hold);
   if (hold > 0) sleep(hold);
-  return (prc == 0) ? 0 : 5;
+  return (src == 0) ? 0 : 5;
 }

@@ -38,6 +38,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <time.h>
 
 #include <string>
 #include <vector>
@@ -994,20 +996,37 @@ void Surface_unlockCanvasAndPost(JNIEnv*, jclass, jlong, jobject) {
     ALOGI("write_png %s ok=%d", png, raster::write_png(png, gLocked));
   }
   // Q20_DRAW_RAW: the same frame as tightly packed w*h*4 RGBA8888 (stride
-  // padding dropped), for the root compositor to post. One static frame is
-  // deliberate here (A7); the file handoff upgrades to a shared-memory
-  // framebuffer + semaphore when A8 needs live per-frame redraw.
+  // padding dropped), for the root compositor to post. A8: written as
+  // <raw>.tmp + rename (atomic) and a <raw>.seq bump (content is the change
+  // signal; QNX st_mtime granularity is too coarse for a 30Hz watch), so the
+  // resident compositor (FACADE_WATCH=1) never reads a half-written frame.
   const char* raw = getenv("Q20_DRAW_RAW");
   if (raw != nullptr && raw[0] != '\0' && gLocked.px != nullptr) {
-    FILE* f = fopen(raw, "wb");
+    char tmp[512];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", raw);
+    FILE* f = fopen(tmp, "wb");
     if (f == nullptr) {
-      ALOGE("Q20_DRAW_RAW fopen %s failed", raw);
+      ALOGE("Q20_DRAW_RAW fopen %s failed", tmp);
     } else {
       size_t rowBytes = (size_t)gLocked.w * 4;
       size_t wrote = 0;
       for (int y = 0; y < gLocked.h; y++)
         wrote += fwrite(gLocked.px + (size_t)y * gLocked.stride, 1, rowBytes, f);
       fclose(f);
+      if (rename(tmp, raw) != 0) {
+        ALOGE("Q20_DRAW_RAW rename to %s failed errno=%d", raw, errno);
+      } else {
+        static unsigned sSeq = 0;  // per-process; fine while each draw is a fresh launch
+        char seqtmp[512], seqpath[512];
+        snprintf(seqpath, sizeof(seqpath), "%s.seq", raw);
+        snprintf(seqtmp, sizeof(seqtmp), "%s.tmp", seqpath);
+        FILE* sf = fopen(seqtmp, "w");
+        if (sf != nullptr) {
+          fprintf(sf, "%u %llu\n", ++sSeq, (unsigned long long)time(NULL));
+          fclose(sf);
+          rename(seqtmp, seqpath);
+        }
+      }
       ALOGI("Q20_DRAW_RAW %s %dx%d wrote=%zu", raw, gLocked.w, gLocked.h, wrote);
     }
   }

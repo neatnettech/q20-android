@@ -1,7 +1,9 @@
 #!/bin/sh
 # ssh to the Q20. Its sshd is OpenSSH 6.2 on QNX: it needs a legacy host key
 # algorithm, kex, cipher and MAC, and it drops the connection on aes-gcm.
-IP=${Q20_IP:-169.254.0.1}
+IP=${Q20_IP:-192.168.1.184}
+PORT=${Q20_PORT:-2222}  # our own devuser sshd (started as root); the devmode
+# one on 22 was found down on 2026-11-05 - restart recipe: docs/common/runbook.md
 KEY=${Q20_KEY:-$HOME/.q20/id_rsa_q20}
 TRY=${Q20_TRY:-3}
 i=0
@@ -12,6 +14,7 @@ while [ $i -lt "$TRY" ]; do
     -o ConnectTimeout=15 -o BatchMode=yes -o ServerAliveInterval=30 \
     -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
     -o KexAlgorithms=+diffie-hellman-group14-sha1 -c aes128-ctr -m hmac-sha1 \
+    -p "$PORT" \
     devuser@"$IP" "$@"; then
     exit 0
   fi
