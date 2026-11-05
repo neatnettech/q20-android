@@ -60,22 +60,24 @@ gated: key only, off by default, with a documented re-arm path.
 Same for the **devmode QCONN door**: development mode exposes the token based door
 access. Hardened build: devmode off, QCONN not listening.
 
-## Signal risks (check early)
+## Signal risks (probed 2026-11-05 - GO)
 
-* Signal's current minSdk: if it rises above 23, Android 6 is out.
+Full results: [signal-gap-probe.md](signal-gap-probe.md). Short version:
+
+* minSdk is **23** - Android 6 stays viable (Signal 8.34.2). Re-check per release.
 * It works without FCM (websocket fallback), so no GMS is needed.
-* Its native libraries (`libsignal_jni.so`, RingRTC/WebRTC, SQLCipher) are Linux bionic
-  ELF that use epoll, futex, eventfd and other Linux syscalls. They must load against my
-  QNX bionic glue. This is the biggest unknown; test it **before** investing in the
-  framework.
+* Native libs: 57 unique symbol gaps against the platform union - a shim
+  layer, not a kernel port (epoll/eventfd/prctl/mremap/locale/chk shims, the
+  `syscall` trampoline audit, dl_iterate_phdr; ANativeWindow/AndroidBitmap
+  fold into the facade). Tracked as NOD-18, gates NOD-14.
 
 ## First slice (read only, cheap, high information)
 
 1. **Phone home inventory** over root SSH: `pidin`, the socket list, the launcher and pps
    job lists, DNS lookups while idle (capture at the Wi-Fi AP). Record per entry:
    process, endpoint, how to kill it.
-2. **Signal native lib probe**: pull the Signal APK, list the undefined symbols of its
-   arm .so files (`readelf`/`nm`) and diff them against the symbols my bionic exports.
+2. ~~**Signal native lib probe**~~ **done (GO)**: minSdk 23 confirmed, 57 gaps
+   enumerated and classified - see [signal-gap-probe.md](signal-gap-probe.md).
 3. **Threat model**: the ceiling above plus the root door policy (sshd implant and
    devmode QCONN).
 4. Then the Phase 4 sandbox probes as already planned in the README.
@@ -85,4 +87,5 @@ No porting code until the inventory and the Signal gap list show real targets.
 ## Done when
 
 * After disabling, a 24 hour idle packet capture shows zero BB endpoints.
-* Every undefined symbol in Signal's native libraries is either resolved or listed as a gap.
+* ~~Every undefined symbol in Signal's native libraries is either resolved or listed as a gap.~~
+  Done 2026-11-05: 57 gaps, all classified ([signal-gap-probe.md](signal-gap-probe.md)).

@@ -31,13 +31,11 @@ def main():
     sz = os.path.getsize(path)
     f = open(path, 'rb')
     cap = pe_end(f)
-    # find the ver2 sig; the 10.3.3.498 builds prefix it with 0x3C bytes
-    hdr_off = None
-    for pfx in (0, 0x3c):
-        f.seek(cap + pfx)
-        if f.read(12) == b'\x9c\xd5\xc5\x97' * 3:
-            hdr_off = cap + pfx
-            break
+    # find the ver2 sig; builds prefix it with a variable length name table
+    # (SQN100 10.3.2.159 0x30, SQK100 10.3.2.159 0x34, 10.3.3.498 builds 0x3C)
+    f.seek(cap)
+    i = f.read(0x100).find(b'\x9c\xd5\xc5\x97' * 3)
+    hdr_off = cap + i if i >= 0 else None
     if hdr_off is None:
         sys.exit('no ver2 header after cap_end %#x' % cap)
     f.seek(hdr_off + 12 + 80)

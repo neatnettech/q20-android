@@ -18,6 +18,8 @@ Three layers:
 | [common/root-chain.md](common/root-chain.md) | the carriers/sz/persisted-jobs root technique |
 | [common/trusted-inode.md](common/trusted-inode.md) | pathtrust and the /var/exfat trusted-inode exec channel |
 | [common/security-feasibility.md](common/security-feasibility.md) | GrapheneOS-on-QNX feasibility: the feature map, the honest ceiling, the first slice |
+| [common/signal-gap-probe.md](common/signal-gap-probe.md) | Signal 8.34.2 native probe: minSdk 23, 57 gaps classified - GO |
+| [common/architecture-direction.md](common/architecture-direction.md) | why Android-on-QNX, not a pure-QNX userland |
 | [common/security-feasibility.md](common/security-feasibility.md) | which Android/GrapheneOS security features port to QNX, the ceiling, the first slice |
 
 ## History (the long-form record)

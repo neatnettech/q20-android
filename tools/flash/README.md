@@ -54,7 +54,7 @@ partition is ungated. See `docs/token-wall-and-device-access.md` sections 22-24.
 ## Tools added 2026-10-30/31 (P'9983 + general)
 
 - `extract_autoloader.py <autoloader.exe> [outdir]` — extracts
-  ifs/radio/os.signed from both autoloader header variants (the 10.3.3.498
+  ifs/radio/os.signed; finds the ver2 header after a variable name table (0x30 to 0x3C, e.g. the 10.3.3.498
   builds prefix the ver2 header with a 0x3C-byte table).
 - `probe_loaders.py <loaders-dir> [password]` — probes every candidate
   RAM-loader against a device end-to-end (upload → run → SetMode(2)); the
