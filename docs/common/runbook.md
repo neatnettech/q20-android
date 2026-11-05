@@ -56,12 +56,25 @@ afterwards to restore devuser access.
 ## Step 2 — root shell
 
 ```sh
+tools/root/q20ssh-root            # the wrapper - use it
+```
+
+or the long form (the cipher list is MANDATORY: the QNX OpenSSH 6.2 build's
+aes128-gcm is broken and modern clients prefer it, killing the connection
+right after KEXINIT - so give an explicit list, never "+"):
+
+```sh
 ssh -p 2225 -i ~/.q20/id_rsa_q20 \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=$HOME/.q20/known_hosts_root \
     -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
-    -o KexAlgorithms=+diffie-hellman-group14-sha1 -c aes128-ctr -m hmac-sha1 \
+    -o KexAlgorithms=+diffie-hellman-group14-sha1 \
+    -o Ciphers=aes128-ctr,aes128-cbc -o MACs=hmac-sha1,hmac-sha2-256 \
     root@192.168.1.184
 ```
+
+Note the root sshd has a bare PATH - prefix
+`export PATH=/base/bin:/base/sbin:/base/usr/bin:/base/usr/sbin:/bin:/sbin:$PATH`
+in remote commands.
 
 The payload embeds the pubkey from `~/.q20/id_rsa_q20.pub`; edit
 `tools/root/ota_info_pps.sh` if your key differs.

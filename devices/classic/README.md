@@ -12,6 +12,8 @@
 
 ## Sessions
 
+- [sessions/2026-11-05-phone-home-inventory.md](sessions/2026-11-05-phone-home-inventory.md) -
+  NOD-15 part 1: live recon, the kill list, the Akamai sighting.
 - [sessions/a7-compositing.md](sessions/a7-compositing.md) - the A7
   breakthrough and the presentation-layer model.
 - [sessions/navigator-kill-notes.md](sessions/navigator-kill-notes.md) -
