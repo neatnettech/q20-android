@@ -39,6 +39,19 @@ exec gate).
 The payload also rebuilds the deckard unpack tree (deckard deletes it on
 every install) and starts the kill-proof sshd (below). Root SSH: port 2225.
 
+## The carrier map (hard rules - the 2026-11-06 break)
+
+| Path in `native/scripts/` | Holds | Rule |
+|---|---|---|
+| `ls-oom-adj.sh` | payload v8.1 (via the ota_info_pps.sh symlink) | NEVER clobber |
+| `ps-android-apps.sh` | migration payload (via migration_logging.sh) | NEVER clobber |
+| `restore-cleanup.sh` | the facade compositor (A8) | the dedicated experiment slot |
+
+The self-healing is ONE BOOT DEEP: the payload must run every boot to re-arm
+the jobs; if a boot runs something else from the carrier, deckard consumes
+the jobs and the chain is gone for good (full story:
+devices/classic/sessions/2026-11-06-chain-break-and-recovery.md).
+
 Gotchas that each cost an iteration: 0644 payload (exec EACCES), payload
 in our own mount (untrusted dev/ino EPERM), missing AuthorizedKeysFile
 (root's $HOME is not /root), devuser-owned key file (StrictModes).

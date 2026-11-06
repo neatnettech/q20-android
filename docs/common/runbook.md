@@ -34,12 +34,18 @@ Power off → unplug → **one brief power press → plug in** (the bootrom ritu
 a fresh `0fca:0001` appears). Then:
 
 ```sh
-tools/flash/flash_retry.sh          # auto-fires on the fresh bootrom edge
+tools/flash/flash_retry.sh ~/q20-flash/OS.signed.unsigned ~/q20-flash/radio.signed
 ```
 
-~10 min. Boot the device normally, re-enable Development Mode + WiFi. This
-first boot mounts `/q` (the getroot uid/gid helper set) — the helpers are
-gone after any reboot, which is why this step repeats per session.
+(~10 min. `~/q20-flash` is a symlink to the WD500 offload drive.) Boot the
+device normally, re-enable Development Mode + WiFi. This first boot mounts
+`/q` (the getroot uid/gid helper set) — the helpers are gone after any
+reboot, which is why this step repeats per session.
+
+Recovery-era gotchas: the door only answers USB peers; pin the Mac's USB
+iface with `tools/flash/q20usb-net.sh` (one sudo, see its header); the door
+session brings the devmode sshd up on 22 on ALL interfaces; after every
+reflash the device re-keys sshd, so clear `~/.q20/known_hosts*` first.
 
 ## Step 1 — the chain
 

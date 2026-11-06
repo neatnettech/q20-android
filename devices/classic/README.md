@@ -12,6 +12,9 @@
 
 ## Sessions
 
+- [sessions/2026-11-06-chain-break-and-recovery.md](sessions/2026-11-06-chain-break-and-recovery.md) -
+  the chain break, the reflash recovery, and the carrier-slot discipline that
+  prevents a repeat.
 - [sessions/2026-11-05-phone-home-inventory.md](sessions/2026-11-05-phone-home-inventory.md) -
   NOD-15 part 1: live recon, the kill list, the Akamai sighting.
 - [sessions/a7-compositing.md](sessions/a7-compositing.md) - the A7
