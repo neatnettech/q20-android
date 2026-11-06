@@ -21,6 +21,10 @@ ro.build.type=userdebug
 ro.debuggable=1
 # Calibration knob: 720 px wide at 320 dpi is 360 dp (xhdpi resources).
 ro.sf.lcd_density=320
+# Calibration knob: the square panel is portrait to WindowManager (w <= h),
+# but phone portrait layouts assume ~640 dp of height; landscape layouts fit
+# 360x360 dp (the Calculator's pads stop clipping). Read by our launcher.
+q20.facade.orientation=landscape
 # Required until A7: Choreographer uses Handler timing, so DisplayEventReceiver
 # natives stay unreached.
 debug.choreographer.vsync=false

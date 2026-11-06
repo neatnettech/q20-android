@@ -115,6 +115,9 @@ class Canvas {
   void drawColor(uint32_t color);
   // Fill a local-space rect (Canvas.drawRect with a fill paint).
   void drawRect(const Rect& localRect, uint32_t color);
+  // Fill a local-space circle, the edge pixel anti-aliased by its distance
+  // (Canvas.drawCircle with a fill paint: ripples).
+  void drawCircle(float cx, float cy, float r, uint32_t color);
 
   // Draw a run of Unicode code points with their baseline origin at local
   // (x, y), at pixelSize px, in color. Glyphs come from face (caller owns it,

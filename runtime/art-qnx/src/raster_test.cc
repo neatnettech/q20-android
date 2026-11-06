@@ -122,6 +122,23 @@ int main(int argc, char** argv) {
     check_px(s, 8, 8, kDecorBg, 0, "outside clip untouched (2)");
   }
 
+  printf("drawCircle (ripples): filled inside, untouched outside, clip holds:\n");
+  {
+    const int W = 20, H = 20;
+    std::vector<uint8_t> buf(W * H * 4);
+    Surface s{buf.data(), W, H, W * 4};
+    Canvas c(s);
+    c.drawColor(kDecorBg);
+    c.save();
+    c.clipRect(Rect{0, 0, 16, 20});
+    c.drawCircle(10, 10, 6, kText);
+    c.restore();
+    check_px(s, 10, 10, kText, 0, "center filled");
+    check_px(s, 14, 10, kText, 0, "inside the radius filled");
+    check_px(s, 4, 4, kDecorBg, 0, "box corner outside the circle untouched");
+    check_px(s, 16, 10, kDecorBg, 0, "right edge beyond the clip untouched");
+  }
+
   printf("stride (padded row stride respected):\n");
   {
     const int W = 8, H = 8, tight = W * 4, padded = W * 4 + 64;

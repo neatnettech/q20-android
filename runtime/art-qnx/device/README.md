@@ -9,7 +9,16 @@ executes on the phone.
 * `q20ssh`, `q20put` wrap ssh and file copy with the legacy algorithms this
   device's OpenSSH 6.2 requires.
 * `run_core.sh` runs on the phone, inside the staging directory produced by
-  `make -f art-qnx.mk stage`.
+  `make -f art-qnx.mk stage`. On the Classic that directory is
+  `/accounts/devuser/runtime`. `APP_APK` and `APP_ACT` pick the app (the
+  Prober by default). `sh run_core.sh tap <id> ... <id>=<text>` taps views
+  headless and checks text; `live` puts the app on the panel (needs the
+  resident root compositor; launch it detached, `( ... & )`); `snap` copies
+  the last frame to `out/frame.rgba`.
+* One ART process at a time on the Classic: a second one fails its fixed
+  address heap reservation while another runs.
+* A `q20put` cut by Wi-Fi leaves a remote `cat` holding the file open, and
+  `dlopen` then fails with "Library cannot be found": kill that session.
 
 Order of operations:
 

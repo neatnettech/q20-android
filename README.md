@@ -23,13 +23,15 @@ Android 6.0 on the BlackBerry Classic (Q20), which runs QNX. Site: https://neatn
 | dex2oat built and running on the Q20, hello.dex compiled to hello.oat on-device | done |
 | GC crash in the boot image build | root caused: upstream `CardTable::ClearCardRange` memsets the heap range, not the card range, on any non-Linux target (patch 0060), confirmed on hardware |
 | Boot image build | done on device: core image (`core.art` 3.0 MB + `core.oat` 23.5 MB) and full 13 dex boot image (`boot.art` 10.5 MB + `boot.oat` 84.8 MB), both exit 0 |
-| ICU natives | real libcore ICU natives on the sysroot ICU 4.6 (patch 0100); only the charset lookup is still a stub (`runtime/art-qnx/src/icu_stubs.cc`) |
+| ICU natives | real libcore ICU natives on the sysroot ICU 4.6 (patch 0100), charsets included: the stock NativeConverter since A9 (patch 0103) |
 | Hello DEX execution | done on device: prints `Hello from ART 6 on QNX! gc ok` in both AOT (Quick-compiled hello.oat) and `-Xint`, exit 0 |
 | Q20 device SSH access | done, reproducible: `runtime/art-qnx/device/connect.sh` plus `q20ssh`/`q20put` |
 | APK ladder A1 to A5 (docs/apk-milestones.md) | done on device: Q20 Prober APK built on the host, headless self test 7/7 AOT and `-Xint` |
 | A6 Activity headless | done on device: my launcher (`apps/q20facade`) runs the Prober Activity through onCreate, onStart, onResume and lays its window out at 720x720 (`sh run_core.sh facade all`) |
 | A7 drawing | done on device: `sh run_core.sh facade draw` rasterizes the real View tree through my own Canvas JNI onto a software engine, 8/8 in AOT and `-Xint`; the frame is read back with `Q20_DRAW_PNG` |
 | A7 compositing | **done**: the Prober's real View tree renders on the Q20 panel - dalvikvm draws (Q20_DRAW_RAW frame) and the root compositor (WM + power-manager contexts, Navigator retired) posts it; the decor stays on screen. Next: A8 (the live loop - resident compositor, shared-memory framebuffer, input). See devices/classic/sessions/a7-compositing.md |
+| A9 native families | **done on device**: the real NativeConverter (any `Reader` decodes) and the StaticLayout natives as a FreeType greedy line breaker; the live counter runs through the Prober's own `OnClickListener` (9 taps, 9 bumps). See devices/classic/sessions/2026-11-06-a9-natives.md |
+| A9 first port | **done on device**: the unmodified AOSP 6.0.1 Calculator runs live on the panel: real MotionEvent dispatch, its own handlers and evaluator, result animation, DEL and CLR (`1 + 2 = 3`, `7 × 6 = 42`, `9 − 4 = 5` checked headless). See devices/classic/sessions/2026-11-06-a9-calculator.md |
 | Root (uid-0) | **done on device + persistent**: `ssh -p 2225 root@<q20>` from macOS. Runtime chain: UFS flash (getroot /q helpers) -> host-built QNX6 symlink image -> deviceconfig package mounts it over /base/scripts -> switchzone sz job runs /base/scripts/ota_info_pps.sh as root -> payload (trusted Android-subsystem inode) starts a kill-proof root sshd (binary in the trusted inode /var/exfat/fs-exfat.so). **Self-healing across reboots**: three persisted installer jobs (mount + sz session::0/::1) + the v8.1 payload re-arm the chain at every boot - verified over consecutive cold reboots with zero intervention. A full UFS flash wipes the persistence (re-root = flash + chain.sh). Full story: docs/token-wall-and-device-access.md sections 22-27, runbook: docs/common/runbook.md, common technique: docs/common/, devices: devices/, tooling: tools/flash/ + tools/root/. |
 
 ## What blocked Hello World
@@ -44,7 +46,8 @@ hardware:
 2. `System.<clinit>` calls three ICU version natives and `println` reaches
    `NativeConverter.charsetForName`; none were registered, so
    `WellKnownClasses::LateInit` aborted on a null `Runtime.nativeLoad`.
-   `runtime/art-qnx/src/icu_stubs.cc` registers the four of them.
+   `runtime/art-qnx/src/icu_stubs.cc` registered the four of them (replaced
+   by the real NativeConverter at A9).
 3. The image writer died on a dangling dex cache field slot: the factory dexes
    are quickened, so the verifier marks a few boot classes erroneous, and
    `DexCache::GetResolvedField()` hides their fields from the prune pass.
@@ -59,9 +62,9 @@ holds absolute pointers into the hammerhead libart.so, so under my libart.so
 the first managed call jumps to NULL. The image has to come from my own
 dex2oat, which is why the compiler was ported.
 
-Next: A8 - the live facade. The Prober's window renders through my stack
-(docs/bringup-log.md, 2026-10-20), so what is left is getting a window the BB10
-compositor will actually draw.
+Next: the second port, the todo app (NOD-22). The first one is done: the
+unmodified AOSP Calculator runs live on the Classic's panel (A9, NOD-9), see
+devices/classic/sessions/2026-11-06-a9-calculator.md.
 
 ## Timeline
 

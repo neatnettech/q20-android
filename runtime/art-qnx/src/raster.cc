@@ -94,6 +94,19 @@ void Canvas::drawRect(const Rect& lr, uint32_t color) {
     for (int x = c.l; x < c.r; x++) blend_pixel(s_, x, y, color, 255);
 }
 
+void Canvas::drawCircle(float lcx, float lcy, float r, uint32_t color) {
+  if (r <= 0) return;
+  const float cx = lcx + cur().dx, cy = lcy + cur().dy;
+  Rect box{(int)floorf(cx - r), (int)floorf(cy - r), (int)ceilf(cx + r) + 1, (int)ceilf(cy + r) + 1};
+  Rect c = cur().clip.intersect(box);
+  for (int y = c.t; y < c.b; y++)
+    for (int x = c.l; x < c.r; x++) {
+      // Coverage ramps across the one pixel the edge passes through.
+      float cov = r + 0.5f - hypotf(x + 0.5f - cx, y + 0.5f - cy);
+      if (cov > 0) blend_pixel(s_, x, y, color, cov >= 1 ? 255 : (int)(cov * 255));
+    }
+}
+
 float Canvas::drawGlyphs(FT_Face face, const uint32_t* cps, int count, float x, float y,
                          uint32_t color, float pixelSize) {
   if (face == nullptr) return 0;

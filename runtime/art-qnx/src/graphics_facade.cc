@@ -1,7 +1,8 @@
 /*
- * QNX graphics facade: the Paint, Path, Matrix, RenderNode, ColorFilter and
- * EmojiFactory natives a View tree reaches while it is built, measured and
- * laid out (A6), plus the Canvas and Surface natives that then draw it (A7).
+ * QNX graphics facade: the Paint, Path, Matrix, Region, RenderNode,
+ * ColorFilter and EmojiFactory natives a View tree reaches while it is built, measured and
+ * laid out (A6), the Canvas and Surface natives that then draw it (A7), and
+ * the StaticLayout line breaker that multi line and editable text needs (A9).
  * There is no Skia, minikin or hwui on the Q20, so these natives keep plain
  * state; text metrics come from FreeType (QNX sysroot) reading
  * $ANDROID_ROOT/fonts/Roboto-Regular.ttf, and drawing goes to the software
@@ -41,6 +42,7 @@
 #include <errno.h>
 #include <time.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -106,22 +108,35 @@ void decodeUtf16(const jchar* text, int start, int end, std::vector<uint32_t>* o
   }
 }
 
-// Advance in pixels of UTF-16 text[start, end).
-float advance(const FPaint* p, const jchar* text, int start, int end) {
+// Advance in pixels of each UTF-16 unit of text[start, end), into
+// out[0, end - start). A surrogate pair's advance sits on its first unit and
+// the second gets 0, as minikin lays it out; control chars (the paragraph's
+// newline) measure 0. The one width source for measuring (advance) and for
+// StaticLayout line breaking, so the two always agree.
+void charAdvances(const FPaint* p, const jchar* text, int start, int end, float* out) {
   std::vector<uint32_t> cps;
   decodeUtf16(text, start, end, &cps);
   pthread_mutex_lock(&gFontLock);
   FT_Face f = face();
-  double units = 0;
-  for (size_t i = 0; f != nullptr && i < cps.size(); i++) {
-    FT_Fixed a = 0;
-    FT_Get_Advance(f, FT_Get_Char_Index(f, cps[i]), FT_LOAD_NO_SCALE, &a);
-    units += a;
-  }
   double upem = f != nullptr ? f->units_per_EM : 1;
-  pthread_mutex_unlock(&gFontLock);
   double scale = p->textSize * p->textScaleX;
-  return units * scale / upem + cps.size() * p->letterSpacing * scale;
+  int u = 0;
+  for (uint32_t c : cps) {
+    FT_Fixed a = 0;
+    if (f != nullptr && c >= 0x20) FT_Get_Advance(f, FT_Get_Char_Index(f, c), FT_LOAD_NO_SCALE, &a);
+    out[u++] = c < 0x20 ? 0 : a * scale / upem + p->letterSpacing * scale;
+    if (c >= 0x10000) out[u++] = 0;
+  }
+  pthread_mutex_unlock(&gFontLock);
+}
+
+// Advance in pixels of UTF-16 text[start, end).
+float advance(const FPaint* p, const jchar* text, int start, int end) {
+  std::vector<float> w(end - start);
+  charAdvances(p, text, start, end, w.data());
+  double sum = 0;
+  for (float x : w) sum += x;
+  return sum;
 }
 
 struct Metrics { float top, ascent, descent, bottom, leading; };
@@ -366,6 +381,199 @@ JNINativeMethod gPaintMethods[] = {
   { "native_getRunAdvance", "(JJ[CIIIIZI)F", reinterpret_cast<void*>(Paint_getRunAdvance) },
 };
 
+// ---- StaticLayout: the line breaker minikin would be ----
+
+// One paragraph between nSetupParagraph and nComputeLineBreaks, as minikin's
+// LineBreaker holds it: widths per UTF-16 unit, offsets paragraph relative.
+//
+// ponytail: greedy only. Breaks come after runs of spaces (no UAX#14 rules, so
+// no break after a hyphen or between ideographs), there is no hyphenation, and
+// the high quality and balanced strategies run greedy too. A word wider than
+// the line breaks at the char that overflows. Upgrade path: icu BreakIterator
+// line rules (brkitr/line.brk is in the linked ICU data), or real minikin.
+struct FBreaker {
+  std::vector<jchar> text;
+  std::vector<float> widths;
+  float firstWidth = 0, restWidth = 0;
+  int firstLines = 1;
+  std::vector<jint> indents, tabStops;
+  int defaultTab = 20;
+
+  // minikin LineWidths::getLineWidth, line counted within the paragraph.
+  float lineWidth(int line) const {
+    float w = line < firstLines ? firstWidth : restWidth;
+    if (!indents.empty()) w -= indents[std::min<size_t>(line, indents.size() - 1)];
+    return w;
+  }
+  // minikin TabStops::nextTab: the first stop past x, else the next default multiple.
+  float nextTab(float x) const {
+    for (jint s : tabStops) {
+      if (s > x) return s;
+    }
+    return floorf(x / defaultTab + 1) * defaultTab;
+  }
+  void finish() {
+    text.clear();
+    widths.clear();
+    indents.clear();
+  }
+};
+
+FBreaker* breakerAt(jlong h) { return reinterpret_cast<FBreaker*>(h); }
+
+struct { jfieldID breaks, widths, flags; } gLineBreaks;
+const jint kTabMask = 0x20000000;  // StaticLayout.TAB_MASK: the line holds a tab
+
+// minikin's isLineEndSpace plus the control chars (tab, the trailing newline):
+// they hang past the line end and a break may follow them.
+bool isLineEndSpace(jchar c) {
+  return c < 0x20 || c == ' ' || c == 0x1680 || (c >= 0x2000 && c <= 0x200A && c != 0x2007) ||
+         c == 0x205F || c == 0x3000;
+}
+
+struct Breaks {
+  std::vector<jint> offsets, flags;
+  std::vector<jfloat> widths;
+  void push(int offset, float width, bool tab) {
+    offsets.push_back(offset);
+    widths.push_back(width);
+    flags.push_back(tab ? kTabMask : 0);
+  }
+};
+
+// Greedy breaks for b's paragraph. Each line is scanned from its start; the
+// reported width excludes trailing spaces, as minikin's postBreak does. A zero
+// width char (second surrogate unit, combining mark, replacement tail) never
+// overflows, so no line starts inside a char.
+void computeBreaks(const FBreaker& b, Breaks* out) {
+  int n = b.text.size();
+  if (n == 0) {
+    out->push(0, 0, false);  // minikin: an empty paragraph is one empty line
+    return;
+  }
+  for (int start = 0, line = 0; start < n; line++) {
+    float limit = b.lineWidth(line), x = 0, post = 0, candPost = 0;
+    int cand = -1, end = n;
+    bool tab = false, candTab = false;
+    for (int i = start; i < n; i++) {
+      jchar c = b.text[i];
+      bool space = isLineEndSpace(c);
+      float next = c == '\t' ? b.nextTab(x) : x + b.widths[i];
+      if (!space && b.widths[i] > 0 && next > limit && i > start) {
+        end = cand > start ? cand : i;
+        if (cand > start) {
+          post = candPost;
+          tab = candTab;
+        }
+        break;
+      }
+      x = next;
+      tab |= c == '\t';
+      if (!space) post = x;
+      if (space && (i + 1 == n || !isLineEndSpace(b.text[i + 1]))) {
+        cand = i + 1;
+        candPost = post;
+        candTab = tab;
+      }
+    }
+    out->push(end, post, tab);
+    start = end;
+  }
+}
+
+jlong SL_newBuilder(JNIEnv*, jclass) { return reinterpret_cast<jlong>(new FBreaker()); }
+void SL_freeBuilder(JNIEnv*, jclass, jlong h) { delete breakerAt(h); }
+void SL_finishBuilder(JNIEnv*, jclass, jlong h) { breakerAt(h)->finish(); }
+// Hyphenator.<clinit> loads sEmptyHyphenator through here with a null buffer.
+jlong SL_loadHyphenator(JNIEnv*, jclass, jobject, jint) { return 0; }
+void SL_setLocale(JNIEnv*, jclass, jlong, jstring, jlong) {}
+
+void SL_setupParagraph(JNIEnv* env, jclass, jlong h, jcharArray text, jint length, jfloat firstWidth,
+                       jint firstLines, jfloat restWidth, jintArray tabStops, jint defaultTab,
+                       jint /*strategy*/, jint /*hyphenationFrequency*/) {
+  FBreaker* b = breakerAt(h);
+  b->text.resize(length);
+  env->GetCharArrayRegion(text, 0, length, b->text.data());
+  b->widths.assign(length, 0);
+  b->firstWidth = firstWidth;
+  b->firstLines = firstLines;
+  b->restWidth = restWidth;
+  b->tabStops.clear();
+  if (tabStops != nullptr) {
+    b->tabStops.resize(env->GetArrayLength(tabStops));
+    env->GetIntArrayRegion(tabStops, 0, b->tabStops.size(), b->tabStops.data());
+  }
+  b->defaultTab = defaultTab > 0 ? defaultTab : 20;
+  b->indents.clear();  // StaticLayout sets them per paragraph, after this call
+}
+void SL_setIndents(JNIEnv* env, jclass, jlong h, jintArray indents) {
+  FBreaker* b = breakerAt(h);
+  b->indents.resize(env->GetArrayLength(indents));
+  env->GetIntArrayRegion(indents, 0, b->indents.size(), b->indents.data());
+}
+// The native paint handle is our FPaint; the typeface is always the default.
+jfloat SL_addStyleRun(JNIEnv* env, jclass, jlong h, jlong paint, jlong, jint start, jint end, jboolean) {
+  FBreaker* b = breakerAt(h);
+  if (!checkRange(env, start, end, b->text.size())) return 0;
+  charAdvances(paintAt(paint), b->text.data(), start, end, b->widths.data() + start);
+  double sum = 0;
+  for (int i = start; i < end; i++) sum += b->widths[i];
+  return sum;
+}
+void SL_addMeasuredRun(JNIEnv* env, jclass, jlong h, jint start, jint end, jfloatArray widths) {
+  FBreaker* b = breakerAt(h);
+  if (!checkRange(env, start, end, b->widths.size())) return;
+  env->GetFloatArrayRegion(widths, start, end - start, b->widths.data() + start);
+}
+void SL_addReplacementRun(JNIEnv* env, jclass, jlong h, jint start, jint end, jfloat width) {
+  FBreaker* b = breakerAt(h);
+  if (!checkRange(env, start, end, b->widths.size()) || start == end) return;
+  std::fill(b->widths.begin() + start, b->widths.begin() + end, 0.0f);
+  b->widths[start] = width;
+}
+void SL_getWidths(JNIEnv* env, jclass, jlong h, jfloatArray widths) {
+  FBreaker* b = breakerAt(h);
+  env->SetFloatArrayRegion(widths, 0, b->widths.size(), b->widths.data());
+}
+// Fills the recycled LineBreaks arrays, replacing them when they are too short
+// (stock recycleCopy), and returns the break count.
+jint SL_computeLineBreaks(JNIEnv* env, jclass, jlong h, jobject recycle, jintArray breaks,
+                          jfloatArray widths, jintArray flags, jint recycleLength) {
+  FBreaker* b = breakerAt(h);
+  Breaks out;
+  computeBreaks(*b, &out);
+  jint n = out.offsets.size();
+  if (recycleLength < n) {
+    breaks = env->NewIntArray(n);
+    widths = env->NewFloatArray(n);
+    flags = env->NewIntArray(n);
+    env->SetObjectField(recycle, gLineBreaks.breaks, breaks);
+    env->SetObjectField(recycle, gLineBreaks.widths, widths);
+    env->SetObjectField(recycle, gLineBreaks.flags, flags);
+  }
+  env->SetIntArrayRegion(breaks, 0, n, out.offsets.data());
+  env->SetFloatArrayRegion(widths, 0, n, out.widths.data());
+  env->SetIntArrayRegion(flags, 0, n, out.flags.data());
+  b->finish();
+  return n;
+}
+
+JNINativeMethod gStaticLayoutMethods[] = {
+  { "nNewBuilder", "()J", reinterpret_cast<void*>(SL_newBuilder) },
+  { "nFreeBuilder", "(J)V", reinterpret_cast<void*>(SL_freeBuilder) },
+  { "nFinishBuilder", "(J)V", reinterpret_cast<void*>(SL_finishBuilder) },
+  { "nLoadHyphenator", "(Ljava/nio/ByteBuffer;I)J", reinterpret_cast<void*>(SL_loadHyphenator) },
+  { "nSetLocale", "(JLjava/lang/String;J)V", reinterpret_cast<void*>(SL_setLocale) },
+  { "nSetupParagraph", "(J[CIFIF[IIII)V", reinterpret_cast<void*>(SL_setupParagraph) },
+  { "nSetIndents", "(J[I)V", reinterpret_cast<void*>(SL_setIndents) },
+  { "nAddStyleRun", "(JJJIIZ)F", reinterpret_cast<void*>(SL_addStyleRun) },
+  { "nAddMeasuredRun", "(JII[F)V", reinterpret_cast<void*>(SL_addMeasuredRun) },
+  { "nAddReplacementRun", "(JIIF)V", reinterpret_cast<void*>(SL_addReplacementRun) },
+  { "nGetWidths", "(J[F)V", reinterpret_cast<void*>(SL_getWidths) },
+  { "nComputeLineBreaks", "(JLandroid/text/StaticLayout$LineBreaks;[I[F[II)I",
+    reinterpret_cast<void*>(SL_computeLineBreaks) },
+};
+
 // ---- Path ----
 
 struct FPath {
@@ -547,6 +755,33 @@ jboolean Matrix_invert(JNIEnv*, jclass, jlong h, jlong inverse) {
   return true;
 }
 // isPts false maps vectors: no translation, affine part only.
+// The bounding box of the mapped corners (SkMatrix::mapRect); true while the
+// matrix keeps rects as rects (no rotation or skew).
+struct { jfieldID left, top, right, bottom; } gRectF;
+jboolean Matrix_rectStaysRect(JNIEnv*, jclass, jlong h) {
+  const float* m = matrixAt(h)->m;
+  return (m[1] == 0 && m[3] == 0) || (m[0] == 0 && m[4] == 0);
+}
+jboolean Matrix_mapRect(JNIEnv* env, jclass, jlong h, jobject dst, jobject src) {
+  const float* m = matrixAt(h)->m;
+  float xs[2] = {env->GetFloatField(src, gRectF.left), env->GetFloatField(src, gRectF.right)};
+  float ys[2] = {env->GetFloatField(src, gRectF.top), env->GetFloatField(src, gRectF.bottom)};
+  float l = 0, t = 0, r = 0, b = 0;
+  for (int i = 0; i < 4; i++) {
+    float x = xs[i & 1], y = ys[i >> 1], w = m[6] * x + m[7] * y + m[8];
+    if (w == 0) w = 1;
+    float mx = (m[0] * x + m[1] * y + m[2]) / w, my = (m[3] * x + m[4] * y + m[5]) / w;
+    l = i == 0 ? mx : std::min(l, mx);
+    r = i == 0 ? mx : std::max(r, mx);
+    t = i == 0 ? my : std::min(t, my);
+    b = i == 0 ? my : std::max(b, my);
+  }
+  env->SetFloatField(dst, gRectF.left, l);
+  env->SetFloatField(dst, gRectF.top, t);
+  env->SetFloatField(dst, gRectF.right, r);
+  env->SetFloatField(dst, gRectF.bottom, b);
+  return Matrix_rectStaysRect(env, nullptr, h);
+}
 void Matrix_mapPoints(JNIEnv* env, jclass, jlong h, jfloatArray dst, jint dstIndex, jfloatArray src,
                       jint srcIndex, jint count, jboolean isPts) {
   const float* m = matrixAt(h)->m;
@@ -581,6 +816,8 @@ JNINativeMethod gMatrixMethods[] = {
   { "finalizer", "(J)V", reinterpret_cast<void*>(Matrix_finalizer) },
   { "native_isIdentity", "(J)Z", reinterpret_cast<void*>(Matrix_isIdentity) },
   { "native_isAffine", "(J)Z", reinterpret_cast<void*>(Matrix_isAffine) },
+  { "native_rectStaysRect", "(J)Z", reinterpret_cast<void*>(Matrix_rectStaysRect) },
+  { "native_mapRect", "(JLandroid/graphics/RectF;Landroid/graphics/RectF;)Z", reinterpret_cast<void*>(Matrix_mapRect) },
   { "native_reset", "(J)V", reinterpret_cast<void*>(Matrix_reset) },
   { "native_set", "(JJ)V", reinterpret_cast<void*>(Matrix_set) },
   { "native_setTranslate", "(JFF)V", reinterpret_cast<void*>(Matrix_setTranslate) },
@@ -686,6 +923,28 @@ jboolean RN_setHasOverlappingRendering(JNIEnv*, jclass, jlong h, jboolean v) { r
 jboolean RN_hasOverlappingRendering(JNIEnv*, jclass, jlong h) { return nodeAt(h)->overlapping; }
 jboolean RN_hasShadow(JNIEnv*, jclass, jlong) { return false; }
 
+// View.getMatrix(), as hwui's RenderProperties::updateMatrix builds it:
+// translate, then scale about the pivot. ponytail: rotation and the static
+// or animation matrix are not composed; nothing on the A ladder rotates.
+void nodeMatrix(const FNode* n, float* m) {
+  float px = n->pivotSet ? n->pivotX : (n->right - n->left) / 2.0f;
+  float py = n->pivotSet ? n->pivotY : (n->bottom - n->top) / 2.0f;
+  m[0] = n->scaleX; m[1] = 0; m[2] = n->translationX + px - n->scaleX * px;
+  m[3] = 0; m[4] = n->scaleY; m[5] = n->translationY + py - n->scaleY * py;
+  m[6] = 0; m[7] = 0; m[8] = 1;
+}
+void RN_getTransformMatrix(JNIEnv*, jclass, jlong h, jlong matrix) { nodeMatrix(nodeAt(h), matrixAt(matrix)->m); }
+void RN_getInverseTransformMatrix(JNIEnv*, jclass, jlong h, jlong matrix) {
+  float m[9];
+  nodeMatrix(nodeAt(h), m);
+  // Scale and translate per axis; a zero scale (not invertible) maps to 1.
+  float sx = m[0] != 0 ? 1 / m[0] : 1, sy = m[4] != 0 ? 1 / m[4] : 1;
+  float* inv = matrixAt(matrix)->m;
+  inv[0] = sx; inv[1] = 0; inv[2] = -m[2] * sx;
+  inv[3] = 0; inv[4] = sy; inv[5] = -m[5] * sy;
+  inv[6] = 0; inv[7] = 0; inv[8] = 1;
+}
+
 // Clip, outline, layer and projection state only matters to drawing: accept it.
 jboolean RN_acceptJ(JNIEnv*, jclass, jlong) { return true; }
 jboolean RN_acceptJI(JNIEnv*, jclass, jlong, jint) { return true; }
@@ -738,8 +997,100 @@ JNINativeMethod gRenderNodeMethods[] = {
   { "nSetOutlineEmpty", "(J)Z", reinterpret_cast<void*>(RN_acceptJ) },
   { "nSetOutlineNone", "(J)Z", reinterpret_cast<void*>(RN_acceptJ) },
   { "nSetRevealClip", "(JZFFF)Z", reinterpret_cast<void*>(RN_acceptRevealClip) },
+  { "nGetTransformMatrix", "(JJ)V", reinterpret_cast<void*>(RN_getTransformMatrix) },
+  { "nAddAnimator", "(JJ)V", reinterpret_cast<void*>(RN_acceptJJ) },
+  { "nEndAllAnimators", "(J)V", reinterpret_cast<void*>(RN_acceptJ) },
+  { "nGetInverseTransformMatrix", "(JJ)V", reinterpret_cast<void*>(RN_getInverseTransformMatrix) },
 };
 #undef RN_PAIR
+
+// ---- RenderNodeAnimator: hwui's animators, finished on start ----
+
+// ViewAnimationUtils.createCircularReveal (the Calculator's clear and error
+// flash) builds one. There is no RenderThread here, so an animator finishes
+// the moment it starts: nStart calls back callOnFinished, the end listeners
+// run (AnimatorSets chained on them carry on), then moveToRunningState
+// notifies the start listeners. ponytail: no reveal clip and no motion, the
+// end state shows at once.
+struct FAnimator {
+  int refs = 0;
+  jlong duration = 300;
+  jobject listener = nullptr;  // global ref to the Java RenderNodeAnimator
+};
+jclass gRenderNodeAnimator;
+jmethodID gCallOnFinished;
+
+FAnimator* animatorAt(jlong h) { return reinterpret_cast<FAnimator*>(h); }
+jlong newAnimator() { return reinterpret_cast<jlong>(new FAnimator()); }
+jlong Anim_create(JNIEnv*, jclass, jint, jfloat) { return newAnimator(); }
+jlong Anim_createCanvasFloat(JNIEnv*, jclass, jlong, jfloat) { return newAnimator(); }
+jlong Anim_createCanvasPaint(JNIEnv*, jclass, jlong, jint, jfloat) { return newAnimator(); }
+jlong Anim_createReveal(JNIEnv*, jclass, jint, jint, jfloat, jfloat) { return newAnimator(); }
+void Anim_ignoreF(JNIEnv*, jclass, jlong, jfloat) {}
+void Anim_ignoreJ(JNIEnv*, jclass, jlong, jlong) {}
+void Anim_ignoreZ(JNIEnv*, jclass, jlong, jboolean) {}
+void Anim_ignore(JNIEnv*, jclass, jlong) {}
+void Anim_setDuration(JNIEnv*, jclass, jlong h, jlong d) { animatorAt(h)->duration = d; }
+jlong Anim_getDuration(JNIEnv*, jclass, jlong h) { return animatorAt(h)->duration; }
+void Anim_setListener(JNIEnv* env, jclass, jlong h, jobject listener) {
+  FAnimator* a = animatorAt(h);
+  if (a->listener != nullptr) env->DeleteGlobalRef(a->listener);
+  a->listener = listener != nullptr ? env->NewGlobalRef(listener) : nullptr;
+}
+// onFinished releases the Java reference, which can free the FAnimator:
+// nothing reads it after the call.
+void Anim_start(JNIEnv* env, jclass, jlong h) {
+  if (animatorAt(h)->listener == nullptr) return;
+  jobject self = env->NewLocalRef(animatorAt(h)->listener);
+  env->CallStaticVoidMethod(gRenderNodeAnimator, gCallOnFinished, self);
+  env->DeleteLocalRef(self);
+}
+
+JNINativeMethod gRenderNodeAnimatorMethods[] = {
+  { "nCreateAnimator", "(IF)J", reinterpret_cast<void*>(Anim_create) },
+  { "nCreateCanvasPropertyFloatAnimator", "(JF)J", reinterpret_cast<void*>(Anim_createCanvasFloat) },
+  { "nCreateCanvasPropertyPaintAnimator", "(JIF)J", reinterpret_cast<void*>(Anim_createCanvasPaint) },
+  { "nCreateRevealAnimator", "(IIFF)J", reinterpret_cast<void*>(Anim_createReveal) },
+  { "nSetStartValue", "(JF)V", reinterpret_cast<void*>(Anim_ignoreF) },
+  { "nSetDuration", "(JJ)V", reinterpret_cast<void*>(Anim_setDuration) },
+  { "nGetDuration", "(J)J", reinterpret_cast<void*>(Anim_getDuration) },
+  { "nSetStartDelay", "(JJ)V", reinterpret_cast<void*>(Anim_ignoreJ) },
+  { "nSetInterpolator", "(JJ)V", reinterpret_cast<void*>(Anim_ignoreJ) },
+  { "nSetAllowRunningAsync", "(JZ)V", reinterpret_cast<void*>(Anim_ignoreZ) },
+  { "nSetListener", "(JLandroid/view/RenderNodeAnimator;)V", reinterpret_cast<void*>(Anim_setListener) },
+  { "nStart", "(J)V", reinterpret_cast<void*>(Anim_start) },
+  { "nEnd", "(J)V", reinterpret_cast<void*>(Anim_ignore) },
+};
+
+// VirtualRefBasePtr: here it only ever wraps an FAnimator.
+void Ref_inc(JNIEnv*, jclass, jlong h) { animatorAt(h)->refs++; }
+void Ref_dec(JNIEnv* env, jclass, jlong h) {
+  FAnimator* a = animatorAt(h);
+  if (--a->refs > 0) return;
+  if (a->listener != nullptr) env->DeleteGlobalRef(a->listener);
+  delete a;
+}
+JNINativeMethod gVirtualRefBasePtrMethods[] = {
+  { "nIncStrong", "(J)V", reinterpret_cast<void*>(Ref_inc) },
+  { "nDecStrong", "(J)V", reinterpret_cast<void*>(Ref_dec) },
+};
+
+// Native interpolators feed only the animators above, which ignore them.
+jlong Interp_plain(JNIEnv*, jclass) { return 1; }
+jlong Interp_factor(JNIEnv*, jclass, jfloat) { return 1; }
+jlong Interp_lut(JNIEnv*, jclass, jfloatArray) { return 1; }
+JNINativeMethod gInterpolatorFactoryMethods[] = {
+  { "createAccelerateDecelerateInterpolator", "()J", reinterpret_cast<void*>(Interp_plain) },
+  { "createAccelerateInterpolator", "(F)J", reinterpret_cast<void*>(Interp_factor) },
+  { "createAnticipateInterpolator", "(F)J", reinterpret_cast<void*>(Interp_factor) },
+  { "createAnticipateOvershootInterpolator", "(F)J", reinterpret_cast<void*>(Interp_factor) },
+  { "createBounceInterpolator", "()J", reinterpret_cast<void*>(Interp_plain) },
+  { "createCycleInterpolator", "(F)J", reinterpret_cast<void*>(Interp_factor) },
+  { "createDecelerateInterpolator", "(F)J", reinterpret_cast<void*>(Interp_factor) },
+  { "createLinearInterpolator", "()J", reinterpret_cast<void*>(Interp_plain) },
+  { "createOvershootInterpolator", "(F)J", reinterpret_cast<void*>(Interp_factor) },
+  { "createLutInterpolator", "([F)J", reinterpret_cast<void*>(Interp_lut) },
+};
 
 // ---- ColorFilter, EmojiFactory ----
 
@@ -752,6 +1103,14 @@ JNINativeMethod gPorterDuffColorFilterMethods[] = {
 };
 JNINativeMethod gColorFilterMethods[] = {
   { "destroyFilter", "(J)V", reinterpret_cast<void*>(ColorFilter_destroy) },
+};
+// Xfermodes (EdgeEffect's SRC_ATOP glow): the same kind of handle, never drawn.
+jlong Xfermode_createPorterDuff(JNIEnv*, jclass, jint) { return reinterpret_cast<jlong>(new int(0)); }
+JNINativeMethod gPorterDuffXfermodeMethods[] = {
+  { "nativeCreateXfermode", "(I)J", reinterpret_cast<void*>(Xfermode_createPorterDuff) },
+};
+JNINativeMethod gXfermodeMethods[] = {
+  { "finalizer", "(J)V", reinterpret_cast<void*>(ColorFilter_destroy) },
 };
 
 // No emoji bitmaps: Layout.<clinit> asks once and accepts null.
@@ -839,6 +1198,13 @@ void Canvas_translate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) {
 void Canvas_ignore_ff(JNIEnv*, jclass, jlong, jfloat, jfloat) {}
 void Canvas_ignore_f(JNIEnv*, jclass, jlong, jfloat) {}
 void Canvas_ignore_j(JNIEnv*, jclass, jlong, jlong) {}
+// A transformed view (an animation in flight) concats its matrix. ponytail:
+// the engine has no scale, so only the translation part applies and a
+// scaled view draws unscaled at its moved origin.
+void Canvas_concat(JNIEnv*, jclass, jlong h, jlong matrix) {
+  const float* m = matrixAt(matrix)->m;
+  canvasAt(h)->translate(m[2], m[5]);
+}
 
 jboolean Canvas_clipRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b, jint) {
   return canvasAt(h)->clipRect(rectOf(l, t, r, b)) ? JNI_TRUE : JNI_FALSE;
@@ -881,6 +1247,11 @@ void Canvas_drawRoundRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r
   // coverage is a loop in raster.cc the day a design needs it.
   DTRACE("drawRoundRect %.0f,%.0f %.0fx%.0f #%08x", l, t, r - l, b - t, paintAt(paint)->color);
   canvasAt(h)->drawRect(rectOf(l, t, r, b), paintAt(paint)->color);
+}
+// Ripples (RippleDrawable's software path). ponytail: a stroke paint fills too.
+void Canvas_drawCircle(JNIEnv*, jclass, jlong h, jfloat cx, jfloat cy, jfloat radius, jlong paint) {
+  DTRACE("drawCircle %.0f,%.0f r=%.0f #%08x", cx, cy, radius, paintAt(paint)->color);
+  canvasAt(h)->drawCircle(cx, cy, radius, paintAt(paint)->color);
 }
 
 // One glyph run at a baseline origin. textScaleX and letterSpacing are in the
@@ -943,7 +1314,7 @@ JNINativeMethod gCanvasMethods[] = {
   { "native_scale", "(JFF)V", reinterpret_cast<void*>(Canvas_ignore_ff) },
   { "native_skew", "(JFF)V", reinterpret_cast<void*>(Canvas_ignore_ff) },
   { "native_rotate", "(JF)V", reinterpret_cast<void*>(Canvas_ignore_f) },
-  { "native_concat", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
+  { "native_concat", "(JJ)V", reinterpret_cast<void*>(Canvas_concat) },
   { "native_setMatrix", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
   { "native_getCTM", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
   { "nativeSetDrawFilter", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
@@ -957,6 +1328,7 @@ JNINativeMethod gCanvasMethods[] = {
   { "native_drawPaint", "(JJ)V", reinterpret_cast<void*>(Canvas_drawPaint) },
   { "native_drawRect", "(JFFFFJ)V", reinterpret_cast<void*>(Canvas_drawRect) },
   { "native_drawRoundRect", "(JFFFFFFJ)V", reinterpret_cast<void*>(Canvas_drawRoundRect) },
+  { "native_drawCircle", "(JFFFJ)V", reinterpret_cast<void*>(Canvas_drawCircle) },
   { "native_drawText", "(J[CIIFFIJJ)V", reinterpret_cast<void*>(Canvas_drawText_C) },
   { "native_drawText", "(JLjava/lang/String;IIFFIJJ)V", reinterpret_cast<void*>(Canvas_drawText_String) },
   { "native_drawTextRun", "(J[CIIIIFFZJJ)V", reinterpret_cast<void*>(Canvas_drawTextRun_C) },
@@ -1044,6 +1416,176 @@ JNINativeMethod gSurfaceMethods[] = {
   { "nativeIsValid", "(J)Z", reinterpret_cast<void*>(Surface_isValid) },
 };
 
+// ---- Region ----
+
+// View.AttachInfo builds one (InternalInsetsInfo.touchableRegion) and the
+// view tree uses them for insets and transparent areas.
+// ponytail: a Region is its bounding rect. Union keeps the bounding box,
+// difference and xor keep the first operand unless it is fully covered, so
+// contains and quickReject can say yes where SkRegion would say no. Path,
+// parcel and scale natives land when a trace reaches them.
+typedef raster::Rect FRegion;
+jfieldID gRegionNative;
+
+FRegion* regionAt(jlong h) { return reinterpret_cast<FRegion*>(h); }
+FRegion* regionOf(JNIEnv* env, jobject r) { return regionAt(env->GetLongField(r, gRegionNative)); }
+
+FRegion unite(const FRegion& a, const FRegion& b) {
+  if (a.empty()) return b;
+  if (b.empty()) return a;
+  return FRegion(std::min(a.l, b.l), std::min(a.t, b.t), std::max(a.r, b.r), std::max(a.b, b.b));
+}
+bool covers(const FRegion& outer, const FRegion& in) {
+  return outer.l <= in.l && outer.t <= in.t && outer.r >= in.r && outer.b >= in.b;
+}
+// Region.Op order, as SkRegion::Op: DIFFERENCE, INTERSECT, UNION, XOR,
+// REVERSE_DIFFERENCE, REPLACE. Operands by value: dst may be one of them.
+jboolean regionOp(FRegion* dst, FRegion a, FRegion b, jint op) {
+  switch (op) {
+    case 0: *dst = covers(b, a) ? FRegion() : a; break;
+    case 1: *dst = a.intersect(b); break;
+    case 2: *dst = unite(a, b); break;
+    case 4: *dst = covers(a, b) ? FRegion() : b; break;
+    case 5: *dst = b; break;
+    default: *dst = a; break;
+  }
+  return !dst->empty();
+}
+FRegion rectFrom(JNIEnv* env, jobject r) {
+  FRegion x(env->GetIntField(r, gRect.left), env->GetIntField(r, gRect.top),
+            env->GetIntField(r, gRect.right), env->GetIntField(r, gRect.bottom));
+  return x.empty() ? FRegion() : x;
+}
+
+jlong Region_constructor(JNIEnv*, jclass) { return reinterpret_cast<jlong>(new FRegion()); }
+void Region_destructor(JNIEnv*, jclass, jlong h) { delete regionAt(h); }
+void Region_setRegion(JNIEnv*, jclass, jlong dst, jlong src) { *regionAt(dst) = *regionAt(src); }
+jboolean Region_setRect(JNIEnv*, jclass, jlong dst, jint l, jint t, jint r, jint b) {
+  return regionOp(regionAt(dst), FRegion(), FRegion(l, t, r, b), 5);
+}
+jboolean Region_getBounds(JNIEnv* env, jclass, jlong h, jobject rect) {
+  const FRegion* g = regionAt(h);
+  env->SetIntField(rect, gRect.left, g->l);
+  env->SetIntField(rect, gRect.top, g->t);
+  env->SetIntField(rect, gRect.right, g->r);
+  env->SetIntField(rect, gRect.bottom, g->b);
+  return !g->empty();
+}
+jboolean Region_opRect(JNIEnv*, jclass, jlong dst, jint l, jint t, jint r, jint b, jint op) {
+  return regionOp(regionAt(dst), *regionAt(dst), FRegion(l, t, r, b), op);
+}
+jboolean Region_opRectRegion(JNIEnv* env, jclass, jlong dst, jobject rect, jlong region, jint op) {
+  return regionOp(regionAt(dst), rectFrom(env, rect), *regionAt(region), op);
+}
+jboolean Region_opRegions(JNIEnv*, jclass, jlong dst, jlong a, jlong b, jint op) {
+  return regionOp(regionAt(dst), *regionAt(a), *regionAt(b), op);
+}
+jboolean Region_equals(JNIEnv*, jclass, jlong a, jlong b) {
+  const FRegion &x = *regionAt(a), &y = *regionAt(b);
+  return x.l == y.l && x.t == y.t && x.r == y.r && x.b == y.b;
+}
+jboolean Region_isEmpty(JNIEnv* env, jobject o) { return regionOf(env, o)->empty(); }
+jboolean Region_isRect(JNIEnv* env, jobject o) { return !regionOf(env, o)->empty(); }
+jboolean Region_isComplex(JNIEnv*, jobject) { return false; }
+jboolean Region_contains(JNIEnv* env, jobject o, jint x, jint y) {
+  const FRegion* g = regionOf(env, o);
+  return x >= g->l && x < g->r && y >= g->t && y < g->b;
+}
+jboolean Region_quickContains(JNIEnv* env, jobject o, jint l, jint t, jint r, jint b) {
+  FRegion in(l, t, r, b);
+  return !in.empty() && covers(*regionOf(env, o), in);
+}
+jboolean Region_quickRejectRect(JNIEnv* env, jobject o, jint l, jint t, jint r, jint b) {
+  return regionOf(env, o)->intersect(FRegion(l, t, r, b)).empty();
+}
+jboolean Region_quickRejectRegion(JNIEnv* env, jobject o, jobject other) {
+  return regionOf(env, o)->intersect(*regionOf(env, other)).empty();
+}
+void Region_translate(JNIEnv* env, jobject o, jint dx, jint dy, jobject dst) {
+  FRegion g = *regionOf(env, o);
+  if (!g.empty()) g = FRegion(g.l + dx, g.t + dy, g.r + dx, g.b + dy);
+  *regionOf(env, dst != nullptr ? dst : o) = g;
+}
+
+// ---- Paint.getTextBounds (needs gRect, so it lives down here) ----
+
+// The union of the glyphs' ink boxes with the pen advancing by the measure
+// widths, rounded out as SkRect::roundOut does; baseline at 0, y down.
+void textBounds(JNIEnv* env, const FPaint* p, const jchar* text, int start, int end, jobject rect) {
+  std::vector<float> adv(end - start);
+  charAdvances(p, text, start, end, adv.data());
+  std::vector<uint32_t> cps;
+  decodeUtf16(text, start, end, &cps);
+  float l = 0, t = 0, r = 0, b = 0, pen = 0;
+  bool any = false;
+  pthread_mutex_lock(&gFontLock);
+  FT_Face f = face();
+  double sy = f != nullptr ? p->textSize / f->units_per_EM : 0, sx = sy * p->textScaleX;
+  int u = 0;
+  for (uint32_t c : cps) {
+    if (f != nullptr && c >= 0x20 && FT_Load_Glyph(f, FT_Get_Char_Index(f, c), FT_LOAD_NO_SCALE) == 0) {
+      const FT_Glyph_Metrics& m = f->glyph->metrics;
+      if (m.width > 0 && m.height > 0) {
+        float x0 = pen + m.horiBearingX * sx, x1 = x0 + m.width * sx;
+        float y0 = -m.horiBearingY * sy, y1 = y0 + m.height * sy;
+        l = any ? std::min(l, x0) : x0;
+        t = any ? std::min(t, y0) : y0;
+        r = any ? std::max(r, x1) : x1;
+        b = any ? std::max(b, y1) : y1;
+        any = true;
+      }
+    }
+    pen += adv[u];
+    u += c >= 0x10000 ? 2 : 1;
+  }
+  pthread_mutex_unlock(&gFontLock);
+  env->SetIntField(rect, gRect.left, (int)floorf(l));
+  env->SetIntField(rect, gRect.top, (int)floorf(t));
+  env->SetIntField(rect, gRect.right, (int)ceilf(r));
+  env->SetIntField(rect, gRect.bottom, (int)ceilf(b));
+}
+void Paint_getStringBounds(JNIEnv* env, jclass, jlong h, jlong, jstring text, jint start, jint end, jint,
+                           jobject rect) {
+  if (!checkRange(env, start, end, env->GetStringLength(text))) return;
+  const jchar* chars = env->GetStringChars(text, nullptr);
+  textBounds(env, paintAt(h), chars, start, end, rect);
+  env->ReleaseStringChars(text, chars);
+}
+void Paint_getCharArrayBounds(JNIEnv* env, jclass, jlong h, jlong, jcharArray text, jint index, jint count,
+                              jint, jobject rect) {
+  if (!checkRange(env, index, index + count, env->GetArrayLength(text))) return;
+  jchar* chars = env->GetCharArrayElements(text, nullptr);
+  textBounds(env, paintAt(h), chars, index, index + count, rect);
+  env->ReleaseCharArrayElements(text, chars, JNI_ABORT);
+}
+
+JNINativeMethod gPaintBoundsMethods[] = {
+  { "nativeGetStringBounds", "(JJLjava/lang/String;IIILandroid/graphics/Rect;)V",
+    reinterpret_cast<void*>(Paint_getStringBounds) },
+  { "nativeGetCharArrayBounds", "(JJ[CIIILandroid/graphics/Rect;)V",
+    reinterpret_cast<void*>(Paint_getCharArrayBounds) },
+};
+
+JNINativeMethod gRegionMethods[] = {
+  { "nativeConstructor", "()J", reinterpret_cast<void*>(Region_constructor) },
+  { "nativeDestructor", "(J)V", reinterpret_cast<void*>(Region_destructor) },
+  { "nativeSetRegion", "(JJ)V", reinterpret_cast<void*>(Region_setRegion) },
+  { "nativeSetRect", "(JIIII)Z", reinterpret_cast<void*>(Region_setRect) },
+  { "nativeGetBounds", "(JLandroid/graphics/Rect;)Z", reinterpret_cast<void*>(Region_getBounds) },
+  { "nativeOp", "(JIIIII)Z", reinterpret_cast<void*>(Region_opRect) },
+  { "nativeOp", "(JLandroid/graphics/Rect;JI)Z", reinterpret_cast<void*>(Region_opRectRegion) },
+  { "nativeOp", "(JJJI)Z", reinterpret_cast<void*>(Region_opRegions) },
+  { "nativeEquals", "(JJ)Z", reinterpret_cast<void*>(Region_equals) },
+  { "isEmpty", "()Z", reinterpret_cast<void*>(Region_isEmpty) },
+  { "isRect", "()Z", reinterpret_cast<void*>(Region_isRect) },
+  { "isComplex", "()Z", reinterpret_cast<void*>(Region_isComplex) },
+  { "contains", "(II)Z", reinterpret_cast<void*>(Region_contains) },
+  { "quickContains", "(IIII)Z", reinterpret_cast<void*>(Region_quickContains) },
+  { "quickReject", "(IIII)Z", reinterpret_cast<void*>(Region_quickRejectRect) },
+  { "quickReject", "(Landroid/graphics/Region;)Z", reinterpret_cast<void*>(Region_quickRejectRegion) },
+  { "translate", "(IILandroid/graphics/Region;)V", reinterpret_cast<void*>(Region_translate) },
+};
+
 }  // namespace
 
 void register_qnx_graphics(JNIEnv* env) {
@@ -1068,7 +1610,20 @@ void register_qnx_graphics(JNIEnv* env) {
   gRect.top = env->GetFieldID(rect, "top", "I");
   gRect.right = env->GetFieldID(rect, "right", "I");
   gRect.bottom = env->GetFieldID(rect, "bottom", "I");
+  jclass rectF = env->FindClass("android/graphics/RectF");
+  gRectF.left = env->GetFieldID(rectF, "left", "F");
+  gRectF.top = env->GetFieldID(rectF, "top", "F");
+  gRectF.right = env->GetFieldID(rectF, "right", "F");
+  gRectF.bottom = env->GetFieldID(rectF, "bottom", "F");
+  jclass lineBreaks = env->FindClass("android/text/StaticLayout$LineBreaks");
+  gLineBreaks.breaks = env->GetFieldID(lineBreaks, "breaks", "[I");
+  gLineBreaks.widths = env->GetFieldID(lineBreaks, "widths", "[F");
+  gLineBreaks.flags = env->GetFieldID(lineBreaks, "flags", "[I");
   jniRegisterNativeMethods(env, "android/graphics/Paint", gPaintMethods, NELEM(gPaintMethods));
+  jniRegisterNativeMethods(env, "android/text/StaticLayout", gStaticLayoutMethods, NELEM(gStaticLayoutMethods));
+  gRegionNative = env->GetFieldID(env->FindClass("android/graphics/Region"), "mNativeRegion", "J");
+  jniRegisterNativeMethods(env, "android/graphics/Region", gRegionMethods, NELEM(gRegionMethods));
+  jniRegisterNativeMethods(env, "android/graphics/Paint", gPaintBoundsMethods, NELEM(gPaintBoundsMethods));
   jniRegisterNativeMethods(env, "android/graphics/Canvas", gCanvasMethods, NELEM(gCanvasMethods));
   jniRegisterNativeMethods(env, "android/view/Surface", gSurfaceMethods, NELEM(gSurfaceMethods));
   jniRegisterNativeMethods(env, "android/graphics/Path", gPathMethods, NELEM(gPathMethods));
@@ -1077,5 +1632,16 @@ void register_qnx_graphics(JNIEnv* env) {
   jniRegisterNativeMethods(env, "android/graphics/PorterDuffColorFilter", gPorterDuffColorFilterMethods,
                            NELEM(gPorterDuffColorFilterMethods));
   jniRegisterNativeMethods(env, "android/graphics/ColorFilter", gColorFilterMethods, NELEM(gColorFilterMethods));
+  jniRegisterNativeMethods(env, "android/graphics/PorterDuffXfermode", gPorterDuffXfermodeMethods,
+                           NELEM(gPorterDuffXfermodeMethods));
+  jniRegisterNativeMethods(env, "android/graphics/Xfermode", gXfermodeMethods, NELEM(gXfermodeMethods));
+  gRenderNodeAnimator = static_cast<jclass>(env->NewGlobalRef(env->FindClass("android/view/RenderNodeAnimator")));
+  gCallOnFinished = env->GetStaticMethodID(gRenderNodeAnimator, "callOnFinished", "(Landroid/view/RenderNodeAnimator;)V");
+  jniRegisterNativeMethods(env, "android/view/RenderNodeAnimator", gRenderNodeAnimatorMethods,
+                           NELEM(gRenderNodeAnimatorMethods));
+  jniRegisterNativeMethods(env, "com/android/internal/util/VirtualRefBasePtr", gVirtualRefBasePtrMethods,
+                           NELEM(gVirtualRefBasePtrMethods));
+  jniRegisterNativeMethods(env, "com/android/internal/view/animation/NativeInterpolatorFactoryHelper",
+                           gInterpolatorFactoryMethods, NELEM(gInterpolatorFactoryMethods));
   jniRegisterNativeMethods(env, "android/emoji/EmojiFactory", gEmojiFactoryMethods, NELEM(gEmojiFactoryMethods));
 }

@@ -10,6 +10,11 @@
 #   prober  Prober APK headless self test (main), AOT then interpreter
 #   facade  [props|res|looper|gfx|activity|all] our launcher running the Prober
 #           Activity headless (A6), each mode one facade layer; default activity
+#   tap     [id ...] [id=text ...] headless real touch taps on the app's views,
+#           then checks; e.g. tap bump_button "counter_text=count: 1"
+#   snap    copy the last live frame to out/frame.rgba (raw 720x720 RGBA)
+#   live    the app ($APP_APK) live on the panel: needs the resident root
+#           compositor (FACADE_WATCH=1) watching $Q20_DRAW_RAW; log in out/live.log
 #
 # Hello prints "Hello from ART 6 on QNX! gc ok" only if a full GC ran with a
 # live heap object, so it doubles as the GC regression check.
@@ -28,6 +33,11 @@ telephony-common voip-common ims-common apache-xml org.apache.http.legacy.boot c
 BCP13=""
 for d in $BOOT13_DEX; do BCP13="$BCP13:$Q/boot/$d.dex"; done
 BCP13=${BCP13#:}
+
+# The app the facade and live targets run: the Prober unless these name another,
+# e.g. APP_APK=$Q/calculator.apk APP_ACT=com.android.calculator2.Calculator
+APP_APK=${APP_APK:-$Q/q20prober.apk}
+APP_ACT=${APP_ACT:-dev.q20.prober.Q20Prober}
 
 # dex2oat flags proven on device: Quick backend (the optimizing backend is not
 # built), krait variant, -j1 (parallel compile is unverified since the GC fix).
@@ -138,7 +148,7 @@ run_prober() {
 }
 
 run_facade() {
-  # Our launcher (q20facade.jar) running the unmodified Prober APK, one mode.
+  # Our launcher (q20facade.jar) running an unmodified APK ($APP_APK), one mode.
   for mode in aot int; do
     case $mode in
       aot) xflags="" ;;
@@ -147,11 +157,32 @@ run_facade() {
     log=$Q/out/facade-$1-$mode.log
     echo "=== facade $1 ($mode)"
     $Q/bin/dalvikvm -Xbootclasspath:$BCP13 -Ximage:$Q/out/boot.art -Xnorelocate $xflags \
-      -cp $Q/q20facade.jar:$Q/q20prober.apk dev.q20.facade.Launcher $1 \
-      $Q/q20prober.apk dev.q20.prober.Q20Prober > $log 2>&1
+      -cp $Q/q20facade.jar:$APP_APK dev.q20.facade.Launcher $1 \
+      $APP_APK $APP_ACT > $log 2>&1
     echo "dalvikvm exit=$?"
     grep -E "facade|Q20Prober|UnsatisfiedLinkError|Exception|Error|FATAL|art: fatal" $log | sed 80q
   done
+}
+
+run_live() {
+  # Never returns: the launcher polls the compositor's input file and redraws
+  # into the frame file the compositor posts. Runs as long as the shell that
+  # started it (no nohup here), so hold that ssh session open.
+  export Q20_DRAW_RAW=${Q20_DRAW_RAW:-/tmp/frame.rgba}
+  echo "=== live: frame $Q20_DRAW_RAW, log $Q/out/live.log"
+  exec $Q/bin/dalvikvm -Xbootclasspath:$BCP13 -Ximage:$Q/out/boot.art -Xnorelocate \
+    -cp $Q/q20facade.jar:$APP_APK dev.q20.facade.Launcher live \
+    $APP_APK $APP_ACT > $Q/out/live.log 2>&1
+}
+
+run_tap() {
+  # The app's Activity, real MotionEvent taps on the named views in order,
+  # then each id=text checked (Launcher tap mode).
+  log=$Q/out/tap.log
+  $Q/bin/dalvikvm -Xbootclasspath:$BCP13 -Ximage:$Q/out/boot.art -Xnorelocate \
+    -cp $Q/q20facade.jar:$APP_APK dev.q20.facade.Launcher tap $APP_APK $APP_ACT "$@" > $log 2>&1
+  echo "dalvikvm exit=$?"
+  grep -v "^art " $log | grep -E "facade (check|: tap)|UnsatisfiedLinkError|Exception|art: fatal" | sed 60q
 }
 
 case ${1:-all} in
@@ -159,10 +190,13 @@ case ${1:-all} in
   boot13) build_image boot $BOOT13_DEX ;;
   hello)  run_hello ;;
   prober) run_prober ;;
-  facade) aot $Q/q20prober.apk && aot $Q/q20facade.jar
+  facade) aot $APP_APK && aot $Q/q20facade.jar
           w=${2:-activity}
           [ "$w" = all ] && w="props res looper gfx activity"
           for x in $w; do run_facade $x; done ;;
+  live)   aot $APP_APK && aot $Q/q20facade.jar && run_live ;;
+  snap)   cp ${Q20_DRAW_RAW:-/tmp/frame.rgba} $Q/out/frame.rgba && ls -l $Q/out/frame.rgba ;;  # the panel's last frame, 720x720 RGBA
+  tap)    shift; aot $APP_APK && aot $Q/q20facade.jar && run_tap "$@" ;;
   all)    build_image core $CORE_DEX && run_hello ;;
-  *)      echo "usage: sh run_core.sh [core|boot13|hello|prober|facade [mode]|all]"; exit 2 ;;
+  *)      echo "usage: sh run_core.sh [core|boot13|hello|prober|facade [mode]|tap [ids]|live|snap|all]"; exit 2 ;;
 esac
