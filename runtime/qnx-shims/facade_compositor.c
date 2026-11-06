@@ -82,7 +82,9 @@ static void publish_input(const char* framepath) {
 }
 
 static void pump_input(screen_context_t ctx, screen_event_t ev, const char* framepath) {
-  for (;;) {
+  /* Bounded drain: SCREEN_EVENT_IDLE (12) can arrive in a flood and must not
+   * starve the frame poll (found the hard way: no redraw ever ran). */
+  for (int budget = 16; budget > 0; budget--) {
     errno = 0;
     int r = screen_get_event(ctx, ev, 0);
     if (r != 0) {
@@ -92,7 +94,7 @@ static void pump_input(screen_context_t ctx, screen_event_t ev, const char* fram
     }
     int type = -1;
     screen_get_event_property_iv(ev, SCREEN_PROPERTY_TYPE, &type);
-    if (type == SCREEN_EVENT_NONE) break;  /* poll idle: success + empty event */
+    if (type == SCREEN_EVENT_NONE || type == SCREEN_EVENT_IDLE) continue;  /* poll idle */
     /* BB10's screen service delivers touch as device-specific types:
      * 100 = touch down, 101 = touch move, 102 = touch up (never the public
      * SCREEN_EVENT_POINTER - found empirically on the Q20). */
@@ -126,9 +128,18 @@ static int show_frame(const char* path, int size, unsigned char* frame,
   size_t got = fread(frame, 1, want, f);
   fclose(f);
   if (got != want) return -2;
-  const size_t copyBytes = ((size_t)stride < rowBytes) ? (size_t)stride : rowBytes;
-  for (int y = 0; y < size; y++)
-    memcpy((unsigned char*)ptr + (size_t)y * stride, frame + (size_t)y * rowBytes, copyBytes);
+  for (int y = 0; y < size; y++) {
+    unsigned char* dst = (unsigned char*)ptr + (size_t)y * stride;
+    const unsigned char* src = frame + (size_t)y * rowBytes;
+    /* The panel consumes BGRA in practice (a pure-blue frame renders red):
+     * swap R/B per pixel. Found 2026-11-06 with a hue probe. */
+    for (int x = 0; x < size; x++) {
+      dst[x * 4 + 0] = src[x * 4 + 2];
+      dst[x * 4 + 1] = src[x * 4 + 1];
+      dst[x * 4 + 2] = src[x * 4 + 0];
+      dst[x * 4 + 3] = src[x * 4 + 3];
+    }
+  }
   int rect[4] = {0, 0, size, size};
   int prc = screen_post_window(win, buf, 1, rect, 0);
   screen_flush_context(ctx, 0);
