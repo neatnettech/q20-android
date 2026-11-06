@@ -33,14 +33,29 @@ latency, with the Navigator retired.
 - Root sshd remote PATH is bare:
   `export PATH=/base/bin:/base/sbin:/base/usr/bin:/base/usr/sbin:/bin:/sbin:$PATH`
 
-## A8 remaining (phase 2)
+## A8 remaining (phase 2b - the app side)
 
 - Rebuild libjavacore with the A8 transport + stage it (Docker make stage).
 - Resident app loop: Launcher stays alive, redraws on invalidate, writes
   frame+seq each time (replaces the one-shot `facade draw`).
-- Input: compositor reads Screen pointer events (WM context gets them) ->
-  small ring file -> the app's loop polls and dispatches MotionEvents into
-  the View tree. Success = the Prober counter increments on touch.
+- The app polls `/tmp/frame.rgba.input` (lines `D|M|U x y`) + its `.seq`,
+  dispatches MotionEvents into the View tree. Success = the Prober counter
+  increments on touch.
+
+## A8 phase 2a - input capture DONE (2026-11-06)
+
+- Screen touch arrives as device-specific event types **100/101/102**
+  (down/move/up) on the WM context, NOT the public SCREEN_EVENT_POINTER.
+  `SCREEN_EVENT_NONE` (0) = poll idle (get_event returns success + empty
+  event with timeout 0, no EAGAIN). Found empirically, verified by touch.
+- `SCREEN_PROPERTY_SENSITIVITY=ALWAYS` set on the window.
+- The input file is written DIRECTLY + seq-bumped after close: C `rename()`
+  fails on /tmp here (32 silently lost publishes) while shell `mv` works.
+  **TODO for the app-side frame writer: graphics_facade.cc's tmp+rename on
+  /accounts/devuser has the same risk - fall back to direct write if the
+  rename fails.**
+- Verified: taps and swipes stream into /tmp/frame.rgba.input (D/M/U x y)
+  with the .seq advancing.
 
 ## State left on device
 

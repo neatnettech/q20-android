@@ -55,6 +55,65 @@ static int envInt(const char* name, int fallback) {
   return (v != NULL && v[0] != '\0') ? atoi(v) : fallback;
 }
 
+/* ---- A8 input: Screen pointer events -> an atomic input file ----
+ * The devuser app polls <frame>.input.seq and drains <frame>.input
+ * (lines "D x y" / "U x y"). Bounded queue, rewritten per event. */
+#define MAX_INPUT_EVENTS 32
+typedef struct { char kind; int x; int y; } in_ev;  /* D down / M move / U up */
+static in_ev evq[MAX_INPUT_EVENTS];
+static int evn = 0;
+static int in_seq = 0;
+
+static void publish_input(const char* framepath) {
+  /* Direct write + seq-bump-after-close (NOT tmp+rename: C rename() fails on
+   * /tmp here even though shell mv works - 32 lost publishes caught it).
+   * The reader must tolerate a torn last line; the seq tells it when done. */
+  char ipath[520];
+  snprintf(ipath, sizeof(ipath), "%s.input", framepath);
+  FILE* f = fopen(ipath, "w");
+  if (f == NULL) return;
+  for (int i = 0; i < evn; i++)
+    fprintf(f, "%c %d %d\n", evq[i].kind, evq[i].x, evq[i].y);
+  fclose(f);
+  char sp[540];
+  snprintf(sp, sizeof(sp), "%s.seq", ipath);
+  FILE* s = fopen(sp, "w");
+  if (s != NULL) { fprintf(s, "%d\n", ++in_seq); fclose(s); }
+}
+
+static void pump_input(screen_context_t ctx, screen_event_t ev, const char* framepath) {
+  for (;;) {
+    errno = 0;
+    int r = screen_get_event(ctx, ev, 0);
+    if (r != 0) {
+      static int last_rc = 0;  /* log only on change: this polls at 30Hz */
+      if (r != last_rc) { P("get_event rc=%d errno=%d\n", r, errno); last_rc = r; }
+      break;
+    }
+    int type = -1;
+    screen_get_event_property_iv(ev, SCREEN_PROPERTY_TYPE, &type);
+    if (type == SCREEN_EVENT_NONE) break;  /* poll idle: success + empty event */
+    /* BB10's screen service delivers touch as device-specific types:
+     * 100 = touch down, 101 = touch move, 102 = touch up (never the public
+     * SCREEN_EVENT_POINTER - found empirically on the Q20). */
+    if (type == 100 || type == 101 || type == 102) {
+      int buttons = 0, pos[2] = {0, 0};
+      screen_get_event_property_iv(ev, SCREEN_PROPERTY_BUTTONS, &buttons);
+      screen_get_event_property_iv(ev, SCREEN_PROPERTY_POSITION, pos);
+      P("input touch type=%d buttons=%d pos=%d,%d\n", type, buttons, pos[0], pos[1]);
+      if (evn < MAX_INPUT_EVENTS) {
+        evq[evn].kind = (type == 100) ? 'D' : (type == 101) ? 'M' : 'U';
+        evq[evn].x = pos[0];
+        evq[evn].y = pos[1];
+        evn++;
+        publish_input(framepath);
+      }
+    } else {
+      P("input other type=%d\n", type);
+    }
+  }
+}
+
 /* (Re)load the frame file into the window buffer and post it. Reuses the
  * caller's scratch buffer and the already-mapped window buffer. */
 static int show_frame(const char* path, int size, unsigned char* frame,
@@ -154,6 +213,12 @@ int main(int argc, char** argv) {
 
   int visible = 1;
   screen_set_window_property_iv(win, SCREEN_PROPERTY_VISIBLE, &visible);
+  /* A8: take pointer input even without explicit focus (the kiosk owns the
+   * panel after the navigator is retired). */
+  {
+    int sens = SCREEN_SENSITIVITY_ALWAYS;
+    screen_set_window_property_iv(win, SCREEN_PROPERTY_SENSITIVITY, &sens);
+  }
 
   /* Set size explicitly: an own-group window inherits the display size, but
    * navigator_probe sets it anyway and screen_window.cc omitting it is a
@@ -186,12 +251,16 @@ int main(int argc, char** argv) {
 
   if (envInt("FACADE_WATCH", 0)) {
     /* A8 resident mode: poll <path>.seq (content, not mtime) and re-post on
-     * every change. Never exits; slay to stop. */
+     * every change. Never exits; slay to stop. Also drains Screen pointer
+     * events into <path>.input (polled by the devuser app). */
+    screen_event_t ev = 0;
+    screen_create_event(&ev);
     char seqpath[520];
     snprintf(seqpath, sizeof(seqpath), "%s.seq", path);
     char last[64] = {0};
     P("watching %s (33ms poll), slay to stop\n", seqpath);
     for (;;) {
+      if (ev != 0) pump_input(ctx, ev, path);
       char cur[64] = {0};
       FILE* sf = fopen(seqpath, "rb");
       if (sf != NULL) { (void)fread(cur, 1, sizeof(cur) - 1, sf); fclose(sf); }
