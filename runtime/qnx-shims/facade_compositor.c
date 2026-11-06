@@ -71,10 +71,15 @@ static void publish_input(const char* framepath) {
   char ipath[520];
   snprintf(ipath, sizeof(ipath), "%s.input", framepath);
   FILE* f = fopen(ipath, "w");
-  if (f == NULL) return;
+  if (f == NULL) { P("publish fopen %s failed errno=%d\n", ipath, errno); return; }
+  int n = evn;
   for (int i = 0; i < evn; i++)
     fprintf(f, "%c %d %d\n", evq[i].kind, evq[i].x, evq[i].y);
   fclose(f);
+  evn = 0;  /* each publish is a DELTA since the last one - the app would
+             * otherwise replay the whole history on every seq bump (the
+             * multi-click bug: one tap fired 3 clicks). */
+  P("publish wrote %d events to %s\n", n, ipath);
   char sp[540];
   snprintf(sp, sizeof(sp), "%s.seq", ipath);
   FILE* s = fopen(sp, "w");
@@ -108,8 +113,16 @@ static void pump_input(screen_context_t ctx, screen_event_t ev, const char* fram
         evq[evn].x = pos[0];
         evq[evn].y = pos[1];
         evn++;
-        publish_input(framepath);
+      } else {
+        /* ring: drop the oldest, keep the latest MAX - and ALWAYS publish
+         * (the old code stopped publishing once full: no new input ever
+         * reached the app again). */
+        memmove(evq, evq + 1, (MAX_INPUT_EVENTS - 1) * sizeof(in_ev));
+        evq[MAX_INPUT_EVENTS - 1].kind = (type == 100) ? 'D' : (type == 101) ? 'M' : 'U';
+        evq[MAX_INPUT_EVENTS - 1].x = pos[0];
+        evq[MAX_INPUT_EVENTS - 1].y = pos[1];
       }
+      publish_input(framepath);
     } else {
       P("input other type=%d\n", type);
     }

@@ -85,6 +85,10 @@ public final class Launcher {
             } else if (mode.equals("draw")) {
                 activity(apk, activityClass);
                 draw();
+            } else if (mode.equals("live")) {
+                activity(apk, activityClass);
+                draw();
+                live();
             } else {
                 System.out.println("facade: unknown mode " + mode);
                 System.exit(2);
@@ -282,6 +286,8 @@ public final class Launcher {
                 decor.getWidth() == SCREEN_PX && decor.getHeight() == SCREEN_PX);
         TextView counter = (TextView) act.findViewById(id(act, "counter_text"));
         View bump = act.findViewById(id(act, "bump_button"));
+        sCounter = counter;
+        sBump = bump;
         check("counter_text \"" + counter.getText() + "\" " + counter.getWidth() + "x" + counter.getHeight(),
                 "count: 0".contentEquals(counter.getText()) && counter.getWidth() > 0);
         check("bump_button " + bump.getWidth() + "x" + bump.getHeight(),
@@ -297,6 +303,102 @@ public final class Launcher {
     // fills it, unlockCanvasAndPost posts it. mNativeObject only has to be
     // non zero: Surface checks it before every call and our natives ignore it.
     static View sDecor;
+    static TextView sCounter;
+    static View sBump;
+    static int sFallbackCount;
+
+    // A8 phase 2b: the input half of the live loop. Plain Java BYTE parsing -
+    // FileReader/InputStreamReader would need CharsetDecoderICU ->
+    // NativeConverter natives we don't have (UnsatisfiedLinkError, an Error,
+    // which is why the catch is Throwable). ASCII only, as published by the
+    // compositor ("D|M|U x y" lines, seq bumped after the file close).
+    static long sInSeq = -1;
+    static int[] q20PollInput() {
+        String raw = System.getenv("Q20_DRAW_RAW");
+        if (raw == null) return new int[0];
+        try {
+            java.io.FileInputStream s = new java.io.FileInputStream(raw + ".input.seq");
+            long seq = 0;
+            int b;
+            while ((b = s.read()) >= 0 && b >= '0' && b <= '9') seq = seq * 10 + (b - '0');
+            try { s.close(); } catch (Throwable ignored) { }
+            if (seq == sInSeq) return new int[0];  // != also catches compositor restarts
+            sInSeq = seq;
+            java.io.FileInputStream f = new java.io.FileInputStream(raw + ".input");
+            int[] vals = new int[96];
+            int n = 0;
+            byte[] line = new byte[32];
+            while (n + 3 <= 96) {
+                int ln = 0;
+                while ((b = f.read()) >= 0 && b != '\n' && ln < 31) line[ln++] = (byte) b;
+                if (ln == 0) break;
+                int i = 0;
+                char k = (char) line[i];
+                if (k != 'D' && k != 'M' && k != 'U') continue;  // torn line guard
+                for (i = 1; i < ln && (line[i] == ' ' || line[i] == '\t'); i++) { }
+                int x = 0;
+                while (i < ln && line[i] >= '0' && line[i] <= '9') { x = x * 10 + (line[i] - '0'); i++; }
+                while (i < ln && (line[i] == ' ' || line[i] == '\t')) i++;
+                int y = 0;
+                while (i < ln && line[i] >= '0' && line[i] <= '9') { y = y * 10 + (line[i] - '0'); i++; }
+                vals[n++] = k == 'D' ? 0 : k == 'M' ? 1 : 2;
+                vals[n++] = x;
+                vals[n++] = y;
+            }
+            try { f.close(); } catch (Throwable ignored) { }
+            return java.util.Arrays.copyOf(vals, n);
+        } catch (Throwable t) {
+            return new int[0];
+        }
+    }
+
+    // A8: resident loop - poll the compositor's input file, click the button
+    // on a down+up inside its rect, redraw whenever the counter changes.
+    static void live() throws Exception {
+        int[] br = rectOf(sBump, sDecor);
+        String last = sCounter.getText().toString();
+        boolean down = false;
+        System.out.println("facade: live loop - touch the bump button");
+        for (;;) {
+            int[] ev = q20PollInput();
+            for (int i = 0; i + 2 < ev.length; i += 3) {
+                int kind = ev[i], x = ev[i + 1], y = ev[i + 2];
+                boolean in = x >= br[0] && x < br[2] && y >= br[1] && y < br[3];
+                if (kind == 0 && in) down = true;
+                if (kind == 2 && in && down) {
+                    down = false;
+                    // NO performClick for now: it trips a draw-time relayout of
+                    // the button label that needs the StaticLayout natives
+                    // (the A9 gap). The Prober's own listener increments the
+                    // same way; we mirror it until the natives land.
+                    sCounter.setText("count: " + (++sFallbackCount));
+                    System.out.println("facade: click at " + x + "," + y);
+                }
+            }
+            String now = sCounter.getText().toString();
+            if (!now.equals(last)) {
+                // Re-measure + re-layout: the measure-time layout path works
+                // on this stack, but draw-time assumeLayout would hit the
+                // missing StaticLayout.nNewBuilder native (the A9 gap).
+                int spec = View.MeasureSpec.makeMeasureSpec(SCREEN_PX, View.MeasureSpec.EXACTLY);
+                sDecor.measure(spec, spec);
+                sDecor.layout(0, 0, SCREEN_PX, SCREEN_PX);
+                draw();
+                last = now;
+                System.out.println("facade: redrew counter=" + now);
+            }
+            try { Thread.sleep(30); } catch (InterruptedException e) { }
+        }
+    }
+
+    static int[] rectOf(View v, View root) {
+        int x = 0, y = 0;
+        for (View p = v; p != root && p != null; p = (View) p.getParent()) {
+            x += p.getLeft();
+            y += p.getTop();
+        }
+        return new int[] { x, y, x + v.getWidth(), y + v.getHeight() };
+    }
 
     static void draw() throws Exception {
         if (sDecor == null) throw new IllegalStateException("nothing laid out to draw");

@@ -6,8 +6,8 @@
 set -e
 cd "$(dirname "$0")"
 T=../../toolchains/android-tools
-JAVA=/opt/homebrew/opt/openjdk/bin/java
-JAVAC=/opt/homebrew/opt/openjdk/bin/javac
+JAVA=/opt/homebrew/opt/openjdk@17/bin/java
+JAVAC=/opt/homebrew/opt/openjdk@17/bin/javac
 
 rm -rf build
 mkdir -p build/classes build/dexout

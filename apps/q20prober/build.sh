@@ -5,8 +5,8 @@
 set -e
 cd "$(dirname "$0")"
 T=../../toolchains/android-tools
-JAVA=/opt/homebrew/opt/openjdk/bin/java
-JAVAC=/opt/homebrew/opt/openjdk/bin/javac
+JAVA=/opt/homebrew/opt/openjdk@17/bin/java
+JAVAC=/opt/homebrew/opt/openjdk@17/bin/javac
 
 rm -rf build
 mkdir -p build/gen
@@ -48,7 +48,7 @@ EOF
 APKSIGNER="${APKSIGNER:-$HOME/Library/Android/sdk/build-tools/35.0.0/apksigner}"
 KS="${Q20_KEYSTORE:-build/q20-debug.jks}"
 if [ ! -f "$KS" ]; then
-  "/opt/homebrew/opt/openjdk/bin/keytool" -genkeypair -keystore "$KS"     -storepass android -keypass android -alias q20 -keyalg RSA -keysize 2048     -validity 10000 -dname "CN=Q20 Debug,O=fun,C=US" >/dev/null 2>&1
+  "/opt/homebrew/opt/openjdk@17/bin/keytool" -genkeypair -keystore "$KS"     -storepass android -keypass android -alias q20 -keyalg RSA -keysize 2048     -validity 10000 -dname "CN=Q20 Debug,O=fun,C=US" >/dev/null 2>&1
 fi
 if [ -x "$APKSIGNER" ]; then
   "$APKSIGNER" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android \

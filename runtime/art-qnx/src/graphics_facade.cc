@@ -1002,30 +1002,26 @@ void Surface_unlockCanvasAndPost(JNIEnv*, jclass, jlong, jobject) {
   // resident compositor (FACADE_WATCH=1) never reads a half-written frame.
   const char* raw = getenv("Q20_DRAW_RAW");
   if (raw != nullptr && raw[0] != '\0' && gLocked.px != nullptr) {
-    char tmp[512];
-    snprintf(tmp, sizeof(tmp), "%s.tmp", raw);
-    FILE* f = fopen(tmp, "wb");
+    /* A8: direct write, then bump <raw>.seq AFTER the close - the seq is the
+     * publish signal, so the compositor can never see a torn frame. No
+     * tmp+rename: C rename() fails on this QNX (facade_compositor.c found 32
+     * silently lost publishes; the shell mv works, the syscall does not). */
+    FILE* f = fopen(raw, "wb");
     if (f == nullptr) {
-      ALOGE("Q20_DRAW_RAW fopen %s failed", tmp);
+      ALOGE("Q20_DRAW_RAW fopen %s failed", raw);
     } else {
       size_t rowBytes = (size_t)gLocked.w * 4;
       size_t wrote = 0;
       for (int y = 0; y < gLocked.h; y++)
         wrote += fwrite(gLocked.px + (size_t)y * gLocked.stride, 1, rowBytes, f);
       fclose(f);
-      if (rename(tmp, raw) != 0) {
-        ALOGE("Q20_DRAW_RAW rename to %s failed errno=%d", raw, errno);
-      } else {
-        static unsigned sSeq = 0;  // per-process; fine while each draw is a fresh launch
-        char seqtmp[512], seqpath[512];
-        snprintf(seqpath, sizeof(seqpath), "%s.seq", raw);
-        snprintf(seqtmp, sizeof(seqtmp), "%s.tmp", seqpath);
-        FILE* sf = fopen(seqtmp, "w");
-        if (sf != nullptr) {
-          fprintf(sf, "%u %llu\n", ++sSeq, (unsigned long long)time(NULL));
-          fclose(sf);
-          rename(seqtmp, seqpath);
-        }
+      static unsigned sSeq = 0;  // per-process; fine while each draw is a fresh launch
+      char seqpath[512];
+      snprintf(seqpath, sizeof(seqpath), "%s.seq", raw);
+      FILE* sf = fopen(seqpath, "w");
+      if (sf != nullptr) {
+        fprintf(sf, "%u %llu\n", ++sSeq, (unsigned long long)time(NULL));
+        fclose(sf);
       }
       ALOGI("Q20_DRAW_RAW %s %dx%d wrote=%zu", raw, gLocked.w, gLocked.h, wrote);
     }
@@ -1035,6 +1031,9 @@ void Surface_unlockCanvasAndPost(JNIEnv*, jclass, jlong, jobject) {
 // Called after every post, so it must tolerate being a no op.
 void Surface_release(JNIEnv*, jclass, jlong) {}
 jboolean Surface_isValid(JNIEnv*, jclass, jlong h) { return h != 0 ? JNI_TRUE : JNI_FALSE; }
+
+// A8 input is read in pure Java (Launcher.q20PollInput) - the JNI route
+// died on the boot-loader FindClass problem and was removed. No natives here.
 
 JNINativeMethod gSurfaceMethods[] = {
   { "nativeLockCanvas", "(JLandroid/graphics/Canvas;Landroid/graphics/Rect;)J",

@@ -24,6 +24,7 @@ extern void register_java_lang_Math(JNIEnv*);
 extern void register_java_util_regex_Pattern(JNIEnv*);
 extern void register_java_util_regex_Matcher(JNIEnv*);
 extern void register_libcore_icu_ICU(JNIEnv*);
+extern void register_libcore_io_AsynchronousCloseMonitor(JNIEnv*);
 extern void register_java_lang_Character(JNIEnv*);
 extern void register_java_lang_Float(JNIEnv*);
 extern void register_java_lang_Double(JNIEnv*);
@@ -65,6 +66,9 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     android::register_android_os_Parcel(env);
     android::register_android_os_SystemClock(env);
     register_libcore_icu_ICU(env);
+    // FileInputStream.close() calls it; missing it kills any Java file IO
+    // (found 2026-11-06 by the A8 input poll dying on stream close).
+    register_libcore_io_AsynchronousCloseMonitor(env);
     register_java_lang_Character(env);
     // AOT code inlines these as intrinsics; -Xint calls the natives.
     register_java_lang_Float(env);
