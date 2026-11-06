@@ -4,11 +4,14 @@
 - **Root**: persistent uid-0, self-healing across reboots. `ssh -p 2225
   root@192.168.1.184` (the kill-proof sshd in the trusted inode). The
   technique: [../../docs/common/root-chain.md](../../docs/common/root-chain.md).
-- **A7 compositing: DONE** - the Prober's real View tree renders on the
-  panel via the root compositor (WM + power-manager contexts, Navigator
-  retired). See [sessions/a7-compositing.md](sessions/a7-compositing.md).
-- **Next**: A8 - the live loop (resident compositor, shared-memory
-  framebuffer, input), turning the facade into the device's actual UI.
+- **A8 compositing: DONE** - the live facade: the Prober's real View tree
+  renders on the panel and responds to touch (the counter increments on
+  button taps, exactly +1). The full loop: Screen touch -> root compositor
+  -> input file -> Launcher dispatch -> redraw -> frame -> panel. See
+  [sessions/a7-compositing.md](sessions/a7-compositing.md) and
+  [sessions/2026-11-05-a8-live-redraw.md](sessions/2026-11-05-a8-live-redraw.md).
+- **Next**: A9 - the first real app port (closing the StaticLayout/NativeConverter
+  native gaps found by A8), and NOD-11 - the facade as the default UI.
 
 ## Sessions
 

@@ -33,6 +33,29 @@ latency, with the Navigator retired.
 - Root sshd remote PATH is bare:
   `export PATH=/base/bin:/base/sbin:/base/usr/bin:/base/usr/sbin:/bin:/sbin:$PATH`
 
+## A8 COMPLETE (2026-11-06 evening)
+
+The live loop proven: tap the Prober button on the panel -> the counter
+increments by exactly one; tap elsewhere -> nothing. The full chain works:
+Screen touch (types 100/101/102) -> compositor delta-publish -> input file ->
+Launcher Java parse -> click dispatch -> text change -> re-measure -> draw ->
+frame+seq -> compositor re-post.
+
+The A9 gaps the A8 work exposed (each a real native port):
+- **StaticLayout.nNewBuilder** (+ the android_text_StaticLayout natives,
+  minikin): any draw-time relayout via StaticLayout.Builder/DynamicLayout.
+  Worked around by plain-String setText + re-measure before redraw (the
+  measure-time BoringLayout path is pure Java).
+- **NativeConverter (ICU)**: FileReader/InputStreamReader charset decoding.
+  Worked around by byte-level ASCII parsing in the Launcher.
+- **AsynchronousCloseMonitor.signalBlockedThreads**: registered (any Java
+  stream close died without it).
+
+The input pipeline fixes: delta publishing (the history replay made one tap
+fire N clicks and the tap area look unbounded), the IDLE-event flood, the
+BGRA panel swap, the C-rename() failure on /tmp (direct write + seq-after-
+close everywhere).
+
 ## A8 remaining (phase 2b - the app side)
 
 - Rebuild libjavacore with the A8 transport + stage it (Docker make stage).
