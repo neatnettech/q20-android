@@ -131,3 +131,11 @@ marker).
   the same payload and the downgrade gate may refuse it.
 * Next: step 5 above (stock, uninjected Q10 os.signed, watched with
   usb_timeline.py) is now the main experiment.
+
+## Resolved 2026-11-06
+
+The marker was wrong, not the build: the navigator's
+`/var/pps/system/navigator/config` `autorun::1` is what launches the OOBE, and
+`status_public` is not consulted for it. Both user partitions are the same
+template at `10.3.3.746`. See
+[2026-11-06-oobe-autorun-root-cause.md](2026-11-06-oobe-autorun-root-cause.md).

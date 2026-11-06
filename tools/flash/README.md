@@ -69,3 +69,25 @@ partition is ungated. See `docs/token-wall-and-device-access.md` sections 22-24.
   the Q10-family (8F00270A) bootrom, whose device comes up unconfigured
   when the RAM loader takes over (every loader appeared to hang at
   SetMode(2) without it).
+
+## Tools added 2026-11-01/06 (the wizard skip)
+
+- `qcfm_unpack_streams.py <os.signed> [outdir]` — unpack a container into its
+  rcfs / sig2 / mbr / ufs streams.
+- `qnx6_inspect.py <ufs.bin> [path...]` — QNX6 reader for the BB10 user
+  partition (sb, inode table, dir walk, file content).
+- `qnx6_wizskip.py <ufs.bin> [out.bin]` — inject
+  `/var/pps/services/firstlaunch/status_public` = `inprogress::0`. Note: this
+  object alone does NOT stop the wizard (proven on the P'9983, 2026-11-01);
+  its inode constants are specific to the image it was derived from.
+- `qnx6_navautorun.py <ufs.bin> [out.bin]` — the actual wizard skip: flip
+  `/var/pps/system/navigator/config` `autorun::1` to `autorun::0` and seed the
+  four `tutorials_*_done` keys, matching the Classic's working bake byte for
+  byte. The navigator launches `autorun_app` (the firstlaunch OOBE) at every
+  boot while `autorun` is 1. In-block edit, so only the file bytes and the
+  inode size change; verifies itself through the reader on write.
+
+Patching a container without a repack: the pfcq/rrcq records carry no payload
+CRC, so a stream can be spliced back in place at its offset (header and the
+560-byte `QNXH-OS-1` trailer untouched). Stream offsets = header size + 0x20,
+then each stream's `blocks * 0x10000` in record order.
