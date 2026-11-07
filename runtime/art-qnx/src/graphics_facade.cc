@@ -52,7 +52,9 @@
 // onto an SkCanvas over the window buffer, building an SkPaint per draw.
 #include "SkBitmap.h"
 #include "SkCanvas.h"
+#include "SkColor.h"
 #include "SkImageInfo.h"
+#include "SkInterpolator.h"
 #include "SkPaint.h"
 #include "SkTypeface.h"
 
@@ -254,6 +256,60 @@ jboolean Paint_hasShadowLayer(JNIEnv*, jclass, jlong h) { return paintAt(h)->sha
 // and nothing native draws, so only the stock return value (the new handle)
 // matters.
 jlong Paint_setHandle(JNIEnv*, jclass, jlong, jlong handle) { return handle; }
+
+// ---- Color (stock Shader.cpp registers these under android/graphics/Color) ----
+
+jint Color_HSVToColor(JNIEnv* env, jclass, jint alpha, jfloatArray hsvArray) {
+  jfloat* hsv = env->GetFloatArrayElements(hsvArray, NULL);
+  SkScalar hsv3[3] = { hsv[0], hsv[1], hsv[2] };
+  jint rgb = SkHSVToColor(hsv3) & 0xFFFFFF;
+  env->ReleaseFloatArrayElements(hsvArray, hsv, JNI_ABORT);
+  return (alpha << 24) | rgb;
+}
+void Color_RGBToHSV(JNIEnv* env, jclass, jint red, jint green, jint blue, jfloatArray hsvArray) {
+  SkScalar hsv3[3];
+  SkRGBToHSV(red, green, blue, hsv3);
+  jfloat* hsv = env->GetFloatArrayElements(hsvArray, NULL);
+  hsv[0] = SkScalarToFloat(hsv3[0]);
+  hsv[1] = SkScalarToFloat(hsv3[1]);
+  hsv[2] = SkScalarToFloat(hsv3[2]);
+  env->ReleaseFloatArrayElements(hsvArray, hsv, 0);
+}
+JNINativeMethod gColorMethods[] = {
+  { "nativeRGBToHSV", "(III[F)V", reinterpret_cast<void*>(Color_RGBToHSV) },
+  { "nativeHSVToColor", "(I[F)I", reinterpret_cast<void*>(Color_HSVToColor) },
+};
+
+// ---- Shaders ----
+// Every creation native returns a fresh handle; the facade's SkPaint build
+// ignores the shader, so gradients draw as plain color until CP2 wires the
+// real SkShader construction. Handles stay non-zero: Shader.finalize checks.
+jlong Shader_create(JNIEnv*, jclass) { return reinterpret_cast<jlong>(new int(0)); }
+void Shader_destroy(JNIEnv*, jclass, jlong h) { delete reinterpret_cast<int*>(h); }
+jlong Shader_setLocalMatrix(JNIEnv*, jclass, jlong h, jlong) { return h; }
+JNINativeMethod gShaderMethods[] = {
+  { "nativeDestructor", "(J)V", reinterpret_cast<void*>(Shader_destroy) },
+  { "nativeSetLocalMatrix", "(JJ)J", reinterpret_cast<void*>(Shader_setLocalMatrix) },
+};
+JNINativeMethod gBitmapShaderMethods[] = {
+  { "nativeCreate", "(Landroid/graphics/Bitmap;II)J", reinterpret_cast<void*>(Shader_create) },
+};
+JNINativeMethod gLinearGradientMethods[] = {
+  { "nativeCreate1", "(FFFF[I[FI)J", reinterpret_cast<void*>(Shader_create) },
+  { "nativeCreate2", "(FFFFIII)J", reinterpret_cast<void*>(Shader_create) },
+};
+JNINativeMethod gRadialGradientMethods[] = {
+  { "nativeCreate1", "(FFF[I[FI)J", reinterpret_cast<void*>(Shader_create) },
+  { "nativeCreate2", "(FFFIII)J", reinterpret_cast<void*>(Shader_create) },
+};
+JNINativeMethod gSweepGradientMethods[] = {
+  { "nativeCreate1", "(FF[I[F)J", reinterpret_cast<void*>(Shader_create) },
+  { "nativeCreate2", "(FFII)J", reinterpret_cast<void*>(Shader_create) },
+};
+JNINativeMethod gComposeShaderMethods[] = {
+  { "nativeCreate1", "(JJJ)J", reinterpret_cast<void*>(Shader_create) },
+  { "nativeCreate2", "(JJI)J", reinterpret_cast<void*>(Shader_create) },
+};
 
 jfloat Paint_ascent(JNIEnv* env, jobject o) {
   Metrics m;
@@ -1102,6 +1158,50 @@ JNINativeMethod gInterpolatorFactoryMethods[] = {
   { "createLutInterpolator", "([F)J", reinterpret_cast<void*>(Interp_lut) },
 };
 
+// ---- android.graphics.Interpolator ----
+
+// The stock android/graphics/Interpolator.cpp over SkInterpolator, minus its
+// AutoJavaFloatArray helper (lives in Graphics.cpp, which drags ashmem).
+// View's ScrollabilityCache builds one per scrolling view: the blend array
+// is null on the 3-arg setKeyFrame, so the JNI get calls are null-guarded.
+jlong Interp_gfx_ctor(JNIEnv*, jclass, jint valueCount, jint frameCount) {
+  return reinterpret_cast<jlong>(new SkInterpolator(valueCount, frameCount));
+}
+void Interp_gfx_dtor(JNIEnv*, jclass, jlong h) { delete reinterpret_cast<SkInterpolator*>(h); }
+void Interp_gfx_reset(JNIEnv*, jclass, jlong h, jint vc, jint fc) {
+  reinterpret_cast<SkInterpolator*>(h)->reset(vc, fc);
+}
+void Interp_gfx_setKeyFrame(JNIEnv* env, jclass, jlong h, jint index, jint msec,
+                            jfloatArray valueArray, jfloatArray blendArray) {
+  SkInterpolator* interp = reinterpret_cast<SkInterpolator*>(h);
+  float* values = env->GetFloatArrayElements(valueArray, NULL);
+  float* blend = blendArray != NULL ? env->GetFloatArrayElements(blendArray, NULL) : NULL;
+  interp->setKeyFrame(index, msec, values, blend);
+  env->ReleaseFloatArrayElements(valueArray, values, JNI_ABORT);
+  if (blend != NULL) env->ReleaseFloatArrayElements(blendArray, blend, JNI_ABORT);
+}
+void Interp_gfx_setRepeatMirror(JNIEnv*, jclass, jlong h, jfloat repeatCount, jboolean mirror) {
+  SkInterpolator* interp = reinterpret_cast<SkInterpolator*>(h);
+  if (repeatCount > 32000) repeatCount = 32000;
+  interp->setRepeatCount(repeatCount);
+  interp->setMirror(mirror != 0);
+}
+jint Interp_gfx_timeToValues(JNIEnv* env, jclass, jlong h, jint msec, jfloatArray valueArray) {
+  SkInterpolator* interp = reinterpret_cast<SkInterpolator*>(h);
+  float* values = valueArray != NULL ? env->GetFloatArrayElements(valueArray, NULL) : NULL;
+  SkInterpolatorBase::Result result = interp->timeToValues(msec, values);
+  if (values != NULL) env->ReleaseFloatArrayElements(valueArray, values, 0);
+  return static_cast<jint>(result);
+}
+JNINativeMethod gGraphicsInterpolatorMethods[] = {
+  { "nativeConstructor", "(II)J", reinterpret_cast<void*>(Interp_gfx_ctor) },
+  { "nativeDestructor", "(J)V", reinterpret_cast<void*>(Interp_gfx_dtor) },
+  { "nativeReset", "(JII)V", reinterpret_cast<void*>(Interp_gfx_reset) },
+  { "nativeSetKeyFrame", "(JII[F[F)V", reinterpret_cast<void*>(Interp_gfx_setKeyFrame) },
+  { "nativeSetRepeatMirror", "(JFZ)V", reinterpret_cast<void*>(Interp_gfx_setRepeatMirror) },
+  { "nativeTimeToValues", "(JI[F)I", reinterpret_cast<void*>(Interp_gfx_timeToValues) },
+};
+
 // ---- ColorFilter, EmojiFactory ----
 
 // A real handle so ColorFilter.finalize has something to free.
@@ -1723,6 +1823,14 @@ void register_qnx_graphics(JNIEnv* env) {
   gLineBreaks.flags = env->GetFieldID(lineBreaks, "flags", "[I");
   jniRegisterNativeMethods(env, "android/graphics/Paint", gPaintMethods, NELEM(gPaintMethods));
   jniRegisterNativeMethods(env, "android/text/StaticLayout", gStaticLayoutMethods, NELEM(gStaticLayoutMethods));
+  jniRegisterNativeMethods(env, "android/graphics/Interpolator", gGraphicsInterpolatorMethods, NELEM(gGraphicsInterpolatorMethods));
+  jniRegisterNativeMethods(env, "android/graphics/Color", gColorMethods, NELEM(gColorMethods));
+  jniRegisterNativeMethods(env, "android/graphics/Shader", gShaderMethods, NELEM(gShaderMethods));
+  jniRegisterNativeMethods(env, "android/graphics/BitmapShader", gBitmapShaderMethods, NELEM(gBitmapShaderMethods));
+  jniRegisterNativeMethods(env, "android/graphics/LinearGradient", gLinearGradientMethods, NELEM(gLinearGradientMethods));
+  jniRegisterNativeMethods(env, "android/graphics/RadialGradient", gRadialGradientMethods, NELEM(gRadialGradientMethods));
+  jniRegisterNativeMethods(env, "android/graphics/SweepGradient", gSweepGradientMethods, NELEM(gSweepGradientMethods));
+  jniRegisterNativeMethods(env, "android/graphics/ComposeShader", gComposeShaderMethods, NELEM(gComposeShaderMethods));
   gRegionNative = env->GetFieldID(env->FindClass("android/graphics/Region"), "mNativeRegion", "J");
   jniRegisterNativeMethods(env, "android/graphics/Region", gRegionMethods, NELEM(gRegionMethods));
   jniRegisterNativeMethods(env, "android/graphics/Paint", gPaintBoundsMethods, NELEM(gPaintBoundsMethods));
