@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>q20-android status</title>
+  <meta name="description" content="Android 6 on the BlackBerry Classic: what is done, what is in progress, what is left.">
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    /* done, now, next. Fills a 1920x1080 window exactly (video frame), stacks on small screens. Status as of 2026-11-07. */
+    .frame { max-width: 1920px; min-height: 100vh; margin: 0 auto; padding: 36px 48px; display: grid; grid-template-rows: auto 1fr auto; gap: 28px; }
+
+    .head { display: flex; align-items: center; gap: 28px; }
+    .head img { width: 96px; image-rendering: pixelated; display: block; background: var(--paper); padding: 8px; border: var(--border); box-shadow: 0 0 0 2px var(--paper); }
+    .head .lead { font-size: 22px; max-width: none; color: var(--paper); }
+    .head .tag--xl { font-size: 77px; }
+
+    .lanes { display: grid; grid-template-columns: 1.55fr auto 1fr auto 1.25fr; align-items: stretch; gap: 12px; min-height: 0; }
+    .lanes > .win { display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+    .lanes .win__bar { font-size: 22px; padding: 6px 12px; }
+    .arrow { align-self: center; color: var(--phos); font: 66px/1 var(--font-px); }
+
+    .nodes { list-style: none; margin: 0; padding: 18px; display: grid; gap: 12px; align-content: start; }
+    .nodes--2 { display: block; columns: 2; column-gap: 20px; }
+    .nodes--2 .node { break-inside: avoid; margin-bottom: 12px; }
+    .node { display: grid; grid-template-columns: 22px 1fr; gap: 2px 12px; align-items: baseline; }
+    .node::before { content: ""; width: 18px; height: 18px; border: var(--border); grid-row: 1 / 3; align-self: start; margin-top: 5px; }
+    .node b { font-size: 19px; line-height: 1.3; }
+    .node span { font-size: 15px; line-height: 1.35; color: var(--muted); grid-column: 2; }
+
+    .done .node::before { content: "\2713"; background: var(--ink); color: var(--phos); font: 700 15px/18px var(--font); text-align: center; }
+    .now .node::before { background: var(--phos); animation: blink 1s steps(1) infinite; }
+    .now .win__body, .now { background: var(--paper); }
+    .next .node::before { background: transparent; border-style: dashed; }
+    .next .node b { color: var(--muted); }
+
+    .goal { margin: 4px 18px 18px; background: var(--ink); color: var(--phos); padding: 14px 18px; font: 22px/1.3 var(--font-px); -webkit-font-smoothing: none; }
+    .goal small { display: block; color: var(--paper); font: 15px/1.4 var(--font); margin-top: 6px; }
+
+    .foot { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 24px; color: var(--paper); font-size: 18px; }
+    .meter { height: 22px; border: 2px solid var(--paper); background: linear-gradient(90deg, var(--phos) var(--p), transparent 0) ; }
+
+    @media (max-width: 1200px) {
+      .frame { padding: 24px 16px; gap: 20px; }
+      .head { flex-wrap: wrap; gap: 16px; }
+      .head .tag--xl { font-size: 44px; }
+      .head .lead { font-size: 17px; }
+      .lanes { grid-template-columns: minmax(0, 1fr); }
+      .arrow { justify-self: center; transform: rotate(90deg); font-size: 44px; }
+      .goal { margin-top: 0; }
+      .foot { grid-template-columns: 1fr; gap: 10px; font-size: 15px; }
+    }
+    @media (max-width: 700px) { .nodes--2 { columns: 1; } }
+  </style>
+</head>
+<body>
+<main class="frame">
+
+  <header class="head">
+    <a href="../" aria-label="home"><img src="../q20.png" alt="BlackBerry Classic"></a>
+    <h1 class="tag tag--xl">ANDROID 6 ON QNX</h1>
+    <p class="lead">Marshmallow apps on the BlackBerry Classic (Q20).<br>Road so far, what I'm on now, and what's left.</p>
+  </header>
+
+  <section class="lanes">
+
+    <div class="win done">
+      <div class="win__bar"><span>Done</span><span>14 milestones</span></div>
+      <ol class="nodes nodes--2">
+        <li class="node"><b>ART 6.0.1 on QNX</b><span>runtime compiles, links, runs on armle</span></li>
+        <li class="node"><b>libjavacore</b><span>core Java natives registered on device</span></li>
+        <li class="node"><b>dex2oat on device</b><span>Quick ARM compiler ported to the phone</span></li>
+        <li class="node"><b>Boot image built on device</b><span>13 dex Marshmallow boot classpath</span></li>
+        <li class="node"><b>GC crash fixed</b><span>card table bug in upstream ART, patched</span></li>
+        <li class="node"><b>Hello from ART 6 on QNX!</b><span>compiled and interpreted, both pass</span></li>
+        <li class="node"><b>Root that survives reboots</b><span>persistent uid 0 SSH on the Classic</span></li>
+        <li class="node"><b>APK ladder A1 to A5</b><span>Prober APK passes 7/7 self test</span></li>
+        <li class="node"><b>A6 Activity lifecycle</b><span>onCreate to onResume, 720x720 layout</span></li>
+        <li class="node"><b>A7 pixels on the panel</b><span>real View tree, my own compositor</span></li>
+        <li class="node"><b>A8 live loop + touch</b><span>redraws and taps on the real screen</span></li>
+        <li class="node"><b>A9 AOSP Calculator</b><span>unmodified stock app, running live</span></li>
+        <li class="node"><b>Skia + perf pass</b><span>stock Skia CPU backend, O2 runtime</span></li>
+        <li class="node"><b>NotePad on Holo</b><span>stock SQLite, ContentProvider works</span></li>
+      </ol>
+    </div>
+
+    <div class="arrow" aria-hidden="true">&rarr;</div>
+
+    <div class="win now">
+      <div class="win__bar"><span>Now</span><span>in progress</span></div>
+      <ol class="nodes">
+        <li class="node"><b>N2 activity stack</b><span>back stack, startActivity between screens</span></li>
+        <li class="node"><b>Menus groundwork</b><span>EventLog natives so menu picks work</span></li>
+        <li class="node"><b>Skia everywhere</b><span>stock Bitmap, NinePatch, Matrix natives in</span></li>
+        <li class="node"><b>Perf epic</b><span>faster frames for the second port</span></li>
+        <li class="node"><b>Live NotePad on panel</b><span>waiting on a compositor redeploy</span></li>
+      </ol>
+    </div>
+
+    <div class="arrow" aria-hidden="true">&rarr;</div>
+
+    <div class="win next">
+      <div class="win__bar"><span>Next</span><span>to the goal</span></div>
+      <ol class="nodes">
+        <li class="node"><b>Keyboard + trackpad</b><span>the Classic's real hardware input</span></li>
+        <li class="node"><b>Menus, dialogs, windows</b><span>real Android windows on QNX</span></li>
+        <li class="node"><b>Smooth scrolling</b><span>50 notes, no stutter</span></li>
+        <li class="node"><b>Services + default UI</b><span>Android UI boots as the main shell</span></li>
+        <li class="node"><b>Process model + zygote</b><span>proper app processes, shared memory</span></li>
+        <li class="node"><b>Binder + security</b><span>minimal Android stack, hardened</span></li>
+      </ol>
+      <p class="goal">GOAL: Signal on the Classic<small>real Android apps as a daily driver on a keyboard BlackBerry</small></p>
+    </div>
+
+  </section>
+
+  <footer class="foot">
+    <span>14 of 25 steps done</span>
+    <div class="meter" style="--p: 56%" aria-hidden="true"></div>
+    <a href="https://github.com/neatnettech/q20-android">github.com/neatnettech/q20-android</a>
+  </footer>
+
+</main>
+</body>
+</html>
