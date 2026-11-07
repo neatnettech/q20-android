@@ -17,7 +17,7 @@ CORE_ROOT   ?= $(abspath ../../system/core)
 LIBNATIVE   ?= $(abspath ../../libnativehelper)
 SHIMS       ?= $(abspath ..)
 
-CXXFLAGS := -O0 -g -std=gnu++11 -fno-rtti -fno-exceptions -DNDEBUG \
+CXXFLAGS := -O2 -g -std=gnu++11 -fno-rtti -fno-exceptions -DNDEBUG \
   -DART_TARGET -DART_DEFAULT_GC_TYPE_IS_CMS -DIMT_SIZE=64 \
   -DART_BASE_ADDRESS=0x70000000 \
   -DART_BASE_ADDRESS_MIN_DELTA=-0x1000000 -DART_BASE_ADDRESS_MAX_DELTA=0x1000000 \
@@ -219,8 +219,9 @@ build/javacore/%.o: src/%.cc
 	@mkdir -p $(dir $@)
 	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
-# The pixel path at -O2 even in the -O0 bring up build: per pixel blends run
-# for every live frame (NOD-29). The later -O2 wins over CXXFLAGS' -O0.
+# The pixel path stays at -O2 even if CXXFLAGS drops back to -O0 for a
+# bisect: per pixel blends run for every live frame (NOD-29). The later -O2
+# wins over an earlier -O0.
 build/javacore/raster.o build/javacore/graphics_facade.o build/javacore/screen_window.o: JCFLAGS += -O2
 
 # libart.so supplies zlib, log and atrace symbols at runtime. Linking against it
@@ -298,7 +299,8 @@ build/javacore/gcc_frame_stubs.o: src/gcc_frame_stubs.cc
 	$(CXX) $(CXXFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
 
-# The interpreter must be optimized even in this -O0 bring-up build: at -O0
+# The interpreter must stay optimized if CXXFLAGS ever drops back to -O0 (the
+# bring up build did until NOD-29; a bisect may again): at -O0
 # ExecuteGotoImpl gets a ~17KB stack frame per invocation, which overflows the
 # small stacks QNX actually grants threads (the request via
 # pthread_attr_setstacksize is capped around 1MB, observed 128KB for attached
