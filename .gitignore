@@ -39,6 +39,7 @@ runtime/art-qnx/dex2oat
 apps/q20prober/build/
 apps/q20facade/build/
 apps/calculator/build/
+apps/notepad/build/
 runtime/qnx-shims/screen-probe
 runtime/qnx-shims/qconnDoor.bin
 frameworks/native/
