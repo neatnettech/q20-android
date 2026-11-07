@@ -45,10 +45,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
 #define P(...) do { printf(__VA_ARGS__); fflush(stdout); } while (0)
+
+/* Perf: monotonic ms. last_in_ms is when the newest touch was dequeued, so
+ * each redraw line can say how long after the input its frame was posted. */
+static double now_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec * 1e3 + ts.tv_nsec / 1e6;
+}
+static double last_in_ms = -1;
+static double read_ms, swz_ms, post_ms;
 
 static int envInt(const char* name, int fallback) {
   const char* v = getenv(name);
@@ -105,9 +116,15 @@ static void pump_input(screen_context_t ctx, screen_event_t ev, const char* fram
      * SCREEN_EVENT_POINTER - found empirically on the Q20). */
     if (type == 100 || type == 101 || type == 102) {
       int buttons = 0, pos[2] = {0, 0};
+      long long stamp = 0;
       screen_get_event_property_iv(ev, SCREEN_PROPERTY_BUTTONS, &buttons);
       screen_get_event_property_iv(ev, SCREEN_PROPERTY_POSITION, pos);
-      P("input touch type=%d buttons=%d pos=%d,%d\n", type, buttons, pos[0], pos[1]);
+      screen_get_event_property_llv(ev, SCREEN_PROPERTY_TIMESTAMP, &stamp);
+      last_in_ms = now_ms();
+      /* age: dequeue time minus the Screen event stamp, meaningful only if
+       * that stamp is CLOCK_MONOTONIC ns (unverified; a sane 0..40 says so) */
+      P("input touch type=%d buttons=%d pos=%d,%d age=%.1fms\n", type, buttons,
+        pos[0], pos[1], last_in_ms - stamp / 1e6);
       if (evn < MAX_INPUT_EVENTS) {
         evq[evn].kind = (type == 100) ? 'D' : (type == 101) ? 'M' : 'U';
         evq[evn].x = pos[0];
@@ -136,11 +153,13 @@ static int show_frame(const char* path, int size, unsigned char* frame,
                       screen_window_t win, screen_context_t ctx) {
   const size_t rowBytes = (size_t)size * 4;
   const size_t want = rowBytes * (size_t)size;
+  double t0 = now_ms();
   FILE* f = fopen(path, "rb");
   if (f == NULL) return -1;
   size_t got = fread(frame, 1, want, f);
   fclose(f);
   if (got != want) return -2;
+  double t1 = now_ms();
   for (int y = 0; y < size; y++) {
     unsigned char* dst = (unsigned char*)ptr + (size_t)y * stride;
     const unsigned char* src = frame + (size_t)y * rowBytes;
@@ -153,9 +172,13 @@ static int show_frame(const char* path, int size, unsigned char* frame,
       dst[x * 4 + 3] = src[x * 4 + 3];
     }
   }
+  double t2 = now_ms();
   int rect[4] = {0, 0, size, size};
   int prc = screen_post_window(win, buf, 1, rect, 0);
   screen_flush_context(ctx, 0);
+  read_ms = t1 - t0;
+  swz_ms = t2 - t1;
+  post_ms = now_ms() - t2;
   return prc;
 }
 
@@ -291,7 +314,10 @@ int main(int argc, char** argv) {
       if (cur[0] != '\0' && strcmp(cur, last) != 0) {
         memcpy(last, cur, sizeof(last));
         int rc = show_frame(path, size, frame, ptr, stride, buf, win, ctx);
-        P("redraw rc=%d seq=%.32s\n", rc, cur);
+        /* in2post: newest touch dequeued -> this frame posted. The poll wait
+         * before the dequeue is not in it (see age on the input line). */
+        P("redraw rc=%d seq=%.32s read=%.1f swz=%.1f post=%.1f in2post=%.0f ms\n", rc,
+          cur, read_ms, swz_ms, post_ms, last_in_ms < 0 ? -1 : now_ms() - last_in_ms);
       }
       usleep(33333);
     }

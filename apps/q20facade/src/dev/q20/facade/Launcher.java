@@ -469,13 +469,42 @@ public final class Launcher {
             if (kind != 1) System.out.println("facade: touch " + (kind == 0 ? "down" : "up") + " " + x + "," + y);
             sLogNextFrame |= kind == 2;
         }
+        long t0 = SystemClock.uptimeMillis();
         boolean laidOut = sDecor.isLayoutRequested();
         if (laidOut) layoutPass();
         if (laidOut || sDecor.isDirty()) {
+            sMs[0] = (int) (SystemClock.uptimeMillis() - t0);
             draw();
-            if (sLogNextFrame) System.out.println("facade: drew frame " + sFrames);
+            perf();
+            if (sLogNextFrame) System.out.println("facade: drew frame " + sFrames + " " + times(sMs));
             sLogNextFrame = false;
         }
+    }
+
+    // Perf: layout, lock, draw and post of each live frame in ms (post
+    // includes the Q20_DRAW_RAW frame write), summed into avg/max every 30
+    // frames. span is the wall time those 30 frames took, so during a steady
+    // animation fps = 29000 / span.
+    static final String[] PERF = { "layout", "lock", "draw", "post" };
+    static final int[] sMs = new int[4], sSum = new int[4], sMax = new int[4];
+    static int sPerfN;
+    static long sPerfStart;
+    static String times(int[] ms) {
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < ms.length; i++) b.append(PERF[i]).append('=').append(ms[i]).append(' ');
+        return b.append("ms").toString();
+    }
+    static void perf() {
+        long now = SystemClock.uptimeMillis();
+        if (sPerfN == 0) sPerfStart = now;
+        for (int i = 0; i < sMs.length; i++) { sSum[i] += sMs[i]; sMax[i] = Math.max(sMax[i], sMs[i]); }
+        if (++sPerfN < 30) return;
+        StringBuilder b = new StringBuilder("facade: perf 30 frames span=" + (now - sPerfStart) + " avg/max");
+        for (int i = 0; i < sMs.length; i++) b.append(' ').append(PERF[i]).append('=').append(sSum[i] / 30).append('/').append(sMax[i]);
+        System.out.println(b.append(" ms"));
+        sPerfN = 0;
+        java.util.Arrays.fill(sSum, 0);
+        java.util.Arrays.fill(sMax, 0);
     }
 
     static void touch(long downTime, long eventTime, int action, float x, float y) {
@@ -558,6 +587,7 @@ public final class Launcher {
         if (sDecor == null) throw new IllegalStateException("nothing laid out to draw");
         // Surface() is public in the framework but hidden from android-23.jar,
         // so it comes through the same reflection door as everything else here.
+        long t0 = SystemClock.uptimeMillis();
         Surface s = (Surface) make("android.view.Surface");
         set(s, "mNativeObject", 1L);
         Canvas c = s.lockCanvas(null);
@@ -568,8 +598,13 @@ public final class Launcher {
             themeColor("colorControlHighlight", android.R.attr.colorControlHighlight);
             themeColor("textColorPrimary", android.R.attr.textColorPrimary);
         }
+        long t1 = SystemClock.uptimeMillis();
         sDecor.draw(c);
+        long t2 = SystemClock.uptimeMillis();
         s.unlockCanvasAndPost(c);
+        sMs[1] = (int) (t1 - t0);
+        sMs[2] = (int) (t2 - t1);
+        sMs[3] = (int) (SystemClock.uptimeMillis() - t2);
         if (first) check("draw pass completed", true);
     }
 

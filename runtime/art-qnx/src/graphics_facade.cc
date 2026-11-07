@@ -1378,6 +1378,8 @@ void Surface_unlockCanvasAndPost(JNIEnv*, jclass, jlong, jobject) {
      * publish signal, so the compositor can never see a torn frame. No
      * tmp+rename: C rename() fails on this QNX (facade_compositor.c found 32
      * silently lost publishes; the shell mv works, the syscall does not). */
+    struct timespec w0, w1;  // perf: the write cost, logged below
+    clock_gettime(CLOCK_MONOTONIC, &w0);
     FILE* f = fopen(raw, "wb");
     if (f == nullptr) {
       ALOGE("Q20_DRAW_RAW fopen %s failed", raw);
@@ -1395,7 +1397,9 @@ void Surface_unlockCanvasAndPost(JNIEnv*, jclass, jlong, jobject) {
         fprintf(sf, "%u %llu\n", ++sSeq, (unsigned long long)time(NULL));
         fclose(sf);
       }
-      ALOGI("Q20_DRAW_RAW %s %dx%d wrote=%zu", raw, gLocked.w, gLocked.h, wrote);
+      clock_gettime(CLOCK_MONOTONIC, &w1);
+      ALOGI("Q20_DRAW_RAW %s %dx%d wrote=%zu in %ld ms", raw, gLocked.w, gLocked.h, wrote,
+            (long)((w1.tv_sec - w0.tv_sec) * 1000 + (w1.tv_nsec - w0.tv_nsec) / 1000000));
     }
   }
 }
