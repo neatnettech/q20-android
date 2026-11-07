@@ -5,7 +5,10 @@ import android.app.Application;
 import android.app.Instrumentation;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.ComponentName;
+import android.content.ContentResolver;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.ProviderInfo;
@@ -40,10 +43,14 @@ import android.util.TypedValue;
 import android.view.Display;
 import android.view.InputDevice;
 import android.view.MotionEvent;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.animation.PathInterpolator;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import org.xmlpull.v1.XmlPullParser;
@@ -54,7 +61,9 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -282,18 +291,21 @@ public final class Launcher {
 
         set(call(Class.forName("android.app.ResourcesManager"), "getInstance"),
                 "mResConfiguration", configuration(dpi));
-        Object thread = make("android.app.ActivityThread");
+        sPkg = pkg;
+        sAi = ai;
+        sThread = make("android.app.ActivityThread");
         Object compat = getStatic(Class.forName("android.content.res.CompatibilityInfo"),
                 "DEFAULT_COMPATIBILITY_INFO");
-        Object loadedApk = make("android.app.LoadedApk", thread, ai, compat, null, false, false, false);
+        sLoadedApk = make("android.app.LoadedApk", sThread, ai, compat, null, false, false, false);
         // Providers load through the context's loader: the activity's, not a
         // second PathClassLoader over the same APK.
-        set(loadedApk, "mClassLoader", ClassLoader.getSystemClassLoader());
-        Instrumentation instr = new Instrumentation();
-        set(thread, "mInstrumentation", instr);  // installProvider's error path
-        Class<?> contextImpl = Class.forName("android.app.ContextImpl");
-        Context appContext = (Context) call(contextImpl, "createAppContext", thread, loadedApk);
+        set(sLoadedApk, "mClassLoader", ClassLoader.getSystemClassLoader());
+        sInstr = new FInstr();  // execStartActivity launches the target in-process
+        set(sThread, "mInstrumentation", sInstr);  // installProvider's error path
+        sContextImpl = Class.forName("android.app.ContextImpl");
+        Context appContext = (Context) call(sContextImpl, "createAppContext", sThread, sLoadedApk);
         Application app = Instrumentation.newApplication(Application.class, appContext);
+        sApp = app;
         call(appContext, "setOuterContext", app);
         final StringBuilder lifecycle = new StringBuilder();
         app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
@@ -311,39 +323,12 @@ public final class Launcher {
         // SQLite's page size comes from StatFs("/data"), which QNX denies
         // (EACCES). Calibration knob: 4096, the Q20 eMMC block.
         setStatic(Class.forName("android.database.sqlite.SQLiteGlobal"), "sDefaultPageSize", 4096);
-        if (!providers.isEmpty()) call(thread, "installContentProviders", app, providers);
+        if (!providers.isEmpty()) call(sThread, "installContentProviders", app, providers);
 
-        Context base = (Context) call(contextImpl, "createActivityContext", thread, loadedApk, 0, null);
-        CharSequence title = info.labelRes != 0 ? base.getResources().getText(info.labelRes) : info.name;
-        Activity act = instr.newActivity(ClassLoader.getSystemClassLoader().loadClass(cls), base,
-                new Binder(), app, new Intent(Intent.ACTION_MAIN).setClassName(ai.packageName, cls),
-                info, title, null, null, null);
-        call(base, "setOuterContext", act);
-        // The manifest theme (activity, else application), applied where
-        // ActivityThread applies it. With none, the stock default below
-        // targetSdk 14 (Theme, Holo); ponytail: above it Material NoActionBar,
-        // because DeviceDefault's action bar needs a PackageManager.
-        int theme = info.getThemeResource();
-        if (theme == 0) {
-            theme = ai.targetSdkVersion < Build.VERSION_CODES.ICE_CREAM_SANDWICH
-                    ? (Integer) call(Resources.class, "selectDefaultTheme", 0, ai.targetSdkVersion)
-                    : android.R.style.Theme_Material_NoActionBar;
-        }
-        act.setTheme(theme);
-        instr.callActivityOnCreate(act, null);
-        call(act, "performStart");
-        instr.callActivityOnPostCreate(act, null);
-        call(act, "performResume");
+        Activity act = launch(info, new Intent(Intent.ACTION_MAIN).setClassName(ai.packageName, cls));
         check("lifecycle " + lifecycle.toString().trim(),
                 lifecycle.toString().equals("created started resumed "));
-
-        // Phase 4: the window at the Q20 screen size, attached the way
-        // ViewRootImpl's first traversal does it, then measured and laid out.
         View decor = act.getWindow().getDecorView();
-        sDecor = decor;  // the draw mode renders this after the checks
-        attach(act, decor);
-        layoutPass();
-        dump(decor, "", 0, 0);
         check("decor " + decor.getWidth() + "x" + decor.getHeight(),
                 decor.getWidth() == SCREEN_PX && decor.getHeight() == SCREEN_PX);
         android.app.ActionBar bar = act.getActionBar();
@@ -362,6 +347,126 @@ public final class Launcher {
         check("both inside the screen", inside(counter, decor) && inside(bump, decor));
         bump.setElevation(3f);
         check("RenderNode round trip elevation=" + bump.getElevation(), bump.getElevation() == 3f);
+    }
+
+    // ---- activity stack (NOD-32): startActivity, Back, in-process ----
+
+    // Set once by activity() so launch()/the resolver can reuse them without a
+    // system_server: the ActivityThread, Application, LoadedApk, our
+    // Instrumentation, ContextImpl class, the app's ApplicationInfo and parsed
+    // package, and the back stack (top is sDecor's activity).
+    static Object sThread, sLoadedApk, sContextImpl, sPkg;
+    static Application sApp;
+    static Instrumentation sInstr;
+    static ApplicationInfo sAi;
+    static final Deque<Activity> sStack = new ArrayDeque<Activity>();
+
+    // Create, theme, run through onCreate/Start/Resume, attach and lay out one
+    // Activity; push it and make its decor current. The facade's own attach
+    // replaces ActivityThread's handleResumeActivity (no system_server), so this
+    // serves both the first activity and every startActivity target.
+    static Activity launch(ActivityInfo info, Intent intent) throws Exception {
+        // Pause and stop the activity being covered, as the real launch does:
+        // its managed cursors go stale (mStopped), so a later Back's
+        // performRestart requeries them and any rows it changed reappear.
+        Activity prev = sStack.peek();
+        if (prev != null) {
+            call(prev, "performPause");
+            call(prev, "performStop");
+        }
+        info.flags &= ~ActivityInfo.FLAG_HARDWARE_ACCELERATED;  // software until A7's renderer
+        Context base = (Context) call(sContextImpl, "createActivityContext", sThread, sLoadedApk, 0, null);
+        CharSequence title = info.labelRes != 0 ? base.getResources().getText(info.labelRes) : info.name;
+        Activity act = sInstr.newActivity(ClassLoader.getSystemClassLoader().loadClass(info.name), base,
+                new Binder(), sApp, intent, info, title, null, null, null);
+        // newActivity attaches with a null ActivityThread; Activity.startActivity
+        // reads mMainThread.getApplicationThread(), so wire ours in.
+        set(act, "mMainThread", sThread);
+        call(base, "setOuterContext", act);
+        // The manifest theme (activity, else application). With none, the stock
+        // default below targetSdk 14 (Theme, Holo); ponytail: above it Material
+        // NoActionBar, because DeviceDefault's action bar needs a PackageManager.
+        int theme = info.getThemeResource();
+        if (theme == 0) {
+            theme = sAi.targetSdkVersion < Build.VERSION_CODES.ICE_CREAM_SANDWICH
+                    ? (Integer) call(Resources.class, "selectDefaultTheme", 0, sAi.targetSdkVersion)
+                    : android.R.style.Theme_Material_NoActionBar;
+        }
+        act.setTheme(theme);
+        sInstr.callActivityOnCreate(act, null);
+        call(act, "performStart");
+        sInstr.callActivityOnPostCreate(act, null);
+        call(act, "performResume");
+        // Phase 4: the window at the Q20 screen size, attached the way
+        // ViewRootImpl's first traversal does it, then measured and laid out.
+        View decor = act.getWindow().getDecorView();
+        sDecor = decor;
+        attach(act, decor);
+        layoutPass();
+        dump(decor, "", 0, 0);
+        sStack.push(act);
+        return act;
+    }
+
+    static ActivityInfo findActivityInfo(String cls) throws Exception {
+        for (Object a : (List<?>) get(sPkg, "activities")) {
+            ActivityInfo i = (ActivityInfo) get(a, "info");
+            if (i.name.equals(cls)) return i;
+        }
+        return null;
+    }
+
+    // Resolve an intent to one of the package's activities: explicit component,
+    // else the first manifest intent-filter that matches (action, data type via
+    // ContentResolver.getType, category). IntentFilter.match does the type work.
+    static ActivityInfo resolveActivity(Intent intent) throws Exception {
+        if (intent.getComponent() != null) return findActivityInfo(intent.getComponent().getClassName());
+        ContentResolver cr = sApp.getContentResolver();
+        for (Object a : (List<?>) get(sPkg, "activities")) {
+            for (Object f : (List<?>) get(a, "intents")) {
+                if (((IntentFilter) f).match(cr, intent, true, "facade") >= 0) return (ActivityInfo) get(a, "info");
+            }
+        }
+        return null;
+    }
+
+    // Back: finish and tear down the top activity (its onPause is where NoteEditor
+    // writes the note), then restart+resume the one beneath so its managed cursors
+    // requery and the new row shows.
+    static void back() throws Exception {
+        if (sStack.size() < 2) { System.out.println("facade: back at root, ignored"); return; }
+        Activity top = sStack.pop();
+        top.finish();  // isFinishing() so NoteEditor's onPause commits instead of discarding
+        call(top, "performPause");
+        call(top, "performStop");
+        call(top, "performDestroy");
+        Activity parent = sStack.peek();
+        sDecor = parent.getWindow().getDecorView();
+        call(parent, "performRestart");  // requeries managed cursors (the new note)
+        call(parent, "performResume");
+        layoutPass();
+        System.out.println("facade: back to " + parent.getClass().getSimpleName());
+    }
+
+    // Our Instrumentation: Activity.startActivity lands in execStartActivity
+    // instead of a system_server. The target launches synchronously in-process
+    // (startActivityNow's effect without ActivityThread's own window attach).
+    static class FInstr extends Instrumentation {
+        public ActivityResult execStartActivity(Context who, IBinder contextThread, IBinder token,
+                Activity target, Intent intent, int requestCode, Bundle options) {
+            try {
+                ActivityInfo info = resolveActivity(intent);
+                if (info == null) { System.out.println("facade: no activity for " + intent); return null; }
+                System.out.println("facade: startActivity " + intent.getAction() + " -> " + info.name);
+                // The system fills the resolved component after matching; code
+                // downstream (getComponentName) reads it.
+                intent.setComponent(new ComponentName(info.packageName, info.name));
+                launch(info, intent);
+            } catch (Exception e) {
+                throw new RuntimeException("startActivity " + intent, e);
+            }
+            return null;
+        }
     }
 
     // A row through the app's own provider into SQLite and back, removed again
@@ -569,6 +674,11 @@ public final class Launcher {
             sHandler.postDelayed(new Runnable() {
                 public void run() {
                     if (sDecor.isLayoutRequested()) layoutPass();  // what the live tick does
+                    try {
+                        if (a.startsWith("@")) { menuItem(a.substring(1)); return; }
+                        if (a.startsWith("type:")) { type(a.substring(5)); return; }
+                        if (a.startsWith("key:")) { keyEvent(a.substring(4)); return; }
+                    } catch (Exception e) { throw new RuntimeException(a, e); }
                     if (eq >= 0) {
                         View v = viewById(a.substring(0, eq));
                         CharSequence text = v instanceof TextView ? ((TextView) v).getText() : null;
@@ -604,10 +714,57 @@ public final class Launcher {
     // The first shown view with this id: layouts repeat an id and hide all
     // but one (the Calculator's numeric and operator = buttons).
     static View viewById(String name) {
-        int id = sDecor.getResources().getIdentifier(name, "id", sDecor.getContext().getPackageName());
-        View v = shownById(sDecor, id);
+        Resources res = sDecor.getResources();
+        int id = res.getIdentifier(name, "id", sDecor.getContext().getPackageName());
+        if (id == 0) id = res.getIdentifier(name, "id", "android");  // stock ids, e.g. text1
+        View v = id != 0 ? shownById(sDecor, id) : null;
         if (v == null) throw new IllegalArgumentException("no shown view with id " + name);
         return v;
+    }
+
+    // Tap harness verbs (NOD-32). @<title>: the options-menu item, dispatched
+    // the way the action bar would (onMenuItemSelected -> onOptionsItemSelected).
+    static void menuItem(String label) throws Exception {
+        Activity top = sStack.peek();
+        Menu menu = (Menu) make("com.android.internal.view.menu.MenuBuilder", top);
+        top.onCreateOptionsMenu(menu);
+        top.onPrepareOptionsMenu(menu);
+        for (int i = 0; i < menu.size(); i++) {
+            MenuItem item = menu.getItem(i);
+            CharSequence t = item.getTitle();
+            if (t != null && label.contentEquals(t)) {
+                boolean ok = top.onMenuItemSelected(Window.FEATURE_OPTIONS_PANEL, item);
+                System.out.println("facade: menu \"" + label + "\" selected=" + ok);
+                return;
+            }
+        }
+        throw new IllegalArgumentException("no menu item \"" + label + "\"");
+    }
+
+    // type:<text> -> the first EditText under the current decor (NoteEditor's note).
+    static void type(String str) {
+        EditText et = firstEditText(sDecor);
+        if (et == null) throw new IllegalArgumentException("no EditText to type into");
+        et.setText(str);
+        System.out.println("facade: typed \"" + str + "\" into " + et.getClass().getSimpleName());
+    }
+
+    static EditText firstEditText(View v) {
+        if (v instanceof EditText) return (EditText) v;
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                EditText e = firstEditText(g.getChildAt(i));
+                if (e != null) return e;
+            }
+        }
+        return null;
+    }
+
+    // key:<NAME> -> the hardware keys the Q20 has. BACK pops the activity stack.
+    static void keyEvent(String name) throws Exception {
+        if (name.equals("BACK")) { back(); return; }
+        throw new IllegalArgumentException("unhandled key " + name);
     }
 
     // Visibility checked on the way down: View.isShown() wants a ViewRootImpl
@@ -758,6 +915,8 @@ public final class Launcher {
 
         // Cursor change notification (setNotificationUri, notifyChange).
         SERVICES.put("content", serve("content", "android.content.IContentService", new HashMap<String, Object>()));
+        // NotesList.onPrepareOptionsMenu asks the clipboard whether Paste is live.
+        SERVICES.put("clipboard", serve("clipboard", "android.content.IClipboard", new HashMap<String, Object>()));
 
         // Unknown names answer null, as a missing service would.
         Class<?> sm = Class.forName("android.os.IServiceManager");

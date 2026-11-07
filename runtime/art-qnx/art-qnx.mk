@@ -139,6 +139,7 @@ JAVACORE_OBJS += build/javacore/JNIHelp.o \
                  build/javacore/sendfile.o build/javacore/gcc_frame_stubs.o
 JAVACORE_OBJS += build/javacore/loglib_qnx.o build/javacore/android_runtime_stubs.o
 JAVACORE_OBJS += build/javacore/android_util_Log.o build/javacore/android_os_SystemClock.o
+JAVACORE_OBJS += build/javacore/android_util_EventLog.o  # Activity.onMenuItemSelected logs the pick
 JAVACORE_OBJS += build/javacore/String8.o build/javacore/SharedBuffer.o \
                  build/javacore/SystemClock.o build/javacore/Unicode.o build/javacore/VectorImpl.o \
                  build/javacore/String16.o build/javacore/Timers.o \

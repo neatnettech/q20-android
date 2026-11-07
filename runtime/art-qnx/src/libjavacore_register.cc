@@ -39,6 +39,7 @@ extern int register_android_graphics_BitmapFactory(JNIEnv*);
 extern int register_android_graphics_NinePatch(JNIEnv*);
 namespace android {
 extern void register_android_util_Log(JNIEnv*);
+extern int register_android_util_EventLog(JNIEnv*);
 extern void register_android_os_Parcel(JNIEnv*);
 extern void register_android_os_SystemClock(JNIEnv*);
 extern int register_android_os_SystemProperties(JNIEnv*);
@@ -77,6 +78,7 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     register_java_util_regex_Pattern(env);
     register_java_util_regex_Matcher(env);
     android::register_android_util_Log(env);
+    android::register_android_util_EventLog(env);  // Activity.onMenuItemSelected
     android::register_android_os_Parcel(env);
     android::register_android_os_SystemClock(env);
     register_libcore_icu_ICU(env);

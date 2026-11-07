@@ -58,3 +58,21 @@ extern "C" int __android_log_is_loggable(int prio, const char* tag,
   (void)tag;
   return prio >= default_prio ? 1 : 0;
 }
+
+// EventLog (android_util_EventLog.cpp): the binary event buffer. No event logd
+// on QNX, so writes discard and the reader (EventLog.readEvents) sees nothing.
+// Loose arg types: C symbols don't mangle, and these are all int/pointer sized.
+#include <stdint.h>
+extern "C" int __android_log_bwrite(int32_t tag, const void* payload, size_t len) {
+  (void) tag; (void) payload; return (int) len;
+}
+extern "C" int __android_log_btwrite(int32_t tag, char type, const void* payload, size_t len) {
+  (void) tag; (void) type; (void) payload; return (int) len;
+}
+extern "C" void* android_logger_list_open(int id, int mode, unsigned int tail, int pid) {
+  (void) id; (void) mode; (void) tail; (void) pid; return 0;
+}
+extern "C" int android_logger_list_read(void* list, void* msg) {
+  (void) list; (void) msg; return -1;  // nothing to read
+}
+extern "C" void android_logger_list_free(void* list) { (void) list; }
