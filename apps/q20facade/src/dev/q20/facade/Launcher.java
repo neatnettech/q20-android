@@ -438,7 +438,9 @@ public final class Launcher {
                     System.out.println("facade: tick threw " + rootCause(t));
                     t.printStackTrace(System.out);
                 }
-                sHandler.postDelayed(this, 30);
+                // ponytail: a 16 ms poll wakes the app even when idle; stage W
+                // (real ViewRootImpls, event driven frames) removes this tick.
+                sHandler.postDelayed(this, 16);
             }
         });
         Looper.loop();
@@ -583,13 +585,17 @@ public final class Launcher {
     }
 
     static int sFrames;
+    static Surface sSurface;
     static void draw() throws Exception {
         if (sDecor == null) throw new IllegalStateException("nothing laid out to draw");
         // Surface() is public in the framework but hidden from android-23.jar,
         // so it comes through the same reflection door as everything else here.
         long t0 = SystemClock.uptimeMillis();
-        Surface s = (Surface) make("android.view.Surface");
-        set(s, "mNativeObject", 1L);
+        if (sSurface == null) {  // one Surface (and its Canvas) for every frame
+            sSurface = (Surface) make("android.view.Surface");
+            set(sSurface, "mNativeObject", 1L);
+        }
+        Surface s = sSurface;
         Canvas c = s.lockCanvas(null);
         boolean first = sFrames++ == 0;
         if (first) {

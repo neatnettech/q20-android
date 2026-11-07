@@ -319,7 +319,9 @@ int main(int argc, char** argv) {
         P("redraw rc=%d seq=%.32s read=%.1f swz=%.1f post=%.1f in2post=%.0f ms\n", rc,
           cur, read_ms, swz_ms, post_ms, last_in_ms < 0 ? -1 : now_ms() - last_in_ms);
       }
-      usleep(33333);
+      /* ponytail: a 16 ms poll (NOD-29, was 33) wakes even when idle; a
+       * shared header with a blocking wait (NOD-28 stage X) replaces it. */
+      usleep(16000);
     }
   }
 

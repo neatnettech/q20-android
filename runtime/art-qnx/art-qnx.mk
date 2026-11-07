@@ -219,6 +219,10 @@ build/javacore/%.o: src/%.cc
 	@mkdir -p $(dir $@)
 	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
+# The pixel path at -O2 even in the -O0 bring up build: per pixel blends run
+# for every live frame (NOD-29). The later -O2 wins over CXXFLAGS' -O0.
+build/javacore/raster.o build/javacore/graphics_facade.o build/javacore/screen_window.o: JCFLAGS += -O2
+
 # libart.so supplies zlib, log and atrace symbols at runtime. Linking against it
 # with --no-undefined turns symbols that would only fail on the device into
 # build errors.

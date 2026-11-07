@@ -1350,11 +1350,18 @@ jlong Surface_lockCanvas(JNIEnv* env, jclass, jlong handle, jobject canvas, jobj
     // memory anyway so the pass is still verifiable: Q20_DRAW_PNG writes it
     // out on post, which is the device evidence that does not need a
     // compositor.
-    const char* sz = getenv("Q20_DRAW_SIZE");
-    const int n = (sz != nullptr && sz[0] != '\0') ? atoi(sz) : 720;
-    gFallback.assign((size_t)n * n * 4, 0);
+    // Allocated once and cleared per frame: drawColor ignores CLEAR, so every
+    // frame must still start from zero (NOD-29: the per frame vector fill at
+    // -O0 cost more than some draws).
+    static int n = 0;
+    if (n == 0) {
+      const char* sz = getenv("Q20_DRAW_SIZE");
+      n = (sz != nullptr && sz[0] != '\0') ? atoi(sz) : 720;
+      gFallback.resize((size_t)n * n * 4);
+      ALOGI("no Screen window, drawing into a %dx%d heap surface", n, n);
+    }
+    memset(gFallback.data(), 0, gFallback.size());
     s = raster::Surface{gFallback.data(), n, n, n * 4};
-    ALOGI("no Screen window, drawing into a %dx%d heap surface", n, n);
   }
   c->setSurface(s);
   gLocked = s;
