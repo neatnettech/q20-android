@@ -160,17 +160,12 @@ static int show_frame(const char* path, int size, unsigned char* frame,
   fclose(f);
   if (got != want) return -2;
   double t1 = now_ms();
+  /* The panel consumes BGRA. Since NOD-30 the frame producer (Skia, with the
+   * BGRA shift config in SkUserConfig) already writes BGRA, so this is a plain
+   * row copy. Before Skia the producer wrote RGBA and this swapped R/B per
+   * pixel; if a frame ever comes back hue-swapped, that config regressed. */
   for (int y = 0; y < size; y++) {
-    unsigned char* dst = (unsigned char*)ptr + (size_t)y * stride;
-    const unsigned char* src = frame + (size_t)y * rowBytes;
-    /* The panel consumes BGRA in practice (a pure-blue frame renders red):
-     * swap R/B per pixel. Found 2026-11-06 with a hue probe. */
-    for (int x = 0; x < size; x++) {
-      dst[x * 4 + 0] = src[x * 4 + 2];
-      dst[x * 4 + 1] = src[x * 4 + 1];
-      dst[x * 4 + 2] = src[x * 4 + 0];
-      dst[x * 4 + 3] = src[x * 4 + 3];
-    }
+    memcpy((unsigned char*)ptr + (size_t)y * stride, frame + (size_t)y * rowBytes, rowBytes);
   }
   double t2 = now_ms();
   int rect[4] = {0, 0, size, size};

@@ -43,8 +43,18 @@
 #include <time.h>
 
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <vector>
+
+// NOD-30: drawing is Skia now (CPU backend). The facade keeps its own Paint,
+// text metrics (FreeType) and StaticLayout; the Canvas natives below forward
+// onto an SkCanvas over the window buffer, building an SkPaint per draw.
+#include "SkBitmap.h"
+#include "SkCanvas.h"
+#include "SkImageInfo.h"
+#include "SkPaint.h"
+#include "SkTypeface.h"
 
 namespace {
 
@@ -1155,117 +1165,198 @@ bool traceOn() {
 }
 #define DTRACE(...) do { if (traceOn()) ALOGI(__VA_ARGS__); } while (0)
 
-raster::Canvas* canvasAt(jlong h) { return reinterpret_cast<raster::Canvas*>(h); }
+// ---- Skia paint + typeface from the facade's Paint and font ----
 
-// Draw coordinates round like the engine's own; reject tests round outward so
-// a partially visible rect is never dropped.
-raster::Rect rectOf(jfloat l, jfloat t, jfloat r, jfloat b) {
-  return raster::Rect{(int)lroundf(l), (int)lroundf(t), (int)lroundf(r), (int)lroundf(b)};
+// Roboto as an SkTypeface, the same file face() reads for metrics, loaded
+// once. Null if it cannot load (text then draws nothing, loudly once).
+SkTypeface* skTypeface() {
+  static SkTypeface* t = nullptr;
+  static bool tried = false;
+  if (!tried) {
+    tried = true;
+    const char* root = getenv("ANDROID_ROOT");
+    std::string path = std::string(root ? root : "/system") + "/fonts/Roboto-Regular.ttf";
+    t = SkTypeface::CreateFromFile(path.c_str());
+    if (t == nullptr) ALOGE("SkTypeface cannot load %s, all text draws nothing", path.c_str());
+  }
+  return t;
 }
-raster::Rect outerRectOf(jfloat l, jfloat t, jfloat r, jfloat b) {
-  return raster::Rect{(int)floorf(l), (int)floorf(t), (int)ceilf(r), (int)ceilf(b)};
+
+// android.graphics.Paint style enum: 0 FILL, 1 STROKE, 2 FILL_AND_STROKE.
+SkPaint skPaintOf(const FPaint* p) {
+  SkPaint sp;
+  sp.setColor(static_cast<SkColor>(p->color));
+  sp.setAntiAlias((p->flags & kAntiAlias) != 0);
+  sp.setStyle(p->style == 1 ? SkPaint::kStroke_Style
+              : p->style == 2 ? SkPaint::kStrokeAndFill_Style : SkPaint::kFill_Style);
+  sp.setStrokeWidth(p->strokeWidth);
+  sp.setStrokeMiter(p->strokeMiter);
+  sp.setStrokeCap(static_cast<SkPaint::Cap>(p->cap));
+  sp.setStrokeJoin(static_cast<SkPaint::Join>(p->join));
+  return sp;
 }
+
+// Text paint: unhinted and linear so Skia's advances match the facade's
+// measure path (FT_LOAD_NO_SCALE advances scaled by size), and the drawn run
+// stays inside its measured box.
+SkPaint skTextPaintOf(const FPaint* p) {
+  SkPaint sp = skPaintOf(p);
+  sp.setAntiAlias(true);
+  sp.setTextSize(p->textSize);
+  sp.setTextScaleX(p->textScaleX);
+  sp.setTypeface(skTypeface());
+  sp.setTextEncoding(SkPaint::kUTF16_TextEncoding);
+  sp.setHinting(SkPaint::kNo_Hinting);
+  sp.setLinearText(true);
+  sp.setSubpixelText(true);
+  return sp;
+}
+
+SkMatrix skMatrixOf(const FMatrix* f) {
+  SkMatrix m;
+  m.setAll(f->m[0], f->m[1], f->m[2], f->m[3], f->m[4], f->m[5], f->m[6], f->m[7], f->m[8]);
+  return m;
+}
+
+// ---- Canvas: the facade's Canvas natives forwarded onto an SkCanvas ----
+//
+// The handle is an FCanvas. Surface.lockCanvas points it at the window buffer
+// (setSurface); every draw native builds an SkPaint from the facade's FPaint
+// and calls the SkCanvas. Scale, rotate, skew, round-rect corners, layer
+// alpha and rect clipping are all real now (the old raster engine had none).
+struct FCanvas {
+  SkBitmap bm;
+  std::unique_ptr<SkCanvas> canvas;  // over bm; rebuilt each lockCanvas
+  void setSurface(const raster::Surface& s) {
+    if (s.px == nullptr) { canvas.reset(); return; }
+    SkImageInfo info = SkImageInfo::Make(s.w, s.h, kN32_SkColorType, kPremul_SkAlphaType);
+    bm.installPixels(info, s.px, static_cast<size_t>(s.stride));
+    canvas.reset(new SkCanvas(bm));
+  }
+};
+FCanvas* fcanvasAt(jlong h) { return reinterpret_cast<FCanvas*>(h); }
+SkCanvas* skOf(jlong h) { return fcanvasAt(h)->canvas.get(); }
+
+SkRect ltrb(jfloat l, jfloat t, jfloat r, jfloat b) { return SkRect::MakeLTRB(l, t, r, b); }
 
 jlong Canvas_initRaster(JNIEnv*, jclass, jobject /*bitmap*/) {
-  // The no argument Canvas() passes null, which is the only case here: there
-  // is no Bitmap native layer. Surface.lockCanvas re-points this canvas at the
-  // window buffer, so it starts with an empty surface and draws nothing.
-  return reinterpret_cast<jlong>(new raster::Canvas(raster::Surface{}));
+  // Canvas() passes null here; Surface.lockCanvas points it at the window
+  // buffer before any draw. Until then skOf() is null and draws no-op.
+  return reinterpret_cast<jlong>(new FCanvas());
 }
-void Canvas_finalizer(JNIEnv*, jclass, jlong h) { delete canvasAt(h); }
+void Canvas_finalizer(JNIEnv*, jclass, jlong h) { delete fcanvasAt(h); }
 void Canvas_setBitmap(JNIEnv*, jclass, jlong, jobject) {}
 jboolean Canvas_isOpaque(JNIEnv*, jclass, jlong) { return JNI_TRUE; }
-jint Canvas_getWidth(JNIEnv*, jclass, jlong h) { return canvasAt(h)->width(); }
-jint Canvas_getHeight(JNIEnv*, jclass, jlong h) { return canvasAt(h)->height(); }
+jint Canvas_getWidth(JNIEnv*, jclass, jlong h) { SkCanvas* c = skOf(h); return c ? c->imageInfo().width() : 0; }
+jint Canvas_getHeight(JNIEnv*, jclass, jlong h) { SkCanvas* c = skOf(h); return c ? c->imageInfo().height() : 0; }
 
-jint Canvas_save(JNIEnv*, jclass, jlong h, jint) { return canvasAt(h)->save(); }
-jint Canvas_saveLayer(JNIEnv*, jclass, jlong h, jfloat, jfloat, jfloat, jfloat, jlong, jint) {
-  return canvasAt(h)->save();
+jint Canvas_save(JNIEnv*, jclass, jlong h, jint) { SkCanvas* c = skOf(h); return c ? c->save() : 0; }
+jint Canvas_saveLayer(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b, jlong, jint) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr) return 0;
+  SkRect rect = ltrb(l, t, r, b);
+  return c->saveLayer(&rect, nullptr);
 }
-jint Canvas_saveLayerAlpha(JNIEnv*, jclass, jlong h, jfloat, jfloat, jfloat, jfloat, jint, jint) {
-  return canvasAt(h)->save();
+jint Canvas_saveLayerAlpha(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b,
+                           jint alpha, jint) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr) return 0;
+  SkRect rect = ltrb(l, t, r, b);
+  return c->saveLayerAlpha(&rect, static_cast<U8CPU>(alpha));
 }
-void Canvas_restore(JNIEnv*, jclass, jlong h, jboolean) { canvasAt(h)->restore(); }
+void Canvas_restore(JNIEnv*, jclass, jlong h, jboolean) { SkCanvas* c = skOf(h); if (c) c->restore(); }
 void Canvas_restoreToCount(JNIEnv*, jclass, jlong h, jint count, jboolean) {
-  canvasAt(h)->restoreToCount(count);
+  SkCanvas* c = skOf(h);
+  if (c) c->restoreToCount(count);
 }
-jint Canvas_getSaveCount(JNIEnv*, jclass, jlong h) { return canvasAt(h)->saveCount(); }
-void Canvas_translate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) {
-  canvasAt(h)->translate(dx, dy);
-}
-
-// Accepted and ignored: no transform beyond translate in this engine.
-void Canvas_ignore_ff(JNIEnv*, jclass, jlong, jfloat, jfloat) {}
-void Canvas_ignore_f(JNIEnv*, jclass, jlong, jfloat) {}
-void Canvas_ignore_j(JNIEnv*, jclass, jlong, jlong) {}
-// A transformed view (an animation in flight) concats its matrix. ponytail:
-// the engine has no scale, so only the translation part applies and a
-// scaled view draws unscaled at its moved origin.
+jint Canvas_getSaveCount(JNIEnv*, jclass, jlong h) { SkCanvas* c = skOf(h); return c ? c->getSaveCount() : 1; }
+void Canvas_translate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) { SkCanvas* c = skOf(h); if (c) c->translate(dx, dy); }
+void Canvas_scale(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy) { SkCanvas* c = skOf(h); if (c) c->scale(sx, sy); }
+void Canvas_skew(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy) { SkCanvas* c = skOf(h); if (c) c->skew(sx, sy); }
+void Canvas_rotate(JNIEnv*, jclass, jlong h, jfloat deg) { SkCanvas* c = skOf(h); if (c) c->rotate(deg); }
 void Canvas_concat(JNIEnv*, jclass, jlong h, jlong matrix) {
-  const float* m = matrixAt(matrix)->m;
-  canvasAt(h)->translate(m[2], m[5]);
+  SkCanvas* c = skOf(h);
+  if (c && matrix) c->concat(skMatrixOf(matrixAt(matrix)));
 }
+void Canvas_setMatrix(JNIEnv*, jclass, jlong h, jlong matrix) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr) return;
+  c->setMatrix(matrix ? skMatrixOf(matrixAt(matrix)) : SkMatrix::I());
+}
+void Canvas_getCTM(JNIEnv*, jclass, jlong h, jlong matrix) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr || matrix == 0) return;
+  SkMatrix m = c->getTotalMatrix();
+  float* d = matrixAt(matrix)->m;
+  for (int i = 0; i < 9; i++) d[i] = m[i];
+}
+void Canvas_ignore_j(JNIEnv*, jclass, jlong, jlong) {}  // setDrawFilter: no filters
 
-jboolean Canvas_clipRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b, jint) {
-  return canvasAt(h)->clipRect(rectOf(l, t, r, b)) ? JNI_TRUE : JNI_FALSE;
+jboolean Canvas_clipRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b, jint op) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr) return JNI_FALSE;
+  // android.graphics.Region.Op and SkRegion::Op share the same order.
+  c->clipRect(ltrb(l, t, r, b), static_cast<SkRegion::Op>(op));
+  return c->isClipEmpty() ? JNI_FALSE : JNI_TRUE;
 }
-// Path and region clips leave the clip alone: reporting non empty is the safe
-// lie, since over drawing is visible and under drawing is a missing widget.
+// CP1: path and region clips are still no-ops (Path/Region handles are the
+// facade's, not SkPath/SkRegion yet; wired in CP2 with the stock Path natives).
+// Report non-empty: over-draw is visible, under-draw hides a widget.
 jboolean Canvas_clipHandle(JNIEnv*, jclass, jlong, jlong, jint) { return JNI_TRUE; }
 
 jboolean Canvas_getClipBounds(JNIEnv* env, jclass, jlong h, jobject bounds) {
-  const raster::Rect c = canvasAt(h)->localClip();
-  env->SetIntField(bounds, gRect.left, c.l);
-  env->SetIntField(bounds, gRect.top, c.t);
-  env->SetIntField(bounds, gRect.right, c.r);
-  env->SetIntField(bounds, gRect.bottom, c.b);
-  return c.empty() ? JNI_FALSE : JNI_TRUE;
+  SkCanvas* c = skOf(h);
+  SkRect r;
+  if (c == nullptr || !c->getClipBounds(&r)) {
+    env->SetIntField(bounds, gRect.left, 0);
+    env->SetIntField(bounds, gRect.top, 0);
+    env->SetIntField(bounds, gRect.right, 0);
+    env->SetIntField(bounds, gRect.bottom, 0);
+    return JNI_FALSE;
+  }
+  env->SetIntField(bounds, gRect.left, static_cast<int>(floorf(r.left())));
+  env->SetIntField(bounds, gRect.top, static_cast<int>(floorf(r.top())));
+  env->SetIntField(bounds, gRect.right, static_cast<int>(ceilf(r.right())));
+  env->SetIntField(bounds, gRect.bottom, static_cast<int>(ceilf(r.bottom())));
+  return JNI_TRUE;
 }
 
 jboolean Canvas_quickRejectRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b) {
-  return canvasAt(h)->localClip().intersect(outerRectOf(l, t, r, b)).empty() ? JNI_TRUE : JNI_FALSE;
+  SkCanvas* c = skOf(h);
+  return (c && c->quickReject(ltrb(l, t, r, b))) ? JNI_TRUE : JNI_FALSE;
 }
 jboolean Canvas_quickRejectPath(JNIEnv*, jclass, jlong, jlong) { return JNI_FALSE; }
 
 void Canvas_drawColor(JNIEnv*, jclass, jlong h, jint color, jint /*mode*/) {
-  const raster::Rect& c = canvasAt(h)->deviceClip();
-  DTRACE("drawColor #%08x clip %d,%d %dx%d", color, c.l, c.t, c.width(), c.height());
-  canvasAt(h)->drawColor(static_cast<uint32_t>(color));
+  SkCanvas* c = skOf(h);
+  if (c) c->drawColor(static_cast<SkColor>(color));
 }
 void Canvas_drawPaint(JNIEnv*, jclass, jlong h, jlong paint) {
-  canvasAt(h)->drawColor(paintAt(paint)->color);
+  SkCanvas* c = skOf(h);
+  if (c) c->drawPaint(skPaintOf(paintAt(paint)));
 }
 void Canvas_drawRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b, jlong paint) {
-  DTRACE("drawRect %.0f,%.0f %.0fx%.0f #%08x style=%d", l, t, r - l, b - t,
-         paintAt(paint)->color, paintAt(paint)->style);
-  canvasAt(h)->drawRect(rectOf(l, t, r, b), paintAt(paint)->color);
+  SkCanvas* c = skOf(h);
+  if (c) c->drawRect(ltrb(l, t, r, b), skPaintOf(paintAt(paint)));
 }
 void Canvas_drawRoundRect(JNIEnv*, jclass, jlong h, jfloat l, jfloat t, jfloat r, jfloat b,
-                          jfloat /*rx*/, jfloat /*ry*/, jlong paint) {
-  // ponytail: square corners. The Prober's Button is the stock Material shape
-  // at control_corner_material, 2dp, which does not read at 176x96; corner
-  // coverage is a loop in raster.cc the day a design needs it.
-  DTRACE("drawRoundRect %.0f,%.0f %.0fx%.0f #%08x", l, t, r - l, b - t, paintAt(paint)->color);
-  canvasAt(h)->drawRect(rectOf(l, t, r, b), paintAt(paint)->color);
+                          jfloat rx, jfloat ry, jlong paint) {
+  SkCanvas* c = skOf(h);
+  if (c) c->drawRoundRect(ltrb(l, t, r, b), rx, ry, skPaintOf(paintAt(paint)));
 }
-// Ripples (RippleDrawable's software path). ponytail: a stroke paint fills too.
 void Canvas_drawCircle(JNIEnv*, jclass, jlong h, jfloat cx, jfloat cy, jfloat radius, jlong paint) {
-  DTRACE("drawCircle %.0f,%.0f r=%.0f #%08x", cx, cy, radius, paintAt(paint)->color);
-  canvasAt(h)->drawCircle(cx, cy, radius, paintAt(paint)->color);
+  SkCanvas* c = skOf(h);
+  if (c) c->drawCircle(cx, cy, radius, skPaintOf(paintAt(paint)));
 }
 
-// One glyph run at a baseline origin. textScaleX and letterSpacing are in the
-// measure path but not here: both are default for every Prober run, and a
-// mismatch would show as text wider than its measured box.
-void drawRun(jlong canvas, const jchar* text, int start, int end, jfloat x, jfloat y, jlong paint) {
-  const FPaint* p = paintAt(paint);
-  std::vector<uint32_t> cps;
-  decodeUtf16(text, start, end, &cps);
-  DTRACE("drawRun %d glyphs at %.0f,%.0f #%08x size=%.1f first=U+%04X", (int)cps.size(), x, y,
-         p->color, p->textSize, cps.empty() ? 0 : cps[0]);
-  pthread_mutex_lock(&gFontLock);
-  canvasAt(canvas)->drawGlyphs(face(), cps.data(), (int)cps.size(), x, y, p->color, p->textSize);
-  pthread_mutex_unlock(&gFontLock);
+// A text run at a baseline origin, drawn straight from the UTF-16 units: Skia
+// shapes and advances through the same FreeType face the measure path uses, so
+// measure and draw agree. textScaleX and letterSpacing: scaleX is on the
+// paint; letterSpacing is default for every run the ports draw.
+void drawRun(jlong h, const jchar* text, int start, int end, jfloat x, jfloat y, jlong paint) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr || end <= start) return;
+  c->drawText(text + start, static_cast<size_t>(end - start) * 2, x, y, skTextPaintOf(paintAt(paint)));
 }
 
 void Canvas_drawText_C(JNIEnv* env, jclass, jlong h, jcharArray text, jint index, jint count,
@@ -1311,12 +1402,12 @@ JNINativeMethod gCanvasMethods[] = {
   { "native_restoreToCount", "(JIZ)V", reinterpret_cast<void*>(Canvas_restoreToCount) },
   { "native_getSaveCount", "(J)I", reinterpret_cast<void*>(Canvas_getSaveCount) },
   { "native_translate", "(JFF)V", reinterpret_cast<void*>(Canvas_translate) },
-  { "native_scale", "(JFF)V", reinterpret_cast<void*>(Canvas_ignore_ff) },
-  { "native_skew", "(JFF)V", reinterpret_cast<void*>(Canvas_ignore_ff) },
-  { "native_rotate", "(JF)V", reinterpret_cast<void*>(Canvas_ignore_f) },
+  { "native_scale", "(JFF)V", reinterpret_cast<void*>(Canvas_scale) },
+  { "native_skew", "(JFF)V", reinterpret_cast<void*>(Canvas_skew) },
+  { "native_rotate", "(JF)V", reinterpret_cast<void*>(Canvas_rotate) },
   { "native_concat", "(JJ)V", reinterpret_cast<void*>(Canvas_concat) },
-  { "native_setMatrix", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
-  { "native_getCTM", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
+  { "native_setMatrix", "(JJ)V", reinterpret_cast<void*>(Canvas_setMatrix) },
+  { "native_getCTM", "(JJ)V", reinterpret_cast<void*>(Canvas_getCTM) },
   { "nativeSetDrawFilter", "(JJ)V", reinterpret_cast<void*>(Canvas_ignore_j) },
   { "native_clipRect", "(JFFFFI)Z", reinterpret_cast<void*>(Canvas_clipRect) },
   { "native_clipPath", "(JJI)Z", reinterpret_cast<void*>(Canvas_clipHandle) },
@@ -1342,7 +1433,7 @@ std::vector<uint8_t> gFallback; // used when Screen gives us no window
 bool gPostable;
 
 jlong Surface_lockCanvas(JNIEnv* env, jclass, jlong handle, jobject canvas, jobject /*dirty*/) {
-  raster::Canvas* c = canvasAt(env->GetLongField(canvas, gCanvasNative));
+  FCanvas* c = fcanvasAt(env->GetLongField(canvas, gCanvasNative));
   raster::Surface s;
   gPostable = q20screen::acquire(&s);
   if (!gPostable) {

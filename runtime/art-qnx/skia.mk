@@ -61,3 +61,8 @@ skia: $(SKIA_OBJS)
 JAVACORE_OBJS += $(SKIA_OBJS)
 # Static libpng from the sysroot (1.4.11); its zlib resolves from libart.
 JAVACORE_EXTRA_LIBS += $(ICU_LIBS)/libpngS.a
+
+# graphics_facade.cc draws through Skia now: it needs the Skia headers and the
+# SK_BUILD_FOR_ANDROID define (SkPreConfig picks the platform). Accumulates
+# with the -O2 the P1 rule already puts on this object.
+build/javacore/graphics_facade.o: JCFLAGS += $(SKIA_DEFS)
