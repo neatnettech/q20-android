@@ -207,6 +207,9 @@ JAVACORE_OBJS += build/javacore/android_view_MotionEvent.o build/javacore/androi
 JAVACORE_OBJS += build/javacore/android_text_AndroidBidi.o
 JAVACORE_EXTRA_LIBS += -L$(ICU_LIBS) -lscreen -Wl,-rpath,/base/usr/lib
 
+# NOD-30: AOSP Skia behind the Canvas JNI (see skia.mk).
+include skia.mk
+
 build/javacore/input/%.o: $(FWNATIVE)/libs/input/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }

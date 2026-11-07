@@ -1,0 +1,57 @@
+Skia PNG decoder against the QNX sysroot libpng 1.4 (q20-android, NOD-30)
+
+png_set_seek_fn, png_build_index and png_configure_decoder exist only in
+AOSP libpng, so the region (tile) decoder is compiled out on QNX.
+
+--- a/external/skia/src/images/SkImageDecoder_libpng.cpp
++++ b/external/skia/src/images/SkImageDecoder_libpng.cpp
+@@ -41,6 +41,13 @@
+ #define png_flush_ptr_NULL NULL
+ #endif
+
++// QNX (q20-android): png_set_seek_fn, png_build_index and
++// png_configure_decoder exist only in AOSP's libpng; the sysroot's 1.4.11 has
++// none of them, so the region (tile) decoder is left out there.
++#if defined(SK_BUILD_FOR_ANDROID) && !defined(__QNXNTO__)
++#define SK_PNG_REGION_DECODER
++#endif
++
+ #if defined(SK_DEBUG)
+ #define DEFAULT_FOR_SUPPRESS_PNG_IMAGE_DECODER_WARNINGS false
+ #else  // !defined(SK_DEBUG)
+@@ -90,7 +97,7 @@
+     }
+
+ protected:
+-#ifdef SK_BUILD_FOR_ANDROID
++#ifdef SK_PNG_REGION_DECODER
+     bool onBuildTileIndex(SkStreamRewindable *stream, int *width, int *height) override;
+     bool onDecodeSubset(SkBitmap* bitmap, const SkIRect& region) override;
+ #endif
+@@ -134,7 +141,7 @@
+     }
+ }
+
+-#ifdef SK_BUILD_FOR_ANDROID
++#ifdef SK_PNG_REGION_DECODER
+ static void sk_seek_fn(png_structp png_ptr, png_uint_32 offset) {
+     SkStreamRewindable* sk_stream = (SkStreamRewindable*) png_get_io_ptr(png_ptr);
+     if (!sk_stream->rewind()) {
+@@ -264,7 +271,7 @@
+     * png_init_io() here you would call:
+     */
+     png_set_read_fn(png_ptr, (void *)sk_stream, sk_read_fn);
+-#ifdef SK_BUILD_FOR_ANDROID
++#ifdef SK_PNG_REGION_DECODER
+     png_set_seek_fn(png_ptr, sk_seek_fn);
+ #endif
+     /* where user_io_ptr is a structure you want available to the callbacks */
+@@ -728,7 +735,7 @@
+     return true;
+ }
+
+-#ifdef SK_BUILD_FOR_ANDROID
++#ifdef SK_PNG_REGION_DECODER
+
+ bool SkPNGImageDecoder::onBuildTileIndex(SkStreamRewindable* sk_stream, int *width, int *height) {
+     SkAutoTDelete<SkStreamRewindable> streamDeleter(sk_stream);

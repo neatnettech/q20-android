@@ -1,0 +1,44 @@
+Skia user config for the QNX CPU only build (q20-android, NOD-30)
+
+GPU and PDF off; little endian from the compiler (the sysroot defines neither
+__BYTE_ORDER nor __BIG_ENDIAN, so the stock test claimed big endian); native
+pixels in the byte order the Q20 panel scans out (B, G, R, A in memory).
+
+--- a/external/skia/include/core/SkUserConfig.h
++++ b/external/skia/include/core/SkUserConfig.h
+@@ -179,7 +179,10 @@
+     #include <utils/misc.h>
+ #endif
+
+-#if __BYTE_ORDER == __BIG_ENDIAN
++/* QNX (q20-android): the sysroot defines neither __BYTE_ORDER nor
++ * __BIG_ENDIAN, so the old test read 0 == 0 and claimed big endian. Ask the
++ * compiler instead. */
++#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+     #define SK_CPU_BENDIAN
+     #undef  SK_CPU_LENDIAN
+ #else
+@@ -210,13 +213,21 @@
+ #define SK_PRINT_CODEC_MESSAGES
+ #define SK_SCALAR_TO_FLOAT_EXCLUDED
+ #define SK_SFNTLY_SUBSETTER "sample/chromium/font_subsetter.h"
+-#define SK_SUPPORT_GPU 1
++/* QNX (q20-android): CPU backend only, no PDF. */
++#define SK_SUPPORT_GPU 0
+ #define SK_SUPPORT_LEGACY_CLIPTOLAYERFLAG
+ #define SK_SUPPORT_LEGACY_GETDEVICE
+ #define SK_SUPPORT_LEGACY_PUBLIC_IMAGEINFO_FIELDS
+ #define SK_SUPPORT_LEGACY_SCALAR_DIV
+ #define SK_SUPPORT_OPENCL 0
+-#define SK_SUPPORT_PDF
+ #define SK_USE_FREETYPE_EMBOLDEN
+
++/* QNX (q20-android): native pixels in the byte order the Q20 panel scans out
++ * (B, G, R, A in memory, Screen's RGBA8888), so a frame goes to the window
++ * buffer with a plain memcpy instead of a per pixel swap. */
++#define SK_A32_SHIFT 24
++#define SK_R32_SHIFT 16
++#define SK_G32_SHIFT 8
++#define SK_B32_SHIFT 0
++
+ #endif // SkUserConfig_Android_DEFINED
