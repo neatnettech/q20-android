@@ -33,6 +33,10 @@ extern void register_java_lang_RealToString(JNIEnv*);
 extern void register_qnx_android_os(JNIEnv*);
 extern void register_qnx_graphics(JNIEnv*);
 extern void register_java_nio_ByteOrder(JNIEnv*);
+extern int register_android_graphics_Graphics(JNIEnv*);
+extern int register_android_graphics_Bitmap(JNIEnv*);
+extern int register_android_graphics_BitmapFactory(JNIEnv*);
+extern int register_android_graphics_NinePatch(JNIEnv*);
 namespace android {
 extern void register_android_util_Log(JNIEnv*);
 extern void register_android_os_Parcel(JNIEnv*);
@@ -46,6 +50,7 @@ extern int register_android_animation_PropertyValuesHolder(JNIEnv*);
 extern int register_android_view_MotionEvent(JNIEnv*);
 extern int register_android_view_VelocityTracker(JNIEnv*);
 extern int register_android_text_AndroidBidi(JNIEnv*);
+extern int register_android_graphics_Matrix(JNIEnv*);
 extern int register_android_database_CursorWindow(JNIEnv*);
 extern int register_android_database_SQLiteConnection(JNIEnv*);
 extern int register_android_database_SQLiteGlobal(JNIEnv*);
@@ -92,6 +97,14 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     android::register_android_os_MessageQueue(env);
     register_qnx_android_os(env);
     android::register_android_animation_PropertyValuesHolder(env);
+    // Stock bitmaps and matrices under the facade: decode (PNG, 9-patch),
+    // Bitmap, and the SkMatrix the facade Canvas concats. Ahead of the facade,
+    // whose NinePatch draws (on its own canvas handle) override the stock glue.
+    register_android_graphics_Graphics(env);
+    register_android_graphics_Bitmap(env);
+    register_android_graphics_BitmapFactory(env);
+    register_android_graphics_NinePatch(env);
+    android::register_android_graphics_Matrix(env);
     register_qnx_graphics(env);
     // A9 touch: real MotionEvent dispatch and VelocityTracker (ViewPager).
     android::register_android_view_MotionEvent(env);

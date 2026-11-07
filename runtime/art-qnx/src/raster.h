@@ -136,7 +136,9 @@ class Canvas {
 
 // Write the surface to a PNG at path (dependency-free: stored DEFLATE blocks,
 // so no zlib). For eyeballing the host test's output. Returns false on I/O
-// error. Alpha is written opaque; the panel is opaque anyway.
+// error. Alpha is written opaque; the panel is opaque anyway. Reads BGRA
+// pixels (Skia N32 here); the legacy RGBA rasterizer's host dumps come out
+// red/blue swapped.
 bool write_png(const char* path, const Surface& s);
 
 /*

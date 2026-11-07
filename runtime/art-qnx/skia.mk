@@ -66,3 +66,23 @@ JAVACORE_EXTRA_LIBS += $(ICU_LIBS)/libpngS.a
 # SK_BUILD_FOR_ANDROID define (SkPreConfig picks the platform). Accumulates
 # with the -O2 the P1 rule already puts on this object.
 build/javacore/graphics_facade.o: JCFLAGS += $(SKIA_DEFS)
+
+# The stock graphics JNI for bitmaps (NOD-22 Holo: every Holo widget background
+# is a PNG or 9-patch): Bitmap, BitmapFactory and NinePatch over the
+# GraphicsJNI allocators in Graphics.cpp. skia-compat goes ahead of hwui: its
+# Caches/ResourceCache/TextureCache stubs shadow the GPU stack. The facade
+# keeps Canvas, Paint and Region; they meet at the Bitmap and SkMatrix handles.
+GFXJNI := Graphics Bitmap BitmapFactory NinePatch NinePatchImpl NinePatchPeeker \
+          CreateJavaOutputStreamAdaptor Utils AutoDecodeCancel Matrix
+JAVACORE_OBJS += $(patsubst %,build/javacore/graphics/%.o,$(GFXJNI)) build/javacore/android_nio_utils.o
+GFXJNI_CFLAGS = -I$(abspath skia-compat) $(JCFLAGS) $(SKIA_DEFS) -I$(FWJNI)/android/graphics \
+  -I$(FWBASE)/libs/hwui -fno-strict-aliasing -Wno-narrowing -O2
+
+build/javacore/graphics/%.o: $(FWJNI)/android/graphics/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(GFXJNI_CFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; grep -E "error" $@.err | head -12; false; }
+# Bionic's headers bring assert.h along; QNX's do not.
+build/javacore/android_nio_utils.o: JCFLAGS += -include assert.h
+# The facade draws stock Bitmaps and 9-patches: GraphicsJNI.h needs the same
+# include set as the stock files.
+build/javacore/graphics_facade.o: JCFLAGS := -I$(abspath skia-compat) $(JCFLAGS) -I$(FWJNI)/android/graphics -I$(FWBASE)/libs/hwui

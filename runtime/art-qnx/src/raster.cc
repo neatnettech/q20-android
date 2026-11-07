@@ -207,7 +207,8 @@ bool write_png(const char* path, const Surface& s) {
   ihdr[12] = 0;  // no interlace
   ok = ok && write_chunk(f, "IHDR", ihdr, sizeof(ihdr));
 
-  // Filtered raw scanlines: filter byte 0, then RGB per pixel.
+  // Filtered raw scanlines: filter byte 0, then RGB per pixel, read from the
+  // BGRA bytes Skia's N32 is on this build (patch 0110, the panel's order).
   const size_t rowbytes = 1 + (size_t)s.w * 3;
   std::vector<uint8_t> raw(rowbytes * s.h);
   for (int y = 0; y < s.h; y++) {
@@ -215,9 +216,9 @@ bool write_png(const char* path, const Surface& s) {
     *dst++ = 0;
     const uint8_t* srow = s.px + (size_t)y * s.stride;
     for (int x = 0; x < s.w; x++) {
-      *dst++ = srow[x * 4 + 0];
-      *dst++ = srow[x * 4 + 1];
       *dst++ = srow[x * 4 + 2];
+      *dst++ = srow[x * 4 + 1];
+      *dst++ = srow[x * 4 + 0];
     }
   }
 

@@ -320,11 +320,16 @@ public final class Launcher {
                 info, title, null, null, null);
         call(base, "setOuterContext", act);
         // The manifest theme (activity, else application), applied where
-        // ActivityThread applies it. ponytail: with none, Material NoActionBar,
-        // because DeviceDefault's action bar needs a PackageManager and bitmap
-        // decoding.
+        // ActivityThread applies it. With none, the stock default below
+        // targetSdk 14 (Theme, Holo); ponytail: above it Material NoActionBar,
+        // because DeviceDefault's action bar needs a PackageManager.
         int theme = info.getThemeResource();
-        act.setTheme(theme != 0 ? theme : android.R.style.Theme_Material_NoActionBar);
+        if (theme == 0) {
+            theme = ai.targetSdkVersion < Build.VERSION_CODES.ICE_CREAM_SANDWICH
+                    ? (Integer) call(Resources.class, "selectDefaultTheme", 0, ai.targetSdkVersion)
+                    : android.R.style.Theme_Material_NoActionBar;
+        }
+        act.setTheme(theme);
         instr.callActivityOnCreate(act, null);
         call(act, "performStart");
         instr.callActivityOnPostCreate(act, null);
@@ -341,6 +346,11 @@ public final class Launcher {
         dump(decor, "", 0, 0);
         check("decor " + decor.getWidth() + "x" + decor.getHeight(),
                 decor.getWidth() == SCREEN_PX && decor.getHeight() == SCREEN_PX);
+        android.app.ActionBar bar = act.getActionBar();
+        if (bar != null) {
+            check("action bar \"" + bar.getTitle() + "\" height " + bar.getHeight(),
+                    bar.isShowing() && bar.getHeight() > 0);
+        }
         if (!providers.isEmpty()) provider(act, providers.get(0).authority);
         if (id(act, "counter_text") == 0) return;  // the rest is the Prober's own tree
         TextView counter = (TextView) act.findViewById(id(act, "counter_text"));

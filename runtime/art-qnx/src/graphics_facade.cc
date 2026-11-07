@@ -50,6 +50,8 @@
 // NOD-30: drawing is Skia now (CPU backend). The facade keeps its own Paint,
 // text metrics (FreeType) and StaticLayout; the Canvas natives below forward
 // onto an SkCanvas over the window buffer, building an SkPaint per draw.
+#include <androidfw/ResourceTypes.h>  // Res_png_9patch
+#include "GraphicsJNI.h"  // the stock Bitmap handle (getSkBitmap) and rect helpers
 #include "SkBitmap.h"
 #include "SkCanvas.h"
 #include "SkColor.h"
@@ -57,6 +59,10 @@
 #include "SkInterpolator.h"
 #include "SkPaint.h"
 #include "SkTypeface.h"
+
+// NinePatchImpl.cpp (stock), global like its caller NinePatch.cpp declares it.
+extern void NinePatch_Draw(SkCanvas* canvas, const SkRect& bounds, const SkBitmap& bitmap,
+        const android::Res_png_9patch& chunk, const SkPaint* paint, SkRegion** outRegion);
 
 namespace {
 
@@ -754,156 +760,9 @@ JNINativeMethod gPathMethods[] = {
 
 // ---- Matrix ----
 
-// Row major like android.graphics.Matrix values: x' = m[0]x + m[1]y + m[2].
-struct FMatrix { float m[9] = {1, 0, 0, 0, 1, 0, 0, 0, 1}; };
-
-FMatrix* matrixAt(jlong h) { return reinterpret_cast<FMatrix*>(h); }
-
-FMatrix multiply(const FMatrix& a, const FMatrix& b) {
-  FMatrix r;
-  for (int i = 0; i < 3; i++) {
-    for (int j = 0; j < 3; j++) {
-      r.m[3 * i + j] = a.m[3 * i] * b.m[j] + a.m[3 * i + 1] * b.m[3 + j] + a.m[3 * i + 2] * b.m[6 + j];
-    }
-  }
-  return r;
-}
-FMatrix translate(float dx, float dy) { FMatrix t; t.m[2] = dx; t.m[5] = dy; return t; }
-FMatrix scale(float sx, float sy, float px, float py) {
-  FMatrix t;
-  t.m[0] = sx; t.m[4] = sy; t.m[2] = px - sx * px; t.m[5] = py - sy * py;
-  return t;
-}
-
-jlong Matrix_create(JNIEnv*, jclass, jlong src) {
-  return reinterpret_cast<jlong>(src != 0 ? new FMatrix(*matrixAt(src)) : new FMatrix());
-}
-void Matrix_finalizer(JNIEnv*, jclass, jlong h) { delete matrixAt(h); }
-jboolean Matrix_isIdentity(JNIEnv*, jclass, jlong h) {
-  static const FMatrix kIdentity;
-  return memcmp(matrixAt(h)->m, kIdentity.m, sizeof(kIdentity.m)) == 0;
-}
-jboolean Matrix_isAffine(JNIEnv*, jclass, jlong h) {
-  const float* m = matrixAt(h)->m;
-  return m[6] == 0 && m[7] == 0 && m[8] == 1;
-}
-void Matrix_reset(JNIEnv*, jclass, jlong h) { *matrixAt(h) = FMatrix(); }
-void Matrix_set(JNIEnv*, jclass, jlong h, jlong other) { *matrixAt(h) = *matrixAt(other); }
-void Matrix_setTranslate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) { *matrixAt(h) = translate(dx, dy); }
-void Matrix_setScale(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy) { *matrixAt(h) = scale(sx, sy, 0, 0); }
-void Matrix_setScaleAt(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy, jfloat px, jfloat py) {
-  *matrixAt(h) = scale(sx, sy, px, py);
-}
-void Matrix_setConcat(JNIEnv*, jclass, jlong h, jlong a, jlong b) { *matrixAt(h) = multiply(*matrixAt(a), *matrixAt(b)); }
-void Matrix_preConcat(JNIEnv*, jclass, jlong h, jlong o) { *matrixAt(h) = multiply(*matrixAt(h), *matrixAt(o)); }
-void Matrix_postConcat(JNIEnv*, jclass, jlong h, jlong o) { *matrixAt(h) = multiply(*matrixAt(o), *matrixAt(h)); }
-void Matrix_preTranslate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) { *matrixAt(h) = multiply(*matrixAt(h), translate(dx, dy)); }
-void Matrix_postTranslate(JNIEnv*, jclass, jlong h, jfloat dx, jfloat dy) { *matrixAt(h) = multiply(translate(dx, dy), *matrixAt(h)); }
-void Matrix_preScale(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy) { *matrixAt(h) = multiply(*matrixAt(h), scale(sx, sy, 0, 0)); }
-void Matrix_postScale(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy) { *matrixAt(h) = multiply(scale(sx, sy, 0, 0), *matrixAt(h)); }
-void Matrix_preScaleAt(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy, jfloat px, jfloat py) {
-  *matrixAt(h) = multiply(*matrixAt(h), scale(sx, sy, px, py));
-}
-void Matrix_postScaleAt(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy, jfloat px, jfloat py) {
-  *matrixAt(h) = multiply(scale(sx, sy, px, py), *matrixAt(h));
-}
-jboolean Matrix_invert(JNIEnv*, jclass, jlong h, jlong inverse) {
-  const float* m = matrixAt(h)->m;
-  double det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6])
-             + m[2] * (m[3] * m[7] - m[4] * m[6]);
-  if (det == 0) return false;
-  if (inverse == 0) return true;
-  float* r = matrixAt(inverse)->m;
-  float c[9] = {m[4] * m[8] - m[5] * m[7], m[2] * m[7] - m[1] * m[8], m[1] * m[5] - m[2] * m[4],
-                m[5] * m[6] - m[3] * m[8], m[0] * m[8] - m[2] * m[6], m[2] * m[3] - m[0] * m[5],
-                m[3] * m[7] - m[4] * m[6], m[1] * m[6] - m[0] * m[7], m[0] * m[4] - m[1] * m[3]};
-  for (int i = 0; i < 9; i++) r[i] = c[i] / det;
-  return true;
-}
-// isPts false maps vectors: no translation, affine part only.
-// The bounding box of the mapped corners (SkMatrix::mapRect); true while the
-// matrix keeps rects as rects (no rotation or skew).
-struct { jfieldID left, top, right, bottom; } gRectF;
-jboolean Matrix_rectStaysRect(JNIEnv*, jclass, jlong h) {
-  const float* m = matrixAt(h)->m;
-  return (m[1] == 0 && m[3] == 0) || (m[0] == 0 && m[4] == 0);
-}
-jboolean Matrix_mapRect(JNIEnv* env, jclass, jlong h, jobject dst, jobject src) {
-  const float* m = matrixAt(h)->m;
-  float xs[2] = {env->GetFloatField(src, gRectF.left), env->GetFloatField(src, gRectF.right)};
-  float ys[2] = {env->GetFloatField(src, gRectF.top), env->GetFloatField(src, gRectF.bottom)};
-  float l = 0, t = 0, r = 0, b = 0;
-  for (int i = 0; i < 4; i++) {
-    float x = xs[i & 1], y = ys[i >> 1], w = m[6] * x + m[7] * y + m[8];
-    if (w == 0) w = 1;
-    float mx = (m[0] * x + m[1] * y + m[2]) / w, my = (m[3] * x + m[4] * y + m[5]) / w;
-    l = i == 0 ? mx : std::min(l, mx);
-    r = i == 0 ? mx : std::max(r, mx);
-    t = i == 0 ? my : std::min(t, my);
-    b = i == 0 ? my : std::max(b, my);
-  }
-  env->SetFloatField(dst, gRectF.left, l);
-  env->SetFloatField(dst, gRectF.top, t);
-  env->SetFloatField(dst, gRectF.right, r);
-  env->SetFloatField(dst, gRectF.bottom, b);
-  return Matrix_rectStaysRect(env, nullptr, h);
-}
-void Matrix_mapPoints(JNIEnv* env, jclass, jlong h, jfloatArray dst, jint dstIndex, jfloatArray src,
-                      jint srcIndex, jint count, jboolean isPts) {
-  const float* m = matrixAt(h)->m;
-  std::vector<float> in(2 * count), out(2 * count);
-  env->GetFloatArrayRegion(src, srcIndex, 2 * count, in.data());
-  for (int i = 0; i < count; i++) {
-    float x = in[2 * i], y = in[2 * i + 1];
-    if (isPts) {
-      float w = m[6] * x + m[7] * y + m[8];
-      if (w == 0) w = 1;
-      out[2 * i] = (m[0] * x + m[1] * y + m[2]) / w;
-      out[2 * i + 1] = (m[3] * x + m[4] * y + m[5]) / w;
-    } else {
-      out[2 * i] = m[0] * x + m[1] * y;
-      out[2 * i + 1] = m[3] * x + m[4] * y;
-    }
-  }
-  env->SetFloatArrayRegion(dst, dstIndex, 2 * count, out.data());
-}
-void Matrix_getValues(JNIEnv* env, jclass, jlong h, jfloatArray values) {
-  env->SetFloatArrayRegion(values, 0, 9, matrixAt(h)->m);
-}
-void Matrix_setValues(JNIEnv* env, jclass, jlong h, jfloatArray values) {
-  env->GetFloatArrayRegion(values, 0, 9, matrixAt(h)->m);
-}
-jboolean Matrix_equals(JNIEnv*, jclass, jlong a, jlong b) {
-  return memcmp(matrixAt(a)->m, matrixAt(b)->m, sizeof(FMatrix::m)) == 0;
-}
-
-JNINativeMethod gMatrixMethods[] = {
-  { "native_create", "(J)J", reinterpret_cast<void*>(Matrix_create) },
-  { "finalizer", "(J)V", reinterpret_cast<void*>(Matrix_finalizer) },
-  { "native_isIdentity", "(J)Z", reinterpret_cast<void*>(Matrix_isIdentity) },
-  { "native_isAffine", "(J)Z", reinterpret_cast<void*>(Matrix_isAffine) },
-  { "native_rectStaysRect", "(J)Z", reinterpret_cast<void*>(Matrix_rectStaysRect) },
-  { "native_mapRect", "(JLandroid/graphics/RectF;Landroid/graphics/RectF;)Z", reinterpret_cast<void*>(Matrix_mapRect) },
-  { "native_reset", "(J)V", reinterpret_cast<void*>(Matrix_reset) },
-  { "native_set", "(JJ)V", reinterpret_cast<void*>(Matrix_set) },
-  { "native_setTranslate", "(JFF)V", reinterpret_cast<void*>(Matrix_setTranslate) },
-  { "native_setScale", "(JFF)V", reinterpret_cast<void*>(Matrix_setScale) },
-  { "native_setScale", "(JFFFF)V", reinterpret_cast<void*>(Matrix_setScaleAt) },
-  { "native_setConcat", "(JJJ)V", reinterpret_cast<void*>(Matrix_setConcat) },
-  { "native_preConcat", "(JJ)V", reinterpret_cast<void*>(Matrix_preConcat) },
-  { "native_postConcat", "(JJ)V", reinterpret_cast<void*>(Matrix_postConcat) },
-  { "native_preTranslate", "(JFF)V", reinterpret_cast<void*>(Matrix_preTranslate) },
-  { "native_postTranslate", "(JFF)V", reinterpret_cast<void*>(Matrix_postTranslate) },
-  { "native_preScale", "(JFF)V", reinterpret_cast<void*>(Matrix_preScale) },
-  { "native_postScale", "(JFF)V", reinterpret_cast<void*>(Matrix_postScale) },
-  { "native_preScale", "(JFFFF)V", reinterpret_cast<void*>(Matrix_preScaleAt) },
-  { "native_postScale", "(JFFFF)V", reinterpret_cast<void*>(Matrix_postScaleAt) },
-  { "native_invert", "(JJ)Z", reinterpret_cast<void*>(Matrix_invert) },
-  { "native_mapPoints", "(J[FI[FIIZ)V", reinterpret_cast<void*>(Matrix_mapPoints) },
-  { "native_getValues", "(J[F)V", reinterpret_cast<void*>(Matrix_getValues) },
-  { "native_setValues", "(J[F)V", reinterpret_cast<void*>(Matrix_setValues) },
-  { "native_equals", "(JJ)Z", reinterpret_cast<void*>(Matrix_equals) },
-};
+// The stock Matrix JNI (android/graphics/Matrix.cpp) owns the handle: an
+// SkMatrix*. Its fMat[9] comes first, which patch 0104's MotionEvent reads.
+SkMatrix* matrixAt(jlong h) { return reinterpret_cast<SkMatrix*>(h); }
 
 // ---- RenderNode ----
 
@@ -999,16 +858,18 @@ void nodeMatrix(const FNode* n, float* m) {
   m[3] = 0; m[4] = n->scaleY; m[5] = n->translationY + py - n->scaleY * py;
   m[6] = 0; m[7] = 0; m[8] = 1;
 }
-void RN_getTransformMatrix(JNIEnv*, jclass, jlong h, jlong matrix) { nodeMatrix(nodeAt(h), matrixAt(matrix)->m); }
+void RN_getTransformMatrix(JNIEnv*, jclass, jlong h, jlong matrix) {
+  float m[9];
+  nodeMatrix(nodeAt(h), m);
+  matrixAt(matrix)->set9(m);
+}
 void RN_getInverseTransformMatrix(JNIEnv*, jclass, jlong h, jlong matrix) {
   float m[9];
   nodeMatrix(nodeAt(h), m);
   // Scale and translate per axis; a zero scale (not invertible) maps to 1.
   float sx = m[0] != 0 ? 1 / m[0] : 1, sy = m[4] != 0 ? 1 / m[4] : 1;
-  float* inv = matrixAt(matrix)->m;
-  inv[0] = sx; inv[1] = 0; inv[2] = -m[2] * sx;
-  inv[3] = 0; inv[4] = sy; inv[5] = -m[5] * sy;
-  inv[6] = 0; inv[7] = 0; inv[8] = 1;
+  float inv[9] = {sx, 0, -m[2] * sx, 0, sy, -m[5] * sy, 0, 0, 1};
+  matrixAt(matrix)->set9(inv);
 }
 
 // Clip, outline, layer and projection state only matters to drawing: accept it.
@@ -1312,11 +1173,6 @@ SkPaint skTextPaintOf(const FPaint* p) {
   return sp;
 }
 
-SkMatrix skMatrixOf(const FMatrix* f) {
-  SkMatrix m;
-  m.setAll(f->m[0], f->m[1], f->m[2], f->m[3], f->m[4], f->m[5], f->m[6], f->m[7], f->m[8]);
-  return m;
-}
 
 // ---- Canvas: the facade's Canvas natives forwarded onto an SkCanvas ----
 //
@@ -1376,19 +1232,17 @@ void Canvas_skew(JNIEnv*, jclass, jlong h, jfloat sx, jfloat sy) { SkCanvas* c =
 void Canvas_rotate(JNIEnv*, jclass, jlong h, jfloat deg) { SkCanvas* c = skOf(h); if (c) c->rotate(deg); }
 void Canvas_concat(JNIEnv*, jclass, jlong h, jlong matrix) {
   SkCanvas* c = skOf(h);
-  if (c && matrix) c->concat(skMatrixOf(matrixAt(matrix)));
+  if (c && matrix) c->concat(*matrixAt(matrix));
 }
 void Canvas_setMatrix(JNIEnv*, jclass, jlong h, jlong matrix) {
   SkCanvas* c = skOf(h);
   if (c == nullptr) return;
-  c->setMatrix(matrix ? skMatrixOf(matrixAt(matrix)) : SkMatrix::I());
+  c->setMatrix(matrix ? *matrixAt(matrix) : SkMatrix::I());
 }
 void Canvas_getCTM(JNIEnv*, jclass, jlong h, jlong matrix) {
   SkCanvas* c = skOf(h);
   if (c == nullptr || matrix == 0) return;
-  SkMatrix m = c->getTotalMatrix();
-  float* d = matrixAt(matrix)->m;
-  for (int i = 0; i < 9; i++) d[i] = m[i];
+  *matrixAt(matrix) = c->getTotalMatrix();
 }
 void Canvas_ignore_j(JNIEnv*, jclass, jlong, jlong) {}  // setDrawFilter: no filters
 
@@ -1488,7 +1342,105 @@ void Canvas_drawTextRun_String(JNIEnv* env, jclass, jlong h, jstring text, jint 
   env->ReleaseStringChars(text, chars);
 }
 
+// ---- Bitmaps: the stock decode (Bitmap.cpp, BitmapFactory.cpp), drawn here ----
+//
+// The stock draws scale by canvasDensity/bitmapDensity and filter whenever the
+// densities differ; the same here, over the facade's paint.
+SkPaint bitmapPaintOf(jlong paint, bool filter) {
+  SkPaint sp = paint ? skPaintOf(paintAt(paint)) : SkPaint();
+  if (filter) sp.setFilterQuality(kLow_SkFilterQuality);
+  return sp;
+}
+
+void Canvas_drawBitmap(JNIEnv* env, jobject, jlong h, jobject jbitmap, jfloat left, jfloat top,
+                       jlong paint, jint canvasDensity, jint screenDensity, jint bitmapDensity) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr) return;
+  SkBitmap bm;
+  GraphicsJNI::getSkBitmap(env, jbitmap, &bm);
+  if (canvasDensity == bitmapDensity || canvasDensity == 0 || bitmapDensity == 0) {
+    SkPaint sp = bitmapPaintOf(paint, screenDensity != 0 && screenDensity != bitmapDensity);
+    c->drawBitmap(bm, left, top, &sp);
+    return;
+  }
+  SkPaint sp = bitmapPaintOf(paint, true);
+  c->save();
+  c->translate(left, top);
+  c->scale(canvasDensity / static_cast<float>(bitmapDensity), canvasDensity / static_cast<float>(bitmapDensity));
+  c->drawBitmap(bm, 0, 0, &sp);
+  c->restore();
+}
+void Canvas_drawBitmapRect(JNIEnv* env, jobject, jlong h, jobject jbitmap, jfloat sl, jfloat st,
+                           jfloat sr, jfloat sb, jfloat dl, jfloat dt, jfloat dr, jfloat db,
+                           jlong paint, jint screenDensity, jint bitmapDensity) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr) return;
+  SkBitmap bm;
+  GraphicsJNI::getSkBitmap(env, jbitmap, &bm);
+  SkPaint sp = bitmapPaintOf(paint, screenDensity != 0 && screenDensity != bitmapDensity);
+  SkRect src = ltrb(sl, st, sr, sb);
+  c->drawBitmapRectToRect(bm, &src, ltrb(dl, dt, dr, db), &sp);
+}
+void Canvas_drawBitmapMatrix(JNIEnv* env, jclass, jlong h, jobject jbitmap, jlong matrix, jlong paint) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr) return;
+  SkBitmap bm;
+  GraphicsJNI::getSkBitmap(env, jbitmap, &bm);
+  SkPaint sp = bitmapPaintOf(paint, false);
+  c->save();  // as hwui's SkiaCanvas: this Skia has no drawBitmapMatrix
+  c->concat(*matrixAt(matrix));
+  c->drawBitmap(bm, 0, 0, &sp);
+  c->restore();
+}
+
+// NinePatch.draw lands on the canvas handle, so the facade overrides the stock
+// glue (which reads an hwui Canvas and an android::Paint) with the same steps.
+void ninePatch(JNIEnv* env, jlong h, SkRect bounds, jobject jbitmap, jlong chunk, jlong paint,
+               jint destDensity, jint srcDensity) {
+  SkCanvas* c = skOf(h);
+  if (c == nullptr) return;
+  SkBitmap bm;
+  GraphicsJNI::getSkBitmap(env, jbitmap, &bm);
+  SkPaint sp = bitmapPaintOf(paint, false);
+  const android::Res_png_9patch& np = *reinterpret_cast<android::Res_png_9patch*>(chunk);
+  if (destDensity == srcDensity || destDensity == 0 || srcDensity == 0) {
+    NinePatch_Draw(c, bounds, bm, np, &sp, nullptr);
+    return;
+  }
+  float scale = destDensity / static_cast<float>(srcDensity);
+  c->save();
+  c->translate(bounds.fLeft, bounds.fTop);
+  c->scale(scale, scale);
+  NinePatch_Draw(c, SkRect::MakeWH(bounds.width() / scale, bounds.height() / scale), bm, np, &sp, nullptr);
+  c->restore();
+}
+void NinePatch_drawF(JNIEnv* env, jobject, jlong h, jobject rectF, jobject jbitmap, jlong chunk,
+                     jlong paint, jint destDensity, jint srcDensity) {
+  SkRect bounds;
+  GraphicsJNI::jrectf_to_rect(env, rectF, &bounds);
+  ninePatch(env, h, bounds, jbitmap, chunk, paint, destDensity, srcDensity);
+}
+void NinePatch_drawI(JNIEnv* env, jobject, jlong h, jobject rect, jobject jbitmap, jlong chunk,
+                     jlong paint, jint destDensity, jint srcDensity) {
+  SkRect bounds;
+  GraphicsJNI::jrect_to_rect(env, rect, &bounds);
+  ninePatch(env, h, bounds, jbitmap, chunk, paint, destDensity, srcDensity);
+}
+// Only a window compositor reads a drawable's transparent region; there is
+// none, and the facade's Region is a rect. Null means "no region".
+jlong NinePatch_getTransparentRegion(JNIEnv*, jobject, jobject, jlong, jobject) { return 0; }
+
+JNINativeMethod gNinePatchMethods[] = {
+  { "nativeDraw", "(JLandroid/graphics/RectF;Landroid/graphics/Bitmap;JJII)V", reinterpret_cast<void*>(NinePatch_drawF) },
+  { "nativeDraw", "(JLandroid/graphics/Rect;Landroid/graphics/Bitmap;JJII)V", reinterpret_cast<void*>(NinePatch_drawI) },
+  { "nativeGetTransparentRegion", "(Landroid/graphics/Bitmap;JLandroid/graphics/Rect;)J",
+    reinterpret_cast<void*>(NinePatch_getTransparentRegion) },
+};
+
 JNINativeMethod gCanvasMethods[] = {
+  { "native_drawBitmap", "(JLandroid/graphics/Bitmap;FFJIII)V", reinterpret_cast<void*>(Canvas_drawBitmap) },
+  { "native_drawBitmap", "(JLandroid/graphics/Bitmap;FFFFFFFFJII)V", reinterpret_cast<void*>(Canvas_drawBitmapRect) },
+  { "nativeDrawBitmapMatrix", "(JLandroid/graphics/Bitmap;JJ)V", reinterpret_cast<void*>(Canvas_drawBitmapMatrix) },
   { "initRaster", "(Landroid/graphics/Bitmap;)J", reinterpret_cast<void*>(Canvas_initRaster) },
   { "native_setBitmap", "(JLandroid/graphics/Bitmap;)V", reinterpret_cast<void*>(Canvas_setBitmap) },
   { "finalizer", "(J)V", reinterpret_cast<void*>(Canvas_finalizer) },
@@ -1812,11 +1764,6 @@ void register_qnx_graphics(JNIEnv* env) {
   gRect.top = env->GetFieldID(rect, "top", "I");
   gRect.right = env->GetFieldID(rect, "right", "I");
   gRect.bottom = env->GetFieldID(rect, "bottom", "I");
-  jclass rectF = env->FindClass("android/graphics/RectF");
-  gRectF.left = env->GetFieldID(rectF, "left", "F");
-  gRectF.top = env->GetFieldID(rectF, "top", "F");
-  gRectF.right = env->GetFieldID(rectF, "right", "F");
-  gRectF.bottom = env->GetFieldID(rectF, "bottom", "F");
   jclass lineBreaks = env->FindClass("android/text/StaticLayout$LineBreaks");
   gLineBreaks.breaks = env->GetFieldID(lineBreaks, "breaks", "[I");
   gLineBreaks.widths = env->GetFieldID(lineBreaks, "widths", "[F");
@@ -1835,9 +1782,9 @@ void register_qnx_graphics(JNIEnv* env) {
   jniRegisterNativeMethods(env, "android/graphics/Region", gRegionMethods, NELEM(gRegionMethods));
   jniRegisterNativeMethods(env, "android/graphics/Paint", gPaintBoundsMethods, NELEM(gPaintBoundsMethods));
   jniRegisterNativeMethods(env, "android/graphics/Canvas", gCanvasMethods, NELEM(gCanvasMethods));
+  jniRegisterNativeMethods(env, "android/graphics/NinePatch", gNinePatchMethods, NELEM(gNinePatchMethods));
   jniRegisterNativeMethods(env, "android/view/Surface", gSurfaceMethods, NELEM(gSurfaceMethods));
   jniRegisterNativeMethods(env, "android/graphics/Path", gPathMethods, NELEM(gPathMethods));
-  jniRegisterNativeMethods(env, "android/graphics/Matrix", gMatrixMethods, NELEM(gMatrixMethods));
   jniRegisterNativeMethods(env, "android/view/RenderNode", gRenderNodeMethods, NELEM(gRenderNodeMethods));
   jniRegisterNativeMethods(env, "android/graphics/PorterDuffColorFilter", gPorterDuffColorFilterMethods,
                            NELEM(gPorterDuffColorFilterMethods));
