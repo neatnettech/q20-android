@@ -50,6 +50,8 @@ extern int register_android_os_MessageQueue(JNIEnv*);
 extern int register_android_animation_PropertyValuesHolder(JNIEnv*);
 extern int register_android_view_MotionEvent(JNIEnv*);
 extern int register_android_view_VelocityTracker(JNIEnv*);
+extern int register_android_view_KeyEvent(JNIEnv*);
+extern int register_android_view_KeyCharacterMap(JNIEnv*);
 extern int register_android_text_AndroidBidi(JNIEnv*);
 extern int register_android_graphics_Matrix(JNIEnv*);
 extern int register_android_database_CursorWindow(JNIEnv*);
@@ -111,6 +113,9 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     // A9 touch: real MotionEvent dispatch and VelocityTracker (ViewPager).
     android::register_android_view_MotionEvent(env);
     android::register_android_view_VelocityTracker(env);
+    // NOD-33: real key events for text fields (KCM via libinput).
+    android::register_android_view_KeyEvent(env);
+    android::register_android_view_KeyCharacterMap(env);
     // MeasuredText asks for bidi levels once a char is at or above U+0590.
     android::register_android_text_AndroidBidi(env);
     // NOD-22: SQLiteDatabase and the cursors a ContentProvider hands back.

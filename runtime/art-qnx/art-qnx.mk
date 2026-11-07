@@ -204,6 +204,15 @@ JAVACORE_OBJS += build/javacore/raster.o build/javacore/screen_window.o
 FWNATIVE ?= $(abspath ../../frameworks/native)
 JAVACORE_OBJS += build/javacore/android_view_MotionEvent.o build/javacore/android_view_VelocityTracker.o \
                  build/javacore/input/Input.o build/javacore/input/VelocityTracker.o
+# NOD-33 keyboard: the stock KeyEvent + KeyCharacterMap JNI over libinput's
+# KeyCharacterMap (libutils Tokenizer). A focused text field's TextKeyListener
+# loads a KCM through InputManager; the launcher serves a minimal FULL map
+# (built via a Parcel) through a fake input device, so key events reach it.
+JAVACORE_OBJS += build/javacore/android_view_KeyEvent.o build/javacore/android_view_KeyCharacterMap.o \
+                 build/javacore/input/KeyCharacterMap.o build/javacore/key_metastate.o build/javacore/Tokenizer.o
+# readFromParcel/writeToParcel on KeyCharacterMap and KeyEvent are behind
+# HAVE_ANDROID_OS; our Parcel is the real one, so turn them on.
+build/javacore/android_view_KeyEvent.o build/javacore/android_view_KeyCharacterMap.o build/javacore/input/KeyCharacterMap.o: JCFLAGS += -DHAVE_ANDROID_OS=1
 # A9 text: AndroidBidi (ICU ubidi), reached by any char at or above U+0590.
 JAVACORE_OBJS += build/javacore/android_text_AndroidBidi.o
 JAVACORE_EXTRA_LIBS += -L$(ICU_LIBS) -lscreen -Wl,-rpath,/base/usr/lib

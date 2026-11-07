@@ -25,6 +25,7 @@ import android.graphics.PorterDuffColorFilter;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Parcel;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.IInterface;
@@ -43,6 +44,8 @@ import android.util.TypedValue;
 import android.view.Display;
 import android.view.InputDevice;
 import android.view.MotionEvent;
+import android.view.KeyCharacterMap;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.Surface;
@@ -322,6 +325,15 @@ public final class Launcher {
         // handleBindApplication's order: the app's providers, then its activity.
         ArrayList<ProviderInfo> providers = new ArrayList<ProviderInfo>();
         for (Object p : (List<?>) get(pkg, "providers")) providers.add((ProviderInfo) get(p, "info"));
+        sAppAuthority = providers.isEmpty() ? null : providers.get(0).authority;  // the app's own, for the self-check
+        // The "settings" provider the framework assumes is always present (text
+        // input reads auto-caps/auto-text through it); load our stub in-process.
+        ProviderInfo settings = new ProviderInfo();
+        settings.authority = "settings";
+        settings.name = "dev.q20.facade.SettingsStub";
+        settings.packageName = ai.packageName;
+        settings.applicationInfo = ai;
+        providers.add(settings);
         // SQLite's page size comes from StatFs("/data"), which QNX denies
         // (EACCES). Calibration knob: 4096, the Q20 eMMC block.
         setStatic(Class.forName("android.database.sqlite.SQLiteGlobal"), "sDefaultPageSize", 4096);
@@ -338,7 +350,7 @@ public final class Launcher {
             check("action bar \"" + bar.getTitle() + "\" height " + bar.getHeight(),
                     bar.isShowing() && bar.getHeight() > 0);
         }
-        if (!providers.isEmpty()) provider(act, providers.get(0).authority);
+        if (sAppAuthority != null) provider(act, sAppAuthority);
         if (id(act, "counter_text") == 0) return;  // the rest is the Prober's own tree
         TextView counter = (TextView) act.findViewById(id(act, "counter_text"));
         View bump = act.findViewById(id(act, "bump_button"));
@@ -358,6 +370,7 @@ public final class Launcher {
     // Instrumentation, ContextImpl class, the app's ApplicationInfo and parsed
     // package, and the back stack (top is sDecor's activity).
     static Object sThread, sLoadedApk, sContextImpl, sPkg;
+    static String sAppAuthority;  // the app's own provider authority, for the self-check
     static Application sApp;
     static Instrumentation sInstr;
     static ApplicationInfo sAi;
@@ -729,6 +742,7 @@ public final class Launcher {
                     try {
                         if (a.startsWith("@")) { menuItem(a.substring(1)); return; }
                         if (a.startsWith("type:")) { type(a.substring(5)); return; }
+                        if (a.startsWith("keys:")) { keys(a.substring(5)); return; }
                         if (a.startsWith("key:")) { keyEvent(a.substring(4)); return; }
                     } catch (Exception e) { throw new RuntimeException(a, e); }
                     if (eq >= 0) {
@@ -813,10 +827,43 @@ public final class Launcher {
         return null;
     }
 
-    // key:<NAME> -> the hardware keys the Q20 has. BACK pops the activity stack.
+    // keys:<text> -> type through real key input, not setText. One ACTION_MULTIPLE
+    // KeyEvent carries the string to the focused EditText's KeyListener, the same
+    // path the live hardware keyboard reaches (NOD-33). This is what the Q20's
+    // physical keys drive once the compositor forwards them.
+    static void keys(String str) {
+        EditText et = firstEditText(sDecor);
+        if (et != null) et.requestFocus();
+        long t = SystemClock.uptimeMillis();
+        boolean ok = sDecor.dispatchKeyEvent(new KeyEvent(t, str, KeyCharacterMap.VIRTUAL_KEYBOARD, 0));
+        System.out.println("facade: keys \"" + str + "\" handled=" + ok);
+    }
+
+    // key:<NAME> -> a single hardware key, down then up. BACK pops the stack
+    // (the Q20 has no software bar); the rest dispatch into the focused view.
     static void keyEvent(String name) throws Exception {
         if (name.equals("BACK")) { back(); return; }
-        throw new IllegalArgumentException("unhandled key " + name);
+        int code = keyCode(name);
+        if (code == 0) throw new IllegalArgumentException("unhandled key " + name);
+        if ("ENTER DEL".indexOf(name) >= 0) { EditText et = firstEditText(sDecor); if (et != null) et.requestFocus(); }
+        long t = SystemClock.uptimeMillis();
+        sDecor.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0));
+        sDecor.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0));
+        System.out.println("facade: key " + name);
+    }
+
+    // The Q20 keys the ports use. Printable characters come through keys:/the
+    // compositor's unicode sym, so only the named non-printables map here.
+    static int keyCode(String n) {
+        if (n.equals("ENTER")) return KeyEvent.KEYCODE_ENTER;
+        if (n.equals("DEL")) return KeyEvent.KEYCODE_DEL;  // Backspace
+        if (n.equals("MENU")) return KeyEvent.KEYCODE_MENU;
+        if (n.equals("UP")) return KeyEvent.KEYCODE_DPAD_UP;
+        if (n.equals("DOWN")) return KeyEvent.KEYCODE_DPAD_DOWN;
+        if (n.equals("LEFT")) return KeyEvent.KEYCODE_DPAD_LEFT;
+        if (n.equals("RIGHT")) return KeyEvent.KEYCODE_DPAD_RIGHT;
+        if (n.equals("CENTER")) return KeyEvent.KEYCODE_DPAD_CENTER;
+        return 0;
     }
 
     // Visibility checked on the way down: View.isShown() wants a ViewRootImpl
@@ -969,6 +1016,14 @@ public final class Launcher {
         SERVICES.put("content", serve("content", "android.content.IContentService", new HashMap<String, Object>()));
         // NotesList.onPrepareOptionsMenu asks the clipboard whether Paste is live.
         SERVICES.put("clipboard", serve("clipboard", "android.content.IClipboard", new HashMap<String, Object>()));
+        // NOD-33: a text field's TextKeyListener loads a KeyCharacterMap through
+        // InputManager. Serve one virtual-keyboard device whose KCM is a minimal
+        // FULL map (ACTION_MULTIPLE inserts from getCharacters(), so no per-key
+        // table is needed); the real one arrives once the compositor forwards keys.
+        Map<String, Object> input = new HashMap<String, Object>();
+        input.put("getInputDeviceIds", new int[] { KeyCharacterMap.VIRTUAL_KEYBOARD });
+        input.put("getInputDevice", virtualKeyboard());
+        SERVICES.put("input", serve("input", "android.hardware.input.IInputManager", input));
 
         // Unknown names answer null, as a missing service would.
         Class<?> sm = Class.forName("android.os.IServiceManager");
@@ -984,6 +1039,26 @@ public final class Launcher {
                     }
                 });
         setStatic(Class.forName("android.os.ServiceManager"), "sServiceManager", manager);
+    }
+
+    // A fake VIRTUAL_KEYBOARD InputDevice carrying a minimal FULL KeyCharacterMap.
+    // nativeReadFromParcel wants [deviceId, type, numKeys]; a FULL type with zero
+    // keys is enough for TextKeyListener to pick the QWERTY listener, and
+    // ACTION_MULTIPLE inserts straight from the event's characters.
+    static Object virtualKeyboard() throws Exception {
+        Parcel p = Parcel.obtain();
+        p.writeInt(KeyCharacterMap.VIRTUAL_KEYBOARD);  // deviceId (read first)
+        p.writeInt(KeyCharacterMap.FULL);              // KeyCharacterMap type
+        p.writeInt(0);                                 // no per-key entries
+        p.setDataPosition(0);
+        KeyCharacterMap kcm = KeyCharacterMap.CREATOR.createFromParcel(p);
+        p.recycle();
+        // The 14-arg private ctor: id, generation, controllerNumber, name,
+        // vendorId, productId, descriptor, isExternal, sources, keyboardType,
+        // keyCharacterMap, hasVibrator, hasMicrophone, hasButtonUnderPad.
+        return make("android.view.InputDevice", KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, "q20-virtual",
+                0, 0, "virtual", false, InputDevice.SOURCE_KEYBOARD, InputDevice.KEYBOARD_TYPE_ALPHABETIC,
+                kcm, false, false, false);
     }
 
     static IBinder serve(final String name, String iface, final Map<String, Object> answers) throws Exception {
