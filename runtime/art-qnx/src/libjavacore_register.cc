@@ -46,6 +46,10 @@ extern int register_android_animation_PropertyValuesHolder(JNIEnv*);
 extern int register_android_view_MotionEvent(JNIEnv*);
 extern int register_android_view_VelocityTracker(JNIEnv*);
 extern int register_android_text_AndroidBidi(JNIEnv*);
+extern int register_android_database_CursorWindow(JNIEnv*);
+extern int register_android_database_SQLiteConnection(JNIEnv*);
+extern int register_android_database_SQLiteGlobal(JNIEnv*);
+extern int register_android_database_SQLiteDebug(JNIEnv*);
 }  // namespace android
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
@@ -94,5 +98,10 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     android::register_android_view_VelocityTracker(env);
     // MeasuredText asks for bidi levels once a char is at or above U+0590.
     android::register_android_text_AndroidBidi(env);
+    // NOD-22: SQLiteDatabase and the cursors a ContentProvider hands back.
+    android::register_android_database_CursorWindow(env);
+    android::register_android_database_SQLiteConnection(env);
+    android::register_android_database_SQLiteGlobal(env);
+    android::register_android_database_SQLiteDebug(env);
     return JNI_VERSION_1_6;
 }

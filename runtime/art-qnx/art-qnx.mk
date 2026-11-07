@@ -207,6 +207,29 @@ JAVACORE_OBJS += build/javacore/android_view_MotionEvent.o build/javacore/androi
 JAVACORE_OBJS += build/javacore/android_text_AndroidBidi.o
 JAVACORE_EXTRA_LIBS += -L$(ICU_LIBS) -lscreen -Wl,-rpath,/base/usr/lib
 
+# NOD-22 persistence: the stock SQLite and CursorWindow JNI over the sysroot's
+# SQLite 3.7.9, plus external/sqlite/android (the LOCALIZED and UNICODE
+# collators every open registers; android-6.0.1_r81, gitignored):
+#   mkdir -p external/sqlite/android && curl -sL \
+#     "https://android.googlesource.com/platform/external/sqlite/+archive/android-6.0.1_r81/android.tar.gz" \
+#     | tar xz -C external/sqlite/android
+# compat/sqlite3_compat.h fills the 3.7.11+ gaps; src/sqlite_compat.cc shims
+# sqlite3_db_readonly.
+SQLITE_ANDROID ?= $(abspath ../../external/sqlite/android)
+JAVACORE_OBJS += build/javacore/androidfw/CursorWindow.o build/javacore/android_database_CursorWindow.o build/javacore/android_database_SQLiteConnection.o \
+                 build/javacore/android_database_SQLiteGlobal.o build/javacore/android_database_SQLiteDebug.o \
+                 build/javacore/android_database_SQLiteCommon.o build/javacore/sqlite_compat.o \
+                 build/javacore/sqlite/sqlite3_android.o build/javacore/sqlite/PhoneNumberUtils.o \
+                 build/javacore/sqlite/OldPhoneNumberUtils.o
+JCFLAGS += -I$(SQLITE_ANDROID)
+# Ahead of the ICU archives: the sysroot build references ICU regex.
+JAVACORE_EXTRA_LIBS := $(ICU_LIBS)/libsqlite3S.a $(JAVACORE_EXTRA_LIBS)
+build/javacore/android_database_SQLiteConnection.o build/javacore/android_database_SQLiteGlobal.o: JCFLAGS += -include $(abspath compat/sqlite3_compat.h)
+
+build/javacore/sqlite/%.o: $(SQLITE_ANDROID)/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
+
 # NOD-30: AOSP Skia behind the Canvas JNI (see skia.mk).
 include skia.mk
 
@@ -431,6 +454,7 @@ stage: dalvikvm dex2oat libart.so libjavacore.so
 	cp ../../q20-runtime/sys.android/native/system/fonts/Roboto-Regular.ttf $(STAGE_DIR)/system/fonts/
 	cp ../../apps/q20prober/build/q20prober.apk ../../apps/q20facade/build/q20facade.jar $(STAGE_DIR)/
 	if [ -f ../../apps/calculator/build/calculator.apk ]; then cp ../../apps/calculator/build/calculator.apk $(STAGE_DIR)/; fi
+	if [ -f ../../apps/notepad/build/notepad.apk ]; then cp ../../apps/notepad/build/notepad.apk $(STAGE_DIR)/; fi
 	@echo "staged in $(STAGE_DIR); copy it to the device and run: sh run_core.sh all"
 
 # patch paths are repo relative (a/art/..., a/libcore/..., a/system/core/...);

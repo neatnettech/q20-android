@@ -3,10 +3,14 @@ package dev.q20.facade;
 import android.app.Activity;
 import android.app.Application;
 import android.app.Instrumentation;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.ProviderInfo;
+import android.database.Cursor;
+import android.net.Uri;
 import android.content.res.AssetManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -50,6 +54,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -281,6 +286,11 @@ public final class Launcher {
         Object compat = getStatic(Class.forName("android.content.res.CompatibilityInfo"),
                 "DEFAULT_COMPATIBILITY_INFO");
         Object loadedApk = make("android.app.LoadedApk", thread, ai, compat, null, false, false, false);
+        // Providers load through the context's loader: the activity's, not a
+        // second PathClassLoader over the same APK.
+        set(loadedApk, "mClassLoader", ClassLoader.getSystemClassLoader());
+        Instrumentation instr = new Instrumentation();
+        set(thread, "mInstrumentation", instr);  // installProvider's error path
         Class<?> contextImpl = Class.forName("android.app.ContextImpl");
         Context appContext = (Context) call(contextImpl, "createAppContext", thread, loadedApk);
         Application app = Instrumentation.newApplication(Application.class, appContext);
@@ -295,10 +305,16 @@ public final class Launcher {
             public void onActivitySaveInstanceState(Activity a, Bundle b) {}
             public void onActivityDestroyed(Activity a) { lifecycle.append("destroyed "); }
         });
+        // handleBindApplication's order: the app's providers, then its activity.
+        ArrayList<ProviderInfo> providers = new ArrayList<ProviderInfo>();
+        for (Object p : (List<?>) get(pkg, "providers")) providers.add((ProviderInfo) get(p, "info"));
+        // SQLite's page size comes from StatFs("/data"), which QNX denies
+        // (EACCES). Calibration knob: 4096, the Q20 eMMC block.
+        setStatic(Class.forName("android.database.sqlite.SQLiteGlobal"), "sDefaultPageSize", 4096);
+        if (!providers.isEmpty()) call(thread, "installContentProviders", app, providers);
 
         Context base = (Context) call(contextImpl, "createActivityContext", thread, loadedApk, 0, null);
         CharSequence title = info.labelRes != 0 ? base.getResources().getText(info.labelRes) : info.name;
-        Instrumentation instr = new Instrumentation();
         Activity act = instr.newActivity(ClassLoader.getSystemClassLoader().loadClass(cls), base,
                 new Binder(), app, new Intent(Intent.ACTION_MAIN).setClassName(ai.packageName, cls),
                 info, title, null, null, null);
@@ -325,6 +341,7 @@ public final class Launcher {
         dump(decor, "", 0, 0);
         check("decor " + decor.getWidth() + "x" + decor.getHeight(),
                 decor.getWidth() == SCREEN_PX && decor.getHeight() == SCREEN_PX);
+        if (!providers.isEmpty()) provider(act, providers.get(0).authority);
         if (id(act, "counter_text") == 0) return;  // the rest is the Prober's own tree
         TextView counter = (TextView) act.findViewById(id(act, "counter_text"));
         View bump = act.findViewById(id(act, "bump_button"));
@@ -335,6 +352,20 @@ public final class Launcher {
         check("both inside the screen", inside(counter, decor) && inside(bump, decor));
         bump.setElevation(3f);
         check("RenderNode round trip elevation=" + bump.getElevation(), bump.getElevation() == 3f);
+    }
+
+    // A row through the app's own provider into SQLite and back, removed again
+    // so the app's list stays as it was. Assumes NotePad's notes table.
+    static void provider(Activity act, String authority) {
+        android.content.ContentResolver cr = act.getContentResolver();
+        ContentValues v = new ContentValues();
+        v.put("title", "q20");
+        Uri row = cr.insert(Uri.parse("content://" + authority + "/notes"), v);
+        Cursor c = cr.query(row, new String[] { "title" }, null, null, null);
+        boolean ok = c != null && c.getCount() == 1 && c.moveToFirst() && "q20".equals(c.getString(0));
+        if (c != null) c.close();
+        check("provider insert/query " + row, ok);
+        check("provider delete", cr.delete(row, null, null) == 1);
     }
 
     // The AttachInfo ViewRootImpl hands the tree: a main looper Handler, so
@@ -714,6 +745,9 @@ public final class Launcher {
         // asks again on every event (hundreds of lookups per tap).
         SERVICES.put("accessibility", serve("accessibility",
                 "android.view.accessibility.IAccessibilityManager", new HashMap<String, Object>()));
+
+        // Cursor change notification (setNotificationUri, notifyChange).
+        SERVICES.put("content", serve("content", "android.content.IContentService", new HashMap<String, Object>()));
 
         // Unknown names answer null, as a missing service would.
         Class<?> sm = Class.forName("android.os.IServiceManager");

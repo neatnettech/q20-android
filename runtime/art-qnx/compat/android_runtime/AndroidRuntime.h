@@ -1,7 +1,7 @@
 /*
  * QNX port stub: the framework JNI files include <android_runtime/AndroidRuntime.h>
  * via core_jni_helpers.h. The real header drags in binder and half of libutils.
- * Only registerNativeMethods is used; it is implemented in
+ * Only registerNativeMethods and getJNIEnv are used; they are implemented in
  * src/android_runtime_stubs.cc on top of JNIHelp.
  */
 #ifndef _RUNTIME_ANDROID_RUNTIME_H
@@ -17,6 +17,7 @@ class AndroidRuntime {
   static int registerNativeMethods(JNIEnv* env, const char* className,
                                    const JNINativeMethod* gMethods,
                                    int numMethods);
+  static JNIEnv* getJNIEnv();  // SQLite custom function callbacks
 };
 
 }  // namespace android
