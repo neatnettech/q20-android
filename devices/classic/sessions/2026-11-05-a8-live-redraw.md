@@ -86,3 +86,7 @@ The compositor (in the ls-oom-adj.sh carrier) is still resident holding the
 panel; Navigator is retired. A clean reboot restores the BB UI and kills the
 compositor (it is not persisted). The A7 compositor backup is at
 /accounts/devuser/ls-oom-adj.sh.a7bak.
+
+Launch discipline: BOTH the compositor and the app must be launched detached
+`( cmd > log 2>&1 &)` inside the ssh command - a foreground child dies with
+the ssh session (the QNX sshd kills session children on disconnect).

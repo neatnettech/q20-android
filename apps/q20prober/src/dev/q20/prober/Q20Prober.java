@@ -30,7 +30,25 @@ public class Q20Prober extends Activity {
         passed += check("Log", logTest());
         passed += check("ICU PluralRules", icuTest());
         passed += check("Bundle", bundleTest());
-        System.out.println("prober: headless done, passed=" + passed + "/7");
+        passed += check("charset decode", charsetTest());
+        System.out.println("prober: headless done, passed=" + passed + "/8");
+    }
+
+    // A Reader decodes through CharsetDecoderICU into the NativeConverter
+    // natives; windows-1250 is a table converter from the ICU data.
+    static boolean charsetTest() {
+        try {
+            String s = "\u017c\u00f3\u0142\u0107";  // zolc with Polish marks
+            java.io.Reader r = new java.io.InputStreamReader(
+                    new java.io.ByteArrayInputStream(s.getBytes("UTF-8")), "UTF-8");
+            char[] buf = new char[8];
+            String back = new String(buf, 0, r.read(buf));
+            String cp1250 = new String(new byte[] { (byte) 0xB9 }, "windows-1250");
+            return s.equals(back) && "\u0105".equals(cp1250);
+        } catch (Throwable t) {
+            System.out.println("prober: charset exception " + t);
+            return false;
+        }
     }
 
     static int sum(int n) {

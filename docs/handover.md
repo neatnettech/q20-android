@@ -153,7 +153,9 @@ installed yet.
 
 ## Running the build on the device
 
-The staging tree is at `/accounts/devuser/q20-stage`. Rebuild and restage with
+The staging tree is at `/accounts/devuser/runtime` (it was
+`/accounts/devuser/q20-stage` before the 2026-11-06 reflash). Rebuild and
+restage with
 
 ```
 docker compose run --rm --entrypoint /bin/bash aosp6 -c \

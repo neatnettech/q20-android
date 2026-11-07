@@ -815,3 +815,40 @@ there was no foreground app to borrow a window group from. See
 docs/token-wall-and-device-access.md section 11 for the privilege sweep
 (devuser gets APPLICATION, is refused WINDOW_MANAGER, DISPLAY_MANAGER and
 INPUT_PROVIDER) and for the one experiment left to run.
+
+## A9: NativeConverter and StaticLayout natives (2026-11-06)
+
+The two native families A8 hit, and every real app needs, are in
+`libjavacore.so` and proven on the Classic.
+
+Charsets: `src/icu_stubs.cc` is gone. The stock
+`libcore_icu_NativeConverter.cpp` now runs on the sysroot ICU 4.6, whose static
+data already carries the converter tables (windows-1250 is `ibm-5346`) and the
+alias table. Its one construct newer than 4.6, `icu::UStringEnumeration`, is
+swapped for the C enumeration by patch 0103. Proof: the Prober's new charset
+decode check passes (a `Reader` over UTF-8, plus a windows-1250 byte), and with
+the A8 library swapped back it fails with `UnsatisfiedLinkError` on
+`NativeConverter.openConverter`.
+
+Text layout: there is no minikin, Skia or HarfBuzz to link, so the 12
+`StaticLayout` natives live in the graphics facade as a greedy line breaker
+over the FreeType widths: breaks after space runs, a forced break inside a word
+wider than the line, tab stops and indents, no hyphenation. `advance()` now
+sums the same per char widths, so layout and measuring agree. Proof: four new
+`facade gfx` checks (wrap, long word, empty text, DynamicLayout), and the live
+Prober counter now changes through the app's own `OnClickListener` (9 taps, 9
+bumps on the panel). Details: devices/classic/sessions/2026-11-06-a9-natives.md.
+
+## A9: the AOSP Calculator runs on the panel (2026-11-06)
+
+The first real Android app, unmodified: the AOSP 6.0.1 Calculator with its
+arity evaluator and the support library ViewPager. Each trace named the next
+gap, in this order: a PackageManager for EditText, Region, getTextBounds,
+PorterDuff xfermodes, Double.parseDouble (patch 0105), the spell checker
+service, ViewRootImpl's Choreographer for postOnAnimation, Matrix.mapRect, and
+for CLR the RenderNodeAnimator behind the circular reveal (finished on start,
+as there is no RenderThread). Real touch needed the MotionEvent and
+VelocityTracker natives over libinput (patch 0104). The square panel gets the
+app's landscape layout through a build.prop knob, because the phone portrait
+one clips at 360x360 dp. Details:
+devices/classic/sessions/2026-11-06-a9-calculator.md.

@@ -1,0 +1,86 @@
+MotionEvent JNI on QNX without Skia or Android parcels (q20-android)
+
+nativeTransform reads the graphics facade Matrix handle (9 floats in SkMatrix
+order, graphics_facade.cc FMatrix) instead of an SkMatrix, and the two parcel
+natives throw, because libinput only parcels under HAVE_ANDROID_OS and no
+MotionEvent crosses a process here. Real touch dispatch for A9 (NOD-9).
+
+--- a/frameworks/base/core/jni/android_view_MotionEvent.cpp
++++ b/frameworks/base/core/jni/android_view_MotionEvent.cpp
+@@ -18,7 +18,9 @@
+ 
+ #include "JNIHelp.h"
+ 
++#ifndef __QNXNTO__
+ #include <SkMatrix.h>
++#endif
+ #include <android_runtime/AndroidRuntime.h>
+ #include <android_runtime/Log.h>
+ #include <utils/Log.h>
+@@ -27,7 +29,9 @@
+ #include "android_os_Parcel.h"
+ #include "android_view_MotionEvent.h"
+ #include "android_util_Binder.h"
++#ifndef __QNXNTO__
+ #include "android/graphics/Matrix.h"
++#endif
+ 
+ #include "core_jni_helpers.h"
+ 
+@@ -692,8 +696,15 @@
+ 
+ static void android_view_MotionEvent_nativeTransform(JNIEnv* env, jclass clazz,
+         jlong nativePtr, jobject matrixObj) {
+-    SkMatrix* matrix = android_graphics_Matrix_getSkMatrix(env, matrixObj);
+     MotionEvent* event = reinterpret_cast<MotionEvent*>(nativePtr);
++#ifdef __QNXNTO__
++    // q20-android: no Skia. The graphics facade's Matrix handle is 9 floats
++    // in SkMatrix order (graphics_facade.cc FMatrix).
++    static jfieldID nativeInstance = env->GetFieldID(env->GetObjectClass(matrixObj),
++            "native_instance", "J");
++    event->transform(reinterpret_cast<const float*>(env->GetLongField(matrixObj, nativeInstance)));
++#else
++    SkMatrix* matrix = android_graphics_Matrix_getSkMatrix(env, matrixObj);
+ 
+     float m[9];
+     m[0] = SkScalarToFloat(matrix->get(SkMatrix::kMScaleX));
+@@ -706,10 +717,16 @@
+     m[7] = SkScalarToFloat(matrix->get(SkMatrix::kMPersp1));
+     m[8] = SkScalarToFloat(matrix->get(SkMatrix::kMPersp2));
+     event->transform(m);
++#endif
+ }
+ 
+ static jlong android_view_MotionEvent_nativeReadFromParcel(JNIEnv* env, jclass clazz,
+         jlong nativePtr, jobject parcelObj) {
++#ifndef HAVE_ANDROID_OS
++    // q20-android: libinput parcels only on Android; nothing here crosses a process.
++    jniThrowRuntimeException(env, "MotionEvent parcels are not supported on QNX.");
++    return 0;
++#else
+     MotionEvent* event = reinterpret_cast<MotionEvent*>(nativePtr);
+     if (!event) {
+         event = new MotionEvent();
+@@ -726,10 +743,14 @@
+         return 0;
+     }
+     return reinterpret_cast<jlong>(event);
++#endif
+ }
+ 
+ static void android_view_MotionEvent_nativeWriteToParcel(JNIEnv* env, jclass clazz,
+         jlong nativePtr, jobject parcelObj) {
++#ifndef HAVE_ANDROID_OS
++    jniThrowRuntimeException(env, "MotionEvent parcels are not supported on QNX.");
++#else
+     MotionEvent* event = reinterpret_cast<MotionEvent*>(nativePtr);
+     Parcel* parcel = parcelForJavaObject(env, parcelObj);
+ 
+@@ -737,6 +758,7 @@
+     if (status) {
+         jniThrowRuntimeException(env, "Failed to write MotionEvent parcel.");
+     }
++#endif
+ }
+ 
+ static jstring android_view_MotionEvent_nativeAxisToString(JNIEnv* env, jclass clazz,

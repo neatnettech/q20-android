@@ -1,0 +1,39 @@
+libcore NativeConverter natives on the QNX sysroot ICU 4.6 (q20-android)
+
+The stock file targets ICU 55. Its only construct newer than 4.6 is
+icu::UStringEnumeration in collectStandardNames, so on 4.6 the alias walk uses
+the C enumeration (uenum_next), the same fix patch 0100 applies to
+ICU_getAvailableCurrencyCodes. Replaces src/icu_stubs.cc (A9).
+
+--- a/libcore/luni/src/main/native/libcore_icu_NativeConverter.cpp
++++ b/libcore/luni/src/main/native/libcore_icu_NativeConverter.cpp
+@@ -64,6 +64,21 @@
+ static bool collectStandardNames(JNIEnv* env, const char* canonicalName, const char* standard,
+                                  std::vector<std::string>& result) {
+   UErrorCode status = U_ZERO_ERROR;
++#if U_ICU_VERSION_MAJOR_NUM < 49
++  // q20-android: ICU 4.6 has no icu::UStringEnumeration; walk the C enumeration.
++  UEnumeration* names = ucnv_openStandardNames(canonicalName, standard, &status);
++  if (maybeThrowIcuException(env, "ucnv_openStandardNames", status)) {
++    return false;
++  }
++  const char* name;
++  while ((name = uenum_next(names, NULL, &status)) != NULL) {
++    if (strpbrk(name, "+,") == NULL) {
++      result.push_back(name);
++    }
++  }
++  uenum_close(names);
++  return !maybeThrowIcuException(env, "uenum_next", status);
++#else
+   icu::UStringEnumeration e(ucnv_openStandardNames(canonicalName, standard, &status));
+   if (maybeThrowIcuException(env, "ucnv_openStandardNames", status)) {
+     return false;
+@@ -87,6 +102,7 @@
+   }
+
+   return true;
++#endif
+ }
+
+ static const char* getICUCanonicalName(const char* name) {

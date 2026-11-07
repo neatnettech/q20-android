@@ -10,10 +10,22 @@
   -> input file -> Launcher dispatch -> redraw -> frame -> panel. See
   [sessions/a7-compositing.md](sessions/a7-compositing.md) and
   [sessions/2026-11-05-a8-live-redraw.md](sessions/2026-11-05-a8-live-redraw.md).
-- **Next**: A9 - the first real app port (closing the StaticLayout/NativeConverter
-  native gaps found by A8), and NOD-11 - the facade as the default UI.
+* **A9 session 1: DONE** (2026-11-06): the real NativeConverter and the
+  StaticLayout line breaker are in; the live counter now runs through the
+  Prober's own listener. See
+  [sessions/2026-11-06-a9-natives.md](sessions/2026-11-06-a9-natives.md).
+* **A9 first port: DONE** (2026-11-06): the unmodified AOSP Calculator runs
+  live on the panel (real touch, its own evaluator, animations, DEL and CLR).
+  See [sessions/2026-11-06-a9-calculator.md](sessions/2026-11-06-a9-calculator.md).
+* **Next**: NOD-22, the second port (the todo app), and NOD-11, the facade as
+  the default UI.
 
 ## Sessions
+
+* [sessions/2026-11-06-a9-calculator.md](sessions/2026-11-06-a9-calculator.md):
+  NOD-9 session 2, the AOSP Calculator live, and what it took.
+* [sessions/2026-11-06-a9-natives.md](sessions/2026-11-06-a9-natives.md):
+  NOD-9 session 1, the NativeConverter and StaticLayout natives, proven live.
 
 - [sessions/2026-11-06-chain-break-and-recovery.md](sessions/2026-11-06-chain-break-and-recovery.md) -
   the chain break, the reflash recovery, and the carrier-slot discipline that

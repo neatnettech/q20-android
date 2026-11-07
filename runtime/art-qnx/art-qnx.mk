@@ -129,9 +129,11 @@ JAVACORE_SRCS := android_system_OsConstants.cpp java_io_File.cpp \
                  NetworkUtilities.cpp canonicalize_path.cpp readlink.cpp \
                  valueOf.cpp libcore_io_AsynchronousCloseMonitor.cpp \
                  java_util_regex_Pattern.cpp java_util_regex_Matcher.cpp IcuUtilities.cpp java_lang_Math.cpp \
-                 libcore_icu_ICU.cpp java_lang_Character.cpp java_lang_Float.cpp java_lang_Double.cpp
+                 libcore_icu_ICU.cpp java_lang_Character.cpp java_lang_Float.cpp java_lang_Double.cpp \
+                 libcore_icu_NativeConverter.cpp \
+                 java_lang_StringToReal.cpp java_lang_RealToString.cpp cbigint.cpp
 JAVACORE_OBJS := $(patsubst %.cpp,build/javacore/%.o,$(JAVACORE_SRCS))
-JAVACORE_OBJS += build/javacore/register.o build/javacore/icu_stubs.o
+JAVACORE_OBJS += build/javacore/register.o
 JAVACORE_OBJS += build/javacore/JNIHelp.o \
                  build/javacore/toStringArray.o build/javacore/fallocate.o \
                  build/javacore/sendfile.o build/javacore/gcc_frame_stubs.o
@@ -194,7 +196,20 @@ JAVACORE_EXTRA_LIBS += $(ICU_LIBS)/libfreetypeS.a
 # device from /base/usr/lib: the sysroot's static libscreenS.a speaks an
 # incompatible protocol and dies on array properties (A4, bringup-log.md).
 JAVACORE_OBJS += build/javacore/raster.o build/javacore/screen_window.o
+
+# A9 touch: the stock MotionEvent and VelocityTracker JNI (patch 0104: no
+# Skia, no parcels) over libinput's Input and VelocityTracker
+# (frameworks/native/libs/input from android-6.0.1_r81, gitignored).
+FWNATIVE ?= $(abspath ../../frameworks/native)
+JAVACORE_OBJS += build/javacore/android_view_MotionEvent.o build/javacore/android_view_VelocityTracker.o \
+                 build/javacore/input/Input.o build/javacore/input/VelocityTracker.o
+# A9 text: AndroidBidi (ICU ubidi), reached by any char at or above U+0590.
+JAVACORE_OBJS += build/javacore/android_text_AndroidBidi.o
 JAVACORE_EXTRA_LIBS += -L$(ICU_LIBS) -lscreen -Wl,-rpath,/base/usr/lib
+
+build/javacore/input/%.o: $(FWNATIVE)/libs/input/%.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
 build/javacore/androidfw/%.o: $(FWBASE)/libs/androidfw/%.cpp
 	@mkdir -p $(dir $@)
@@ -243,10 +258,6 @@ build/javacore/binder_jni_stubs.o: src/binder_jni_stubs.cc
 	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
 build/javacore/register.o: src/libjavacore_register.cc
-	@mkdir -p $(dir $@)
-	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
-
-build/javacore/icu_stubs.o: src/icu_stubs.cc
 	@mkdir -p $(dir $@)
 	$(CXX) $(JCFLAGS) -c $< -o $@ 2> $@.err || { echo "FAILED: $<"; tail -12 $@.err; false; }
 
@@ -410,6 +421,7 @@ stage: dalvikvm dex2oat libart.so libjavacore.so
 	cp $(DEPLOY)/system/framework/framework-res.apk $(STAGE_DIR)/system/framework/
 	cp ../../q20-runtime/sys.android/native/system/fonts/Roboto-Regular.ttf $(STAGE_DIR)/system/fonts/
 	cp ../../apps/q20prober/build/q20prober.apk ../../apps/q20facade/build/q20facade.jar $(STAGE_DIR)/
+	if [ -f ../../apps/calculator/build/calculator.apk ]; then cp ../../apps/calculator/build/calculator.apk $(STAGE_DIR)/; fi
 	@echo "staged in $(STAGE_DIR); copy it to the device and run: sh run_core.sh all"
 
 # patch paths are repo relative (a/art/..., a/libcore/..., a/system/core/...);

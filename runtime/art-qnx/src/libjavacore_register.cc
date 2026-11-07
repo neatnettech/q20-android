@@ -2,9 +2,9 @@
  * libjavacore QNX subset registration.
  *
  * ponytail: only the native tables the A ladder has reached are registered.
- * The UTF-8 charset lookup is a stub (src/icu_stubs.cc) because
- * System.out.println calls it on the boot path. Crypto, zip and expat natives
- * land when something reaches them.
+ * Charsets are the real NativeConverter on the sysroot ICU 4.6 (patch 0103);
+ * System.out.println reaches charsetForName on the boot path. Crypto, zip and
+ * expat natives land when something reaches them.
  */
 
 #define LOG_TAG "libcore"
@@ -19,7 +19,7 @@ extern void register_java_io_FileDescriptor(JNIEnv*);
 extern void register_java_lang_System(JNIEnv*);
 extern void register_libcore_io_Memory(JNIEnv*);
 extern void register_libcore_io_Posix(JNIEnv*);
-extern void register_qnx_icu_stubs(JNIEnv*);
+extern void register_libcore_icu_NativeConverter(JNIEnv*);
 extern void register_java_lang_Math(JNIEnv*);
 extern void register_java_util_regex_Pattern(JNIEnv*);
 extern void register_java_util_regex_Matcher(JNIEnv*);
@@ -28,6 +28,8 @@ extern void register_libcore_io_AsynchronousCloseMonitor(JNIEnv*);
 extern void register_java_lang_Character(JNIEnv*);
 extern void register_java_lang_Float(JNIEnv*);
 extern void register_java_lang_Double(JNIEnv*);
+extern void register_java_lang_StringToReal(JNIEnv*);
+extern void register_java_lang_RealToString(JNIEnv*);
 extern void register_qnx_android_os(JNIEnv*);
 extern void register_qnx_graphics(JNIEnv*);
 extern void register_java_nio_ByteOrder(JNIEnv*);
@@ -41,6 +43,9 @@ extern int register_android_content_StringBlock(JNIEnv*);
 extern int register_android_content_XmlBlock(JNIEnv*);
 extern int register_android_os_MessageQueue(JNIEnv*);
 extern int register_android_animation_PropertyValuesHolder(JNIEnv*);
+extern int register_android_view_MotionEvent(JNIEnv*);
+extern int register_android_view_VelocityTracker(JNIEnv*);
+extern int register_android_text_AndroidBidi(JNIEnv*);
 }  // namespace android
 
 jint JNI_OnLoad(JavaVM* vm, void*) {
@@ -58,7 +63,7 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     register_libcore_io_Memory(env);
     register_libcore_io_Posix(env);
     register_java_nio_ByteOrder(env);
-    register_qnx_icu_stubs(env);
+    register_libcore_icu_NativeConverter(env);
     register_java_lang_Math(env);
     register_java_util_regex_Pattern(env);
     register_java_util_regex_Matcher(env);
@@ -73,6 +78,9 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     // AOT code inlines these as intrinsics; -Xint calls the natives.
     register_java_lang_Float(env);
     register_java_lang_Double(env);
+    // Double.parseDouble and Double.toString slow paths (A9: the Calculator).
+    register_java_lang_StringToReal(env);
+    register_java_lang_RealToString(env);
     android::register_android_os_SystemProperties(env);
     android::register_android_content_AssetManager(env);
     android::register_android_content_StringBlock(env);
@@ -81,5 +89,10 @@ jint JNI_OnLoad(JavaVM* vm, void*) {
     register_qnx_android_os(env);
     android::register_android_animation_PropertyValuesHolder(env);
     register_qnx_graphics(env);
+    // A9 touch: real MotionEvent dispatch and VelocityTracker (ViewPager).
+    android::register_android_view_MotionEvent(env);
+    android::register_android_view_VelocityTracker(env);
+    // MeasuredText asks for bidi levels once a char is at or above U+0590.
+    android::register_android_text_AndroidBidi(env);
     return JNI_VERSION_1_6;
 }

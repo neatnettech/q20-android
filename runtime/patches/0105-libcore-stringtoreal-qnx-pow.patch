@@ -1,0 +1,35 @@
+libcore StringToReal on the QNX toolchain (q20-android)
+
+QNX math.h plus the GCC 9 cmath make pow(double, int) ambiguous; the four
+decimal scaling calls take a double exponent instead. Double.parseDouble for
+A9 (the Calculator evaluator).
+
+--- a/libcore/luni/src/main/native/java_lang_StringToReal.cpp
++++ b/libcore/luni/src/main/native/java_lang_StringToReal.cpp
+@@ -210,7 +210,7 @@
+     }
+   else if (e >= 0 && e < APPROX_MAX_MAGNITUDE)
+     {
+-      result = toDoubleHighPrecision (f, length) * pow (10.0, e);
++      result = toDoubleHighPrecision (f, length) * pow (10.0, (double) e);  // q20-android: pow(double, int) is ambiguous on QNX
+     }
+   else if (e >= APPROX_MAX_MAGNITUDE)
+     {
+@@ -234,14 +234,14 @@
+     }
+   else if (e > APPROX_MIN_MAGNITUDE)
+     {
+-      result = toDoubleHighPrecision (f, length) / pow (10.0, -e);
++      result = toDoubleHighPrecision (f, length) / pow (10.0, (double) -e);
+     }
+ 
+   if (e <= APPROX_MIN_MAGNITUDE)
+     {
+ 
+-      result = toDoubleHighPrecision (f, length) * pow (10.0, e + 52);
+-      result = result * pow (10.0, -52);
++      result = toDoubleHighPrecision (f, length) * pow (10.0, (double) (e + 52));
++      result = result * pow (10.0, -52.0);
+ 
+     }
+ 

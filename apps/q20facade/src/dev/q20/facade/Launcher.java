@@ -26,9 +26,16 @@ import android.os.Process;
 import android.os.SystemClock;
 import android.os.Trace;
 import android.text.BoringLayout;
+import android.text.DynamicLayout;
+import android.text.Layout;
+import android.text.SpannableStringBuilder;
+import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.system.Os;
 import android.util.TypedValue;
+import android.view.Display;
+import android.view.InputDevice;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
@@ -61,6 +68,9 @@ import java.util.Map;
  *   gfx    graphics facade: FreeType metrics, Path, RenderNode, ColorFilter
  *   activity  the APK's Activity: fake services, real ContextImpl, lifecycle,
  *          then measure and layout of its window at the Q20 screen size
+ *   tap    the Activity, then real MotionEvent taps on the view ids given
+ *          after the class, in order; each id=text argument is then checked
+ *   draw, live  the Activity on the panel, once or as the resident loop
  */
 public final class Launcher {
     private static int passed;
@@ -89,6 +99,9 @@ public final class Launcher {
                 activity(apk, activityClass);
                 draw();
                 live();
+            } else if (mode.equals("tap")) {
+                activity(apk, activityClass);
+                taps(java.util.Arrays.copyOfRange(args, 3, args.length));
             } else {
                 System.out.println("facade: unknown mode " + mode);
                 System.exit(2);
@@ -197,6 +210,31 @@ public final class Launcher {
         BoringLayout.Metrics bm = BoringLayout.isBoring("count: 0", tp);
         check("BoringLayout count: 0 width=" + (bm == null ? -1 : bm.width), bm != null && bm.width > 0);
 
+        // A9: StaticLayout through the facade line breaker. The width holds
+        // exactly "one two three" (+2 px rounding slack), so that is line 0.
+        String words = "one two three four five six";
+        int w = (int) tp.measureText("one two three") + 2;
+        StaticLayout sl = StaticLayout.Builder.obtain(words, 0, words.length(), tp, w).build();
+        boolean fits = sl.getLineEnd(0) == "one two three ".length();
+        for (int i = 0; i < sl.getLineCount(); i++) {
+            // getLineMax: the extent without trailing spaces, what the breaker bounds
+            fits &= sl.getLineMax(i) <= w && (i == 0 || words.charAt(sl.getLineStart(i) - 1) == ' ');
+        }
+        check("StaticLayout wrap lines=" + sl.getLineCount() + " end0=" + sl.getLineEnd(0),
+                sl.getLineCount() > 1 && fits);
+        String word = "abcdefghijklmnopqrstuvwxyz";
+        StaticLayout split = StaticLayout.Builder.obtain(word, 0, word.length(), tp,
+                (int) tp.measureText("abcdefgh")).build();
+        boolean progress = true;
+        for (int i = 0; i < split.getLineCount(); i++) progress &= split.getLineEnd(i) > split.getLineStart(i);
+        check("StaticLayout long word lines=" + split.getLineCount(), split.getLineCount() > 1 && progress
+                && split.getLineEnd(split.getLineCount() - 1) == word.length());
+        check("StaticLayout empty", StaticLayout.Builder.obtain("", 0, 0, tp, w).build().getLineCount() == 1);
+        // EditText's path: a Spannable reflows through DynamicLayout.
+        DynamicLayout dl = new DynamicLayout(new SpannableStringBuilder(words), tp, w,
+                Layout.Alignment.ALIGN_NORMAL, 1f, 0f, false);
+        check("DynamicLayout lines=" + dl.getLineCount(), dl.getLineCount() == sl.getLineCount());
+
         PathInterpolator pi = new PathInterpolator(0.4f, 0f, 0.2f, 1f);
         float a = pi.getInterpolation(0f), m = pi.getInterpolation(0.5f), z = pi.getInterpolation(1f);
         check("PathInterpolator 0=" + a + " 0.5=" + m + " 1=" + z, a == 0f && z == 1f && m > 0.5f && m < 1f);
@@ -265,9 +303,12 @@ public final class Launcher {
                 new Binder(), app, new Intent(Intent.ACTION_MAIN).setClassName(ai.packageName, cls),
                 info, title, null, null, null);
         call(base, "setOuterContext", act);
-        // ponytail: DeviceDefault's action bar needs a PackageManager and bitmap
-        // decoding; the APK's own theme (none here) comes back at A9.
-        act.setTheme(android.R.style.Theme_Material_NoActionBar);
+        // The manifest theme (activity, else application), applied where
+        // ActivityThread applies it. ponytail: with none, Material NoActionBar,
+        // because DeviceDefault's action bar needs a PackageManager and bitmap
+        // decoding.
+        int theme = info.getThemeResource();
+        act.setTheme(theme != 0 ? theme : android.R.style.Theme_Material_NoActionBar);
         instr.callActivityOnCreate(act, null);
         call(act, "performStart");
         instr.callActivityOnPostCreate(act, null);
@@ -275,19 +316,18 @@ public final class Launcher {
         check("lifecycle " + lifecycle.toString().trim(),
                 lifecycle.toString().equals("created started resumed "));
 
-        // Phase 4: the window at the Q20 screen size, no ViewRootImpl.
+        // Phase 4: the window at the Q20 screen size, attached the way
+        // ViewRootImpl's first traversal does it, then measured and laid out.
         View decor = act.getWindow().getDecorView();
         sDecor = decor;  // the draw mode renders this after the checks
-        int spec = View.MeasureSpec.makeMeasureSpec(SCREEN_PX, View.MeasureSpec.EXACTLY);
-        decor.measure(spec, spec);
-        decor.layout(0, 0, SCREEN_PX, SCREEN_PX);
+        attach(act, decor);
+        layoutPass();
         dump(decor, "", 0, 0);
         check("decor " + decor.getWidth() + "x" + decor.getHeight(),
                 decor.getWidth() == SCREEN_PX && decor.getHeight() == SCREEN_PX);
+        if (id(act, "counter_text") == 0) return;  // the rest is the Prober's own tree
         TextView counter = (TextView) act.findViewById(id(act, "counter_text"));
         View bump = act.findViewById(id(act, "bump_button"));
-        sCounter = counter;
-        sBump = bump;
         check("counter_text \"" + counter.getText() + "\" " + counter.getWidth() + "x" + counter.getHeight(),
                 "count: 0".contentEquals(counter.getText()) && counter.getWidth() > 0);
         check("bump_button " + bump.getWidth() + "x" + bump.getHeight(),
@@ -297,21 +337,52 @@ public final class Launcher {
         check("RenderNode round trip elevation=" + bump.getElevation(), bump.getElevation() == 3f);
     }
 
+    // The AttachInfo ViewRootImpl hands the tree: a main looper Handler, so
+    // View.post (click and tap timeout runnables) runs, and the invalidate
+    // bookkeeping the live loop reads back through isDirty(). Window and
+    // session are logging fakes like the services below. The ViewRootImpl in
+    // it is real but never setView()'d: View.postOnAnimation (ViewPager) and
+    // RenderNodeAnimator reach through it for its Choreographer and pending
+    // animator list. Sound and haptics stay no ops here, because its own
+    // need a window session.
+    static Handler sHandler;
+    static void attach(Activity act, View decor) throws Exception {
+        sHandler = new Handler(Looper.getMainLooper());
+        Object session = serve("session", "android.view.IWindowSession", new HashMap<String, Object>())
+                .queryLocalInterface("android.view.IWindowSession");
+        Object window = serve("iwindow", "android.view.IWindow", new HashMap<String, Object>())
+                .queryLocalInterface("android.view.IWindow");
+        Class<?> cb = Class.forName("android.view.View$AttachInfo$Callbacks");
+        Object effects = Proxy.newProxyInstance(cb.getClassLoader(), new Class<?>[] { cb },
+                new InvocationHandler() {
+                    public Object invoke(Object p, Method m, Object[] args) { return zero(m.getReturnType()); }
+                });
+        Display display = act.getWindowManager().getDefaultDisplay();
+        Object root = make("android.view.ViewRootImpl", act, display);
+        Object ai = make("android.view.View$AttachInfo", session, window, display, root, sHandler, effects);
+        set(ai, "mRootView", decor);
+        set(ai, "mApplicationScale", 1f);
+        set(ai, "mInTouchMode", true);  // a touch only device, as ViewRootImpl decides on first touch
+        call(decor, "dispatchAttachedToWindow", ai, View.VISIBLE);
+    }
+
+    static void layoutPass() {
+        int spec = View.MeasureSpec.makeMeasureSpec(SCREEN_PX, View.MeasureSpec.EXACTLY);
+        sDecor.measure(spec, spec);
+        sDecor.layout(0, 0, SCREEN_PX, SCREEN_PX);
+    }
+
     // A7: the laid out tree's first pixels. Surface is the window handle the
     // framework already knows how to drive: lockCanvas maps the Q20 Screen
     // buffer into a Canvas (our JNI in graphics_facade.cc), one draw pass
     // fills it, unlockCanvasAndPost posts it. mNativeObject only has to be
     // non zero: Surface checks it before every call and our natives ignore it.
     static View sDecor;
-    static TextView sCounter;
-    static View sBump;
-    static int sFallbackCount;
 
-    // A8 phase 2b: the input half of the live loop. Plain Java BYTE parsing -
-    // FileReader/InputStreamReader would need CharsetDecoderICU ->
-    // NativeConverter natives we don't have (UnsatisfiedLinkError, an Error,
-    // which is why the catch is Throwable). ASCII only, as published by the
-    // compositor ("D|M|U x y" lines, seq bumped after the file close).
+    // A8 phase 2b: the input half of the live loop. Plain Java BYTE parsing:
+    // the compositor publishes ASCII only ("D|M|U x y" lines, seq bumped after
+    // the file close), and bytes need no charset decoder per 30 ms poll. A
+    // Reader works since A9 (real NativeConverter); this predates it.
     static long sInSeq = -1;
     static int[] q20PollInput() {
         String raw = System.getenv("Q20_DRAW_RAW");
@@ -352,54 +423,137 @@ public final class Launcher {
         }
     }
 
-    // A8: resident loop - poll the compositor's input file, click the button
-    // on a down+up inside its rect, redraw whenever the counter changes.
-    static void live() throws Exception {
-        int[] br = rectOf(sBump, sDecor);
-        String last = sCounter.getText().toString();
-        boolean down = false;
-        System.out.println("facade: live loop - touch the bump button");
-        for (;;) {
-            int[] ev = q20PollInput();
-            for (int i = 0; i + 2 < ev.length; i += 3) {
-                int kind = ev[i], x = ev[i + 1], y = ev[i + 2];
-                boolean in = x >= br[0] && x < br[2] && y >= br[1] && y < br[3];
-                if (kind == 0 && in) down = true;
-                if (kind == 2 && in && down) {
-                    down = false;
-                    // NO performClick for now: it trips a draw-time relayout of
-                    // the button label that needs the StaticLayout natives
-                    // (the A9 gap). The Prober's own listener increments the
-                    // same way; we mirror it until the natives land.
-                    sCounter.setText("count: " + (++sFallbackCount));
-                    System.out.println("facade: click at " + x + "," + y);
+    // A9: the resident loop, ViewRootImpl's job in miniature. A main looper
+    // tick polls the compositor's input file and turns taps into clicks, then
+    // lays out when a view asked and draws when anything is dirty. Between
+    // ticks the looper runs the app's own posted work: clicks, focus, animator
+    // frames (Choreographer on Handler timing, device/build.prop).
+    static void live() {
+        System.out.println("facade: live loop - touch the app");
+        sHandler.post(new Runnable() {
+            public void run() {
+                try {
+                    tick();
+                } catch (Throwable t) {
+                    System.out.println("facade: tick threw " + rootCause(t));
+                    t.printStackTrace(System.out);
                 }
+                sHandler.postDelayed(this, 30);
             }
-            String now = sCounter.getText().toString();
-            if (!now.equals(last)) {
-                // Re-measure + re-layout: the measure-time layout path works
-                // on this stack, but draw-time assumeLayout would hit the
-                // missing StaticLayout.nNewBuilder native (the A9 gap).
-                int spec = View.MeasureSpec.makeMeasureSpec(SCREEN_PX, View.MeasureSpec.EXACTLY);
-                sDecor.measure(spec, spec);
-                sDecor.layout(0, 0, SCREEN_PX, SCREEN_PX);
-                draw();
-                last = now;
-                System.out.println("facade: redrew counter=" + now);
+        });
+        Looper.loop();
+    }
+
+    // Touches go in as real MotionEvents (A9: the stock MotionEvent and
+    // VelocityTracker natives), so pressed state, ripples, long press and
+    // swipes are the framework's own; clicks arrive through View.post.
+    static long sDownTime;
+    static boolean sTouching;
+    static boolean sLogNextFrame;
+    static void tick() throws Exception {
+        int[] ev = q20PollInput();
+        for (int i = 0; i + 2 < ev.length; i += 3) {
+            int kind = ev[i], x = ev[i + 1], y = ev[i + 2];
+            long now = SystemClock.uptimeMillis();
+            // The compositor replaces its input file per batch, so a quick
+            // tap's down can be overwritten before this poll reads it. Views
+            // drop an up without a down: replay the lost down here.
+            if (kind != 0 && !sTouching) {
+                sDownTime = now;
+                touch(sDownTime, now, MotionEvent.ACTION_DOWN, x, y);
             }
-            try { Thread.sleep(30); } catch (InterruptedException e) { }
+            if (kind == 0) sDownTime = now;
+            sTouching = kind != 2;
+            touch(sDownTime, now, kind == 0 ? MotionEvent.ACTION_DOWN
+                    : kind == 1 ? MotionEvent.ACTION_MOVE : MotionEvent.ACTION_UP, x, y);
+            if (kind != 1) System.out.println("facade: touch " + (kind == 0 ? "down" : "up") + " " + x + "," + y);
+            sLogNextFrame |= kind == 2;
+        }
+        boolean laidOut = sDecor.isLayoutRequested();
+        if (laidOut) layoutPass();
+        if (laidOut || sDecor.isDirty()) {
+            draw();
+            if (sLogNextFrame) System.out.println("facade: drew frame " + sFrames);
+            sLogNextFrame = false;
         }
     }
 
-    static int[] rectOf(View v, View root) {
-        int x = 0, y = 0;
-        for (View p = v; p != root && p != null; p = (View) p.getParent()) {
-            x += p.getLeft();
-            y += p.getTop();
-        }
-        return new int[] { x, y, x + v.getWidth(), y + v.getHeight() };
+    static void touch(long downTime, long eventTime, int action, float x, float y) {
+        MotionEvent me = MotionEvent.obtain(downTime, eventTime, action, x, y, 0);
+        me.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        sDecor.dispatchTouchEvent(me);
+        me.recycle();
     }
 
+    // A9 headless touch check: run the arguments in order on the main looper.
+    // A view id is a tap through the real dispatch path (MotionEvents into
+    // the decor, the click posted back to the looper); id=text checks that
+    // TextView at that point. Taps are 800 ms apart, past
+    // config_longAnimTime, so result animations settle in between.
+    static void taps(String[] args) throws Exception {
+        long at = 300;
+        for (final String a : args) {
+            final int eq = a.indexOf('=');
+            sHandler.postDelayed(new Runnable() {
+                public void run() {
+                    if (sDecor.isLayoutRequested()) layoutPass();  // what the live tick does
+                    if (eq >= 0) {
+                        View v = viewById(a.substring(0, eq));
+                        CharSequence text = v instanceof TextView ? ((TextView) v).getText() : null;
+                        check(a + " (got \"" + text + "\")", text != null && a.substring(eq + 1).contentEquals(text));
+                        return;
+                    }
+                    View v = viewById(a);
+                    int[] loc = new int[2];
+                    v.getLocationInWindow(loc);
+                    float x = loc[0] + v.getWidth() / 2f, y = loc[1] + v.getHeight() / 2f;
+                    long t = SystemClock.uptimeMillis();
+                    touch(t, t, MotionEvent.ACTION_DOWN, x, y);
+                    touch(t, t + 60, MotionEvent.ACTION_UP, x, y);
+                    System.out.println("facade: tapped " + a + " at " + (int) x + "," + (int) y);
+                }
+            }, at);
+            if (eq < 0) at += 800;
+        }
+        // ponytail: the main looper may not quit, so a sentinel thrown from
+        // a posted runnable ends this loop() after the last argument.
+        final RuntimeException done = new RuntimeException("taps done");
+        sHandler.postDelayed(new Runnable() {
+            public void run() { throw done; }
+        }, at + 300);
+        try {
+            Looper.loop();
+        } catch (RuntimeException e) {
+            if (e != done) throw e;
+        }
+        dump(sDecor, "", 0, 0);
+    }
+
+    // The first shown view with this id: layouts repeat an id and hide all
+    // but one (the Calculator's numeric and operator = buttons).
+    static View viewById(String name) {
+        int id = sDecor.getResources().getIdentifier(name, "id", sDecor.getContext().getPackageName());
+        View v = shownById(sDecor, id);
+        if (v == null) throw new IllegalArgumentException("no shown view with id " + name);
+        return v;
+    }
+
+    // Visibility checked on the way down: View.isShown() wants a ViewRootImpl
+    // parent above the decor and answers false here.
+    static View shownById(View v, int id) {
+        if (v.getVisibility() != View.VISIBLE) return null;
+        if (v.getId() == id) return v;
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                View hit = shownById(g.getChildAt(i), id);
+                if (hit != null) return hit;
+            }
+        }
+        return null;
+    }
+
+    static int sFrames;
     static void draw() throws Exception {
         if (sDecor == null) throw new IllegalStateException("nothing laid out to draw");
         // Surface() is public in the framework but hidden from android-23.jar,
@@ -407,14 +561,16 @@ public final class Launcher {
         Surface s = (Surface) make("android.view.Surface");
         set(s, "mNativeObject", 1L);
         Canvas c = s.lockCanvas(null);
-        check("canvas " + c.getWidth() + "x" + c.getHeight(),
-                c.getWidth() > 0 && c.getHeight() > 0);
-        themeColor("colorButtonNormal", android.R.attr.colorButtonNormal);
-        themeColor("colorControlHighlight", android.R.attr.colorControlHighlight);
-        themeColor("textColorPrimary", android.R.attr.textColorPrimary);
+        boolean first = sFrames++ == 0;
+        if (first) {
+            check("canvas " + c.getWidth() + "x" + c.getHeight(), c.getWidth() > 0 && c.getHeight() > 0);
+            themeColor("colorButtonNormal", android.R.attr.colorButtonNormal);
+            themeColor("colorControlHighlight", android.R.attr.colorControlHighlight);
+            themeColor("textColorPrimary", android.R.attr.textColorPrimary);
+        }
         sDecor.draw(c);
         s.unlockCanvasAndPost(c);
-        check("draw pass completed", true);
+        if (first) check("draw pass completed", true);
     }
 
     // Which theme attribute the button background resolves through: the draw
@@ -427,14 +583,20 @@ public final class Launcher {
                 + " data=#" + Integer.toHexString(tv.data) + " res=0x" + Integer.toHexString(tv.resourceId));
     }
 
-    static Configuration configuration(int dpi) {
+    static Configuration configuration(int dpi) throws Exception {
         Configuration c = new Configuration();
         c.setToDefaults();
         c.locale = Locale.getDefault();
         c.setLayoutDirection(c.locale);
         c.densityDpi = dpi;
         c.screenWidthDp = c.screenHeightDp = c.smallestScreenWidthDp = SCREEN_PX * 160 / dpi;
-        c.orientation = Configuration.ORIENTATION_PORTRAIT;  // square: w <= h, as WindowManager decides
+        // Square: WindowManager says portrait (w <= h). Calibration knob
+        // q20.facade.orientation (device/build.prop): phone portrait layouts
+        // assume ~640 dp of height, and their landscape ones fit 360x360 dp.
+        Object orientation = call(Class.forName("android.os.SystemProperties"), "get",
+                "q20.facade.orientation", "portrait");
+        c.orientation = "landscape".equals(orientation)
+                ? Configuration.ORIENTATION_LANDSCAPE : Configuration.ORIENTATION_PORTRAIT;
         c.screenLayout = Configuration.SCREENLAYOUT_SIZE_NORMAL | Configuration.SCREENLAYOUT_LONG_NO
                 | Configuration.SCREENLAYOUT_LAYOUTDIR_LTR;
         c.touchscreen = Configuration.TOUCHSCREEN_FINGER;
@@ -499,6 +661,18 @@ public final class Launcher {
         display.put("getDisplayIds", new int[] { 0 });
         SERVICES.put("display", serve("display", "android.hardware.display.IDisplayManager", display));
         SERVICES.put("activity", serve("activity", "android.app.IActivityManager", new HashMap<String, Object>()));
+        // A9: every EditText's Editor requires a PackageManager, which
+        // ContextImpl only builds when this service answers.
+        SERVICES.put("package", serve("package", "android.content.pm.IPackageManager", new HashMap<String, Object>()));
+        // EditText attach and focus: spell checking (off) and the input method.
+        SERVICES.put("textservices", serve("textservices",
+                "com.android.internal.textservice.ITextServicesManager", new HashMap<String, Object>()));
+        SERVICES.put("input_method", serve("input_method",
+                "com.android.internal.view.IInputMethodManager", new HashMap<String, Object>()));
+        // Answers state 0 (disabled) once; when missing, AccessibilityManager
+        // asks again on every event (hundreds of lookups per tap).
+        SERVICES.put("accessibility", serve("accessibility",
+                "android.view.accessibility.IAccessibilityManager", new HashMap<String, Object>()));
 
         // Unknown names answer null, as a missing service would.
         Class<?> sm = Class.forName("android.os.IServiceManager");

@@ -11,6 +11,7 @@ system/
 q20-runtime/
 toolchains/
 bbnix/
+packages/
 
 # device photos (personal hardware)
 internals/
@@ -37,6 +38,7 @@ runtime/art-qnx/dex2oat
 .omc/
 apps/q20prober/build/
 apps/q20facade/build/
+apps/calculator/build/
 runtime/qnx-shims/screen-probe
 runtime/qnx-shims/qconnDoor.bin
 frameworks/native/

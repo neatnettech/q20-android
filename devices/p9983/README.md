@@ -1,19 +1,16 @@
 # P'9983 (Porsche Design Q10) — research & recovery
 
-Second device on the bench: a **P'9983** (Porsche Design variant of the Q10).
-The stock Q10 10.3.3.498 OS boots to the setup wizard; the wizard's
-"Verifying and securing device" step (BlackBerry Infrastructure enrollment)
-hangs because the BB infra is dead (2026). The wizard skip is root caused
-(2026-11-06): the navigator launches the OOBE while
-`/var/pps/system/navigator/config` has `autorun::1`, and the Classic's working
-bake has `autorun::0`. Patched container `~/q20-flash/p9983/os-navskip.signed`
-is built and fsck clean, waiting on a flash — see the sessions.
+**ROOTED 2026-11-06**: `ssh -p 2225 root@192.168.1.185` = uid-0, with the
+same self-healing boot persistence as the Classic. Second target of the
+two-devices-one-chain setup.
 
 ## Sessions
 
 - [session-2026-10-30-first-contact.md](sessions/2026-10-30-first-contact.md) — first probe, USB state, plan.
 - [session-2026-10-31-resume-plan.md](sessions/2026-10-31-resume-plan.md) — the resume plan after charging.
 - [session-2026-11-01-image-swap-plan.md](sessions/2026-11-01-image-swap-plan.md) — image-swap ruled out; enrollment reframe; the QNX6 wizard-skip injection (tools + flash lesson + the flag not working on the Q10 build).
+- [session-2026-11-06-oobe-autorun-root-cause.md](sessions/2026-11-06-oobe-autorun-root-cause.md) — the navigator autorun root cause + the navskip image.
+- [session-2026-11-06-rooted.md](sessions/2026-11-06-rooted.md) — **ROOTED**: the /q getroot bake, the timestamp-overflow fix, the session-0 sz, persistence.
 - [session-2026-11-06-oobe-autorun-root-cause.md](sessions/2026-11-06-oobe-autorun-root-cause.md) — the wizard skip root caused: navigator `autorun::0`, not the firstlaunch flag; patched container built + fsck clean.
 
 ## The hardware case

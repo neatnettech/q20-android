@@ -74,15 +74,33 @@ class QNX6:
                     ptrs=ptrs, levels=levels, status=status)
 
     def read_file(self, raw):
-        """raw = inode bytes; returns the file content."""
+        """raw = inode bytes; returns the file content.
+        levels 0: ptr[0..14] = direct data blocks.
+        levels 1: ptr[i] = L1 table blocks (1024 entries = data blocks)."""
         size, = struct.unpack_from('<Q', raw, 0)
         ptrs = struct.unpack_from('<16I', raw, 36)
+        levels = raw[100]
         out = bytearray()
-        for i in range(15):
-            b = ptrs[i]
-            if b == 0xFFFFFFFF or b == 0:
-                break
-            out += self.data(b)
+        bs = self.blocksize
+        nptrs = bs // 4
+        if levels == 0:
+            for i in range(15):
+                b = ptrs[i]
+                if b == 0xFFFFFFFF or b == 0:
+                    break
+                out += self.data(b)
+        elif levels == 1:
+            for i in range(15):
+                l1blk = ptrs[i]
+                if l1blk == 0xFFFFFFFF or l1blk == 0:
+                    break
+                l1 = struct.unpack_from('<%dI' % nptrs, self.data(l1blk), 0)
+                for e in l1:
+                    if e == 0xFFFFFFFF:
+                        break
+                    out += self.data(e)
+        else:
+            raise NotImplementedError('filelevels %d' % levels)
         return bytes(out[:size])
 
     def list_dir(self, raw):
@@ -109,6 +127,15 @@ class QNX6:
 
     def lookup(self, dirino, name):
         return dict((n, i) for i, n in self.list_dir(self.inode(dirino))).get(name)
+
+    def lookup_all(self, path):
+        ino = 1
+        for part in [p for p in path.split('/') if p]:
+            nxt = self.lookup(ino, part)
+            if nxt is None:
+                raise KeyError('missing %r under ino %d' % (part, ino))
+            ino = nxt
+        return ino
 
 def main():
     img = open(sys.argv[1], 'rb').read()
