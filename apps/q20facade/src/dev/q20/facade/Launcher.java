@@ -116,6 +116,8 @@ public final class Launcher {
             } else if (mode.equals("tap")) {
                 activity(apk, activityClass);
                 taps(java.util.Arrays.copyOfRange(args, 3, args.length));
+            } else if (mode.equals("inputtest")) {
+                inputTest();
             } else {
                 System.out.println("facade: unknown mode " + mode);
                 System.exit(2);
@@ -529,10 +531,17 @@ public final class Launcher {
     // the compositor publishes ASCII only ("D|M|U x y" lines, seq bumped after
     // the file close), and bytes need no charset decoder per 30 ms poll. A
     // Reader works since A9 (real NativeConverter); this predates it.
-    static long sInSeq = -1;
+    static long sInSeq = -1;  // highest absolute event index consumed
     static int[] q20PollInput() {
         String raw = System.getenv("Q20_DRAW_RAW");
-        if (raw == null) return new int[0];
+        return raw == null ? new int[0] : q20PollInput(raw);
+    }
+
+    // Read the events the compositor published since our cursor. Each .input
+    // line is "<idx> <K> <x> <y>" (K in D/M/U), the .input.seq is the running
+    // total; we emit only lines whose absolute index is past sInSeq, so no
+    // event is replayed and (within the compositor's 32-event ring) none lost.
+    static int[] q20PollInput(String raw) {
         try {
             java.io.FileInputStream s = new java.io.FileInputStream(raw + ".input.seq");
             long seq = 0;
@@ -540,33 +549,76 @@ public final class Launcher {
             while ((b = s.read()) >= 0 && b >= '0' && b <= '9') seq = seq * 10 + (b - '0');
             try { s.close(); } catch (Throwable ignored) { }
             if (seq == sInSeq) return new int[0];  // != also catches compositor restarts
-            sInSeq = seq;
             java.io.FileInputStream f = new java.io.FileInputStream(raw + ".input");
             int[] vals = new int[96];
             int n = 0;
-            byte[] line = new byte[32];
+            long maxIdx = sInSeq;
+            byte[] line = new byte[48];
             while (n + 3 <= 96) {
                 int ln = 0;
-                while ((b = f.read()) >= 0 && b != '\n' && ln < 31) line[ln++] = (byte) b;
+                while ((b = f.read()) >= 0 && b != '\n' && ln < 47) line[ln++] = (byte) b;
                 if (ln == 0) break;
                 int i = 0;
-                char k = (char) line[i];
-                if (k != 'D' && k != 'M' && k != 'U') continue;  // torn line guard
-                for (i = 1; i < ln && (line[i] == ' ' || line[i] == '\t'); i++) { }
+                long idx = 0;
+                while (i < ln && line[i] >= '0' && line[i] <= '9') { idx = idx * 10 + (line[i] - '0'); i++; }
+                while (i < ln && (line[i] == ' ' || line[i] == '\t')) i++;
+                if (i >= ln) continue;  // torn/garbage line (seq guards the usual case)
+                char k = (char) line[i++];
+                if (k != 'D' && k != 'M' && k != 'U') continue;
+                while (i < ln && (line[i] == ' ' || line[i] == '\t')) i++;
                 int x = 0;
                 while (i < ln && line[i] >= '0' && line[i] <= '9') { x = x * 10 + (line[i] - '0'); i++; }
                 while (i < ln && (line[i] == ' ' || line[i] == '\t')) i++;
                 int y = 0;
                 while (i < ln && line[i] >= '0' && line[i] <= '9') { y = y * 10 + (line[i] - '0'); i++; }
+                if (idx <= sInSeq) continue;  // already consumed on an earlier poll
+                if (idx > maxIdx) maxIdx = idx;
                 vals[n++] = k == 'D' ? 0 : k == 'M' ? 1 : 2;
                 vals[n++] = x;
                 vals[n++] = y;
             }
             try { f.close(); } catch (Throwable ignored) { }
+            sInSeq = maxIdx;  // the max we actually read, so a torn tail re-reads cleanly
             return java.util.Arrays.copyOf(vals, n);
         } catch (Throwable t) {
             return new int[0];
         }
+    }
+
+    // NOD-26 self-check: the cursor reader keeps every event the compositor
+    // published, even when several land between polls, and never replays one.
+    // Runs standalone (no device Screen): dalvikvm ... Launcher inputtest.
+    static void writeInput(String base, long total, String body) throws Exception {
+        java.io.FileOutputStream fi = new java.io.FileOutputStream(base + ".input");
+        fi.write(body.getBytes("US-ASCII"));
+        fi.close();
+        java.io.FileOutputStream fs = new java.io.FileOutputStream(base + ".input.seq");
+        fs.write((total + "\n").getBytes("US-ASCII"));
+        fs.close();
+    }
+
+    static void inputTest() throws Exception {
+        String data = System.getenv("ANDROID_DATA");
+        String base = (data != null ? data : ".") + "/q20-inputtest";
+        sInSeq = -1;
+        // A down/move/up burst the old per-poll overwrite collapsed to just the up.
+        writeInput(base, 3, "1 D 10 20\n2 M 11 21\n3 U 12 22\n");
+        int[] a = q20PollInput(base);
+        check("input burst keeps D,M,U", a.length == 9
+                && a[0] == 0 && a[1] == 10 && a[3] == 1 && a[6] == 2 && a[7] == 12);
+        // Same seq: nothing replayed.
+        check("input no replay", q20PollInput(base).length == 0);
+        // Ring still shows old events; the cursor emits only the new one.
+        writeInput(base, 4, "2 M 11 21\n3 U 12 22\n4 D 30 40\n");
+        int[] b = q20PollInput(base);
+        check("input cursor emits only new", b.length == 3 && b[0] == 0 && b[1] == 30 && b[2] == 40);
+        // A torn last line (seq already bumped): the good line lands, the tail is skipped.
+        writeInput(base, 6, "5 M 31 41\n6 ");
+        int[] c = q20PollInput(base);
+        check("input torn tail skipped", c.length == 3 && c[0] == 1 && c[1] == 31 && c[2] == 41);
+        new java.io.File(base + ".input").delete();
+        new java.io.File(base + ".input.seq").delete();
+        sInSeq = -1;
     }
 
     // A9: the resident loop, ViewRootImpl's job in miniature. A main looper
@@ -603,9 +655,9 @@ public final class Launcher {
         for (int i = 0; i + 2 < ev.length; i += 3) {
             int kind = ev[i], x = ev[i + 1], y = ev[i + 2];
             long now = SystemClock.uptimeMillis();
-            // The compositor replaces its input file per batch, so a quick
-            // tap's down can be overwritten before this poll reads it. Views
-            // drop an up without a down: replay the lost down here.
+            // The cursor transport keeps every event now, but if a down ever
+            // slides out of the compositor's 32-event ring we would see a
+            // move/up with no down; Views drop those, so synthesize the down.
             if (kind != 0 && !sTouching) {
                 sDownTime = now;
                 touch(sDownTime, now, MotionEvent.ACTION_DOWN, x, y);

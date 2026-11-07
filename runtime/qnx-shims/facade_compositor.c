@@ -72,29 +72,31 @@ static int envInt(const char* name, int fallback) {
 #define MAX_INPUT_EVENTS 32
 typedef struct { char kind; int x; int y; } in_ev;  /* D down / M move / U up */
 static in_ev evq[MAX_INPUT_EVENTS];
-static int evn = 0;
-static int in_seq = 0;
+static int evn = 0;         /* events currently in the ring (<= MAX)        */
+static long ev_base = 0;    /* absolute count that has slid out of the ring */
+static long ev_total = 0;   /* absolute count ever enqueued = the seq value */
 
 static void publish_input(const char* framepath) {
-  /* Direct write + seq-bump-after-close (NOT tmp+rename: C rename() fails on
-   * /tmp here even though shell mv works - 32 lost publishes caught it).
-   * The reader must tolerate a torn last line; the seq tells it when done. */
+  /* The file holds the last <=32 events, each prefixed with its absolute
+   * 1-based index; the seq is the running total (ev_total). The reader keeps a
+   * cursor (last index consumed), so nothing is lost between its polls and
+   * nothing is replayed. The old code overwrote a bare delta and reset per
+   * publish: two seq bumps inside one 33ms poll dropped a quick tap's DOWN,
+   * leaving an orphan UP (NOD-26). Direct write + seq-bump-after-close (C
+   * rename() is unreliable here); the reader tolerates a torn last line because
+   * the seq is written only after this file is closed. */
   char ipath[520];
   snprintf(ipath, sizeof(ipath), "%s.input", framepath);
   FILE* f = fopen(ipath, "w");
   if (f == NULL) { P("publish fopen %s failed errno=%d\n", ipath, errno); return; }
-  int n = evn;
   for (int i = 0; i < evn; i++)
-    fprintf(f, "%c %d %d\n", evq[i].kind, evq[i].x, evq[i].y);
+    fprintf(f, "%ld %c %d %d\n", ev_base + i + 1, evq[i].kind, evq[i].x, evq[i].y);
   fclose(f);
-  evn = 0;  /* each publish is a DELTA since the last one - the app would
-             * otherwise replay the whole history on every seq bump (the
-             * multi-click bug: one tap fired 3 clicks). */
-  P("publish wrote %d events to %s\n", n, ipath);
+  P("publish %d events (total %ld) to %s\n", evn, ev_total, ipath);
   char sp[540];
   snprintf(sp, sizeof(sp), "%s.seq", ipath);
   FILE* s = fopen(sp, "w");
-  if (s != NULL) { fprintf(s, "%d\n", ++in_seq); fclose(s); }
+  if (s != NULL) { fprintf(s, "%ld\n", ev_total); fclose(s); }
 }
 
 static void pump_input(screen_context_t ctx, screen_event_t ev, const char* framepath) {
@@ -125,20 +127,21 @@ static void pump_input(screen_context_t ctx, screen_event_t ev, const char* fram
        * that stamp is CLOCK_MONOTONIC ns (unverified; a sane 0..40 says so) */
       P("input touch type=%d buttons=%d pos=%d,%d age=%.1fms\n", type, buttons,
         pos[0], pos[1], last_in_ms - stamp / 1e6);
+      char kind = (type == 100) ? 'D' : (type == 101) ? 'M' : 'U';
       if (evn < MAX_INPUT_EVENTS) {
-        evq[evn].kind = (type == 100) ? 'D' : (type == 101) ? 'M' : 'U';
-        evq[evn].x = pos[0];
-        evq[evn].y = pos[1];
+        evq[evn].kind = kind; evq[evn].x = pos[0]; evq[evn].y = pos[1];
         evn++;
       } else {
-        /* ring: drop the oldest, keep the latest MAX - and ALWAYS publish
-         * (the old code stopped publishing once full: no new input ever
-         * reached the app again). */
+        /* ring full: the oldest slides out (ev_base counts it), newest in. A
+         * reader more than MAX events behind loses the overrun - at a 16ms
+         * poll that is ~0.5s of moves, far past any real touch latency. */
         memmove(evq, evq + 1, (MAX_INPUT_EVENTS - 1) * sizeof(in_ev));
-        evq[MAX_INPUT_EVENTS - 1].kind = (type == 100) ? 'D' : (type == 101) ? 'M' : 'U';
+        evq[MAX_INPUT_EVENTS - 1].kind = kind;
         evq[MAX_INPUT_EVENTS - 1].x = pos[0];
         evq[MAX_INPUT_EVENTS - 1].y = pos[1];
+        ev_base++;
       }
+      ev_total++;
       publish_input(framepath);
     } else {
       P("input other type=%d\n", type);
