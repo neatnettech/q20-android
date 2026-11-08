@@ -54,6 +54,7 @@ import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ListView;
 import android.view.animation.PathInterpolator;
@@ -127,6 +128,9 @@ public final class Launcher {
                 inputTest();
             } else if (mode.equals("scroll")) {
                 scroll(apk, activityClass);
+            } else if (mode.equals("window")) {
+                sRealWindows = true;
+                activity(apk, activityClass);
             } else {
                 System.out.println("facade: unknown mode " + mode);
                 System.exit(2);
@@ -422,8 +426,12 @@ public final class Launcher {
         // ViewRootImpl's first traversal does it, then measured and laid out.
         View decor = act.getWindow().getDecorView();
         sDecor = decor;
-        attach(act, decor);
-        layoutPass();
+        if (sRealWindows) {
+            attachReal(act, decor);  // NOD-31: real ViewRootImpl drives layout + draw
+        } else {
+            attach(act, decor);
+            layoutPass();
+        }
         dump(decor, "", 0, 0);
         sStack.push(act);
         return act;
@@ -512,6 +520,76 @@ public final class Launcher {
     // RenderNodeAnimator reach through it for its Choreographer and pending
     // animator list. Sound and haptics stay no ops here, because its own
     // need a window session.
+    // NOD-31: bring a window up through the real stock path instead of the
+    // hand-built attach()/layoutPass()/draw(). makeVisible -> WindowManager.addView
+    // -> new ViewRootImpl -> setView -> our IWindowSession.addToDisplay; the
+    // ViewRootImpl then measures, lays out and draws (drawSoftware locks the same
+    // facade Surface as draw() does). INPUT_FEATURE_NO_INPUT_CHANNEL skips the
+    // input channel so no InputChannel/InputEventReceiver natives are needed yet.
+    static boolean sRealWindows;
+    static void attachReal(Activity act, View decor) throws Exception {
+        if (sHandler == null) sHandler = new Handler(Looper.getMainLooper());
+        setStatic(Class.forName("android.view.WindowManagerGlobal"), "sWindowSession", windowSession());
+        WindowManager.LayoutParams p = act.getWindow().getAttributes();
+        // inputFeatures + INPUT_FEATURE_NO_INPUT_CHANNEL (0x2) are hidden from
+        // android-23.jar; reflect. Skips the InputChannel so setView needs no
+        // input natives until real touch is wired.
+        set(p, "inputFeatures", ((Integer) get(p, "inputFeatures")) | 0x2);
+        call(act, "makeVisible");        // adds the decor; ViewRootImpl schedules the first traversal
+        pumpLooper(500);                 // run it: measure, layout, draw
+    }
+
+    // Run the main looper for ms so posted work (the ViewRootImpl traversal via
+    // the Choreographer) executes, then stop. Same bounded-loop trick as taps().
+    static void pumpLooper(int ms) {
+        final RuntimeException stop = new RuntimeException("pump done");
+        sHandler.postDelayed(new Runnable() { public void run() { throw stop; } }, ms);
+        try {
+            Looper.loop();
+        } catch (RuntimeException e) {
+            if (e != stop) throw e;
+        }
+    }
+
+    // The real IWindowSession: addToDisplay/relayout succeed with zero insets, a
+    // full-screen frame and a valid Surface (mNativeObject != 0, the sentinel the
+    // facade's Surface natives accept); getDisplayFrame is the panel; the rest
+    // are no-ops. One window needs no more than this.
+    static Object windowSession() throws Exception {
+        final String iface = "android.view.IWindowSession";
+        final Binder binder = new Binder();
+        return Proxy.newProxyInstance(Class.forName(iface).getClassLoader(),
+                new Class<?>[] { Class.forName(iface) }, new InvocationHandler() {
+                    public Object invoke(Object p, Method m, Object[] a) throws Throwable {
+                        String n = m.getName();
+                        if (n.equals("asBinder")) return binder;
+                        if (m.getDeclaringClass() == Object.class) {
+                            if (n.equals("equals")) return p == a[0];
+                            if (n.equals("hashCode")) return System.identityHashCode(p);
+                            return "fake session";
+                        }
+                        if (n.equals("addToDisplay")) {
+                            rectSet(a[5], 0, 0, 0, 0);   // outContentInsets
+                            rectSet(a[6], 0, 0, 0, 0);   // outStableInsets
+                            rectSet(a[7], 0, 0, 0, 0);   // outOutsets
+                            return 0;                    // ADD_OKAY
+                        }
+                        if (n.equals("relayout")) {
+                            rectSet(a[7], 0, 0, SCREEN_PX, SCREEN_PX);  // outFrame
+                            for (int i = 8; i <= 12; i++) rectSet(a[i], 0, 0, 0, 0);
+                            if (a[14] != null) set(a[14], "mNativeObject", 1L);  // outSurface valid
+                            return 0;
+                        }
+                        if (n.equals("getDisplayFrame")) { rectSet(a[1], 0, 0, SCREEN_PX, SCREEN_PX); return null; }
+                        return zero(m.getReturnType());
+                    }
+                });
+    }
+
+    static void rectSet(Object r, int l, int t, int rt, int b) {
+        if (r instanceof android.graphics.Rect) ((android.graphics.Rect) r).set(l, t, rt, b);
+    }
+
     static Handler sHandler;
     static void attach(Activity act, View decor) throws Exception {
         sHandler = new Handler(Looper.getMainLooper());
