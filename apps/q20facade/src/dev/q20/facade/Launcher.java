@@ -125,6 +125,8 @@ public final class Launcher {
                 taps(java.util.Arrays.copyOfRange(args, 3, args.length));
             } else if (mode.equals("inputtest")) {
                 inputTest();
+            } else if (mode.equals("scroll")) {
+                scroll(apk, activityClass);
             } else {
                 System.out.println("facade: unknown mode " + mode);
                 System.exit(2);
@@ -638,6 +640,94 @@ public final class Launcher {
         sInSeq = -1;
     }
 
+    // NOD-35 scroll perf: seed 50 notes, fling the list, and run a bounded
+    // draw loop so perf() prints the per-frame layout/draw breakdown. No
+    // compositor (Q20_DRAW_RAW unset): the cost measured is layout + draw.
+    static void scroll(String apk, String cls) throws Exception {
+        activity(apk, cls);
+        Activity act = sStack.peek();
+        int n = 50;
+        ContentResolver cr = act.getContentResolver();
+        Uri dir = Uri.parse("content://" + sAppAuthority + "/notes");
+        for (int i = 0; i < n; i++) {
+            ContentValues v = new ContentValues();
+            v.put("title", "note " + i);
+            v.put("note", "body of note number " + i);
+            cr.insert(dir, v);
+        }
+        ListView lv = firstListView(sDecor);
+        if (lv == null) throw new IllegalStateException("no ListView to scroll");
+        android.widget.ListAdapter ad = lv.getAdapter();
+        while (ad instanceof android.widget.WrapperListAdapter) ad = ((android.widget.WrapperListAdapter) ad).getWrappedAdapter();
+        if (ad instanceof android.widget.CursorAdapter) {
+            Cursor cur = ((android.widget.CursorAdapter) ad).getCursor();
+            if (cur != null) cur.requery();
+        }
+        layoutPass();
+        check("list seeded " + lv.getAdapter().getCount() + " rows", lv.getAdapter().getCount() >= n);
+
+        // One throwaway frame to warm the glyph cache and surface, then fling.
+        draw();
+        java.util.Arrays.fill(sSum, 0);
+        java.util.Arrays.fill(sMax, 0);
+        sPerfN = 0;
+        sFlingFrames = 0;
+        flingUp(lv);
+        measureFrames(2000);
+        check("fling drew " + sFlingFrames + " frames", sFlingFrames > 0);
+    }
+
+    // A quick upward fling: a down, a few fast upward moves (timestamped so the
+    // VelocityTracker builds velocity), then an up. ListView flings from there.
+    static void flingUp(View lv) {
+        int x = SCREEN_PX / 2;
+        long t = SystemClock.uptimeMillis();
+        touch(t, t, MotionEvent.ACTION_DOWN, x, 620);
+        for (int i = 1; i <= 6; i++) touch(t, t + i * 8, MotionEvent.ACTION_MOVE, x, 620 - i * 95);
+        touch(t, t + 56, MotionEvent.ACTION_UP, x, 50);
+    }
+
+    // Tick for ms milliseconds: each tick lays out and draws if the fling left
+    // the tree dirty, and perf() prints every 30 frames. A bounded Looper.loop
+    // like taps(): the fling's own posted animation callbacks run between ticks.
+    static int sFlingFrames;
+    static void measureFrames(final int ms) {
+        final long end = SystemClock.uptimeMillis() + ms;
+        final RuntimeException stop = new RuntimeException("scroll done");
+        sHandler.post(new Runnable() {
+            public void run() {
+                boolean drew = false;
+                try {
+                    drew = tick();
+                    if (drew) sFlingFrames++;
+                } catch (Throwable t) {
+                    System.out.println("facade: scroll tick threw " + rootCause(t));
+                }
+                // Same pacing as live(): animating reposts now (the vsync post
+                // paces it), idle backs off to 16 ms.
+                if (SystemClock.uptimeMillis() < end) sHandler.postDelayed(this, drew ? 0 : 16);
+                else throw stop;
+            }
+        });
+        try {
+            Looper.loop();
+        } catch (RuntimeException e) {
+            if (e != stop) throw e;
+        }
+    }
+
+    static ListView firstListView(View v) {
+        if (v instanceof ListView) return (ListView) v;
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                ListView l = firstListView(g.getChildAt(i));
+                if (l != null) return l;
+            }
+        }
+        return null;
+    }
+
     // A9: the resident loop, ViewRootImpl's job in miniature. A main looper
     // tick polls the compositor's input file and turns taps into clicks, then
     // lays out when a view asked and draws when anything is dirty. Between
@@ -647,15 +737,19 @@ public final class Launcher {
         System.out.println("facade: live loop - touch the app");
         sHandler.post(new Runnable() {
             public void run() {
+                boolean drew = false;
                 try {
-                    tick();
+                    drew = tick();
                 } catch (Throwable t) {
                     System.out.println("facade: tick threw " + rootCause(t));
                     t.printStackTrace(System.out);
                 }
-                // ponytail: a 16 ms poll wakes the app even when idle; stage W
-                // (real ViewRootImpls, event driven frames) removes this tick.
-                sHandler.postDelayed(this, 16);
+                // While animating, repost now: the vsync-blocked post already
+                // paces the frame (50 notes fling at ~58 fps instead of 28 with
+                // a 16 ms delay stacked on top, NOD-35). Idle, back off to 16 ms
+                // so we don't wake the app for nothing. ponytail: stage W (event
+                // driven frames) removes the poll entirely.
+                sHandler.postDelayed(this, drew ? 0 : 16);
             }
         });
         Looper.loop();
@@ -667,7 +761,10 @@ public final class Launcher {
     static long sDownTime;
     static boolean sTouching;
     static boolean sLogNextFrame;
-    static void tick() throws Exception {
+    // Returns whether it drew a frame, so the caller can repost immediately
+    // while animating (the vsync-blocked post paces it) and back off to 16 ms
+    // when idle instead of waking the app for nothing.
+    static boolean tick() throws Exception {
         int[] ev = q20PollInput();
         for (int i = 0; i + 2 < ev.length; i += 3) {
             int kind = ev[i], x = ev[i + 1], y = ev[i + 2];
@@ -695,7 +792,9 @@ public final class Launcher {
             perf();
             if (sLogNextFrame) System.out.println("facade: drew frame " + sFrames + " " + times(sMs));
             sLogNextFrame = false;
+            return true;
         }
+        return false;
     }
 
     // Perf: layout, lock, draw and post of each live frame in ms (post
