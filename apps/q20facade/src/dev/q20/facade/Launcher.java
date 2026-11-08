@@ -583,7 +583,7 @@ public final class Launcher {
                 while (i < ln && (line[i] == ' ' || line[i] == '\t')) i++;
                 if (i >= ln) continue;  // torn/garbage line (seq guards the usual case)
                 char k = (char) line[i++];
-                if (k != 'D' && k != 'M' && k != 'U') continue;
+                if (k != 'D' && k != 'M' && k != 'U' && k != 'K') continue;
                 while (i < ln && (line[i] == ' ' || line[i] == '\t')) i++;
                 int x = 0;
                 while (i < ln && line[i] >= '0' && line[i] <= '9') { x = x * 10 + (line[i] - '0'); i++; }
@@ -592,7 +592,7 @@ public final class Launcher {
                 while (i < ln && line[i] >= '0' && line[i] <= '9') { y = y * 10 + (line[i] - '0'); i++; }
                 if (idx <= sInSeq) continue;  // already consumed on an earlier poll
                 if (idx > maxIdx) maxIdx = idx;
-                vals[n++] = k == 'D' ? 0 : k == 'M' ? 1 : 2;
+                vals[n++] = k == 'D' ? 0 : k == 'M' ? 1 : k == 'U' ? 2 : 3;  // 3 = key (x=sym, y=flags)
                 vals[n++] = x;
                 vals[n++] = y;
             }
@@ -635,6 +635,10 @@ public final class Launcher {
         writeInput(base, 6, "5 M 31 41\n6 ");
         int[] c = q20PollInput(base);
         check("input torn tail skipped", c.length == 3 && c[0] == 1 && c[1] == 31 && c[2] == 41);
+        // A forwarded keyboard line surfaces as a key event: kind 3, sym, flags.
+        writeInput(base, 7, "7 K 104 1\n");
+        int[] d = q20PollInput(base);
+        check("input key line -> kind 3", d.length == 3 && d[0] == 3 && d[1] == 104 && d[2] == 1);
         new java.io.File(base + ".input").delete();
         new java.io.File(base + ".input.seq").delete();
         sInSeq = -1;
@@ -768,6 +772,7 @@ public final class Launcher {
         int[] ev = q20PollInput();
         for (int i = 0; i + 2 < ev.length; i += 3) {
             int kind = ev[i], x = ev[i + 1], y = ev[i + 2];
+            if (kind == 3) { liveKey(x, y); continue; }  // x=sym, y=flags
             long now = SystemClock.uptimeMillis();
             // The cursor transport keeps every event now, but if a down ever
             // slides out of the compositor's 32-event ring we would see a
@@ -944,6 +949,44 @@ public final class Launcher {
             }
         }
         return null;
+    }
+
+    // A key the compositor forwarded from the Q20 keyboard (NOD-33): sym is a
+    // unicode codepoint for a printable key or a 0xf0xx QNX KEYCODE for a special
+    // one, flags carries KEY_DOWN (0x1). Printables type their char; the mapped
+    // specials dispatch a KeyEvent; Escape/Back pops the stack.
+    static void liveKey(int sym, int flags) throws Exception {
+        if ((flags & 0x1) == 0) return;  // act on the press, not the release
+        if (sym >= 0x20 && sym < 0x7f) { keys(String.valueOf((char) sym)); return; }
+        int code = symToKeyCode(sym);
+        if (code == -1) { back(); return; }
+        if (code != 0) {
+            if (code == KeyEvent.KEYCODE_DEL || code == KeyEvent.KEYCODE_ENTER) {
+                EditText et = firstEditText(sDecor);
+                if (et != null) et.requestFocus();
+            }
+            long t = SystemClock.uptimeMillis();
+            sDecor.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0));
+            sDecor.dispatchKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0));
+        }
+        System.out.println("facade: live key sym=0x" + Integer.toHexString(sym) + " code=" + code);
+    }
+
+    // QNX key syms (sys/keycodes.h: KEYCODE_PC_KEYS = 0xf000) to Android key
+    // codes. -1 means pop the stack (Escape; the Q20 Back button's own sym is
+    // logged by the compositor so this can be tuned on a real device).
+    static int symToKeyCode(int sym) {
+        switch (sym) {
+            case 0x08: case 0xf008: return KeyEvent.KEYCODE_DEL;
+            case 0x0a: case 0x0d: case 0xf00d: return KeyEvent.KEYCODE_ENTER;
+            case 0xf051: return KeyEvent.KEYCODE_DPAD_LEFT;
+            case 0xf053: return KeyEvent.KEYCODE_DPAD_RIGHT;
+            case 0xf052: return KeyEvent.KEYCODE_DPAD_UP;
+            case 0xf054: return KeyEvent.KEYCODE_DPAD_DOWN;
+            case 0xf067: return KeyEvent.KEYCODE_MENU;
+            case 0x1b: case 0xf01b: return -1;  // Escape -> Back
+            default: return 0;
+        }
     }
 
     // keys:<text> -> type through real key input, not setText. One ACTION_MULTIPLE

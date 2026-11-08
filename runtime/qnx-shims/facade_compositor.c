@@ -99,6 +99,23 @@ static void publish_input(const char* framepath) {
   if (s != NULL) { fprintf(s, "%ld\n", ev_total); fclose(s); }
 }
 
+/* Add one event to the ring: 'D'/'M'/'U' touches carry x,y; 'K' keys carry the
+ * sym and the QNX key flags. ev_total is the running count the reader cursors
+ * on, ev_base the count that has slid out of the 32-event window. */
+static void enqueue(char kind, int a, int b) {
+  if (evn < MAX_INPUT_EVENTS) {
+    evq[evn].kind = kind; evq[evn].x = a; evq[evn].y = b;
+    evn++;
+  } else {
+    memmove(evq, evq + 1, (MAX_INPUT_EVENTS - 1) * sizeof(in_ev));
+    evq[MAX_INPUT_EVENTS - 1].kind = kind;
+    evq[MAX_INPUT_EVENTS - 1].x = a;
+    evq[MAX_INPUT_EVENTS - 1].y = b;
+    ev_base++;
+  }
+  ev_total++;
+}
+
 static void pump_input(screen_context_t ctx, screen_event_t ev, const char* framepath) {
   /* Bounded drain: SCREEN_EVENT_IDLE (12) can arrive in a flood and must not
    * starve the frame poll (found the hard way: no redraw ever ran). */
@@ -127,21 +144,19 @@ static void pump_input(screen_context_t ctx, screen_event_t ev, const char* fram
        * that stamp is CLOCK_MONOTONIC ns (unverified; a sane 0..40 says so) */
       P("input touch type=%d buttons=%d pos=%d,%d age=%.1fms\n", type, buttons,
         pos[0], pos[1], last_in_ms - stamp / 1e6);
-      char kind = (type == 100) ? 'D' : (type == 101) ? 'M' : 'U';
-      if (evn < MAX_INPUT_EVENTS) {
-        evq[evn].kind = kind; evq[evn].x = pos[0]; evq[evn].y = pos[1];
-        evn++;
-      } else {
-        /* ring full: the oldest slides out (ev_base counts it), newest in. A
-         * reader more than MAX events behind loses the overrun - at a 16ms
-         * poll that is ~0.5s of moves, far past any real touch latency. */
-        memmove(evq, evq + 1, (MAX_INPUT_EVENTS - 1) * sizeof(in_ev));
-        evq[MAX_INPUT_EVENTS - 1].kind = kind;
-        evq[MAX_INPUT_EVENTS - 1].x = pos[0];
-        evq[MAX_INPUT_EVENTS - 1].y = pos[1];
-        ev_base++;
-      }
-      ev_total++;
+      enqueue((type == 100) ? 'D' : (type == 101) ? 'M' : 'U', pos[0], pos[1]);
+      publish_input(framepath);
+    } else if (type == SCREEN_EVENT_KEYBOARD) {
+      /* The Q20's physical keyboard. KEY_SYM is the unicode codepoint for a
+       * printable key or a 0xf0xx KEYCODE for a special one; KEY_FLAGS carries
+       * KEY_DOWN (0x1). The app maps sym->KeyEvent; forward both. Logged first
+       * so the Back/trackpad syms can be read off a real device (NOD-33). */
+      int sym = 0, flags = 0;
+      screen_get_event_property_iv(ev, SCREEN_PROPERTY_KEY_SYM, &sym);
+      screen_get_event_property_iv(ev, SCREEN_PROPERTY_KEY_FLAGS, &flags);
+      last_in_ms = now_ms();
+      P("input key sym=0x%x flags=0x%x\n", sym, flags);
+      enqueue('K', sym, flags);
       publish_input(framepath);
     } else {
       P("input other type=%d\n", type);
