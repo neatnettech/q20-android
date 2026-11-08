@@ -9,9 +9,11 @@ import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.ClipData;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.ProviderInfo;
+import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import android.content.res.AssetManager;
@@ -52,6 +54,8 @@ import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.widget.AdapterView;
+import android.widget.ListView;
 import android.view.animation.PathInterpolator;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -744,6 +748,7 @@ public final class Launcher {
                         if (a.startsWith("type:")) { type(a.substring(5)); return; }
                         if (a.startsWith("keys:")) { keys(a.substring(5)); return; }
                         if (a.startsWith("key:")) { keyEvent(a.substring(4)); return; }
+                        if (a.startsWith("long:")) { contextMenu(a.substring(5)); return; }
                     } catch (Exception e) { throw new RuntimeException(a, e); }
                     if (eq >= 0) {
                         View v = viewById(a.substring(0, eq));
@@ -791,15 +796,30 @@ public final class Launcher {
     // Tap harness verbs (NOD-32). @<title>: the options-menu item, dispatched
     // the way the action bar would (onMenuItemSelected -> onOptionsItemSelected).
     static void menuItem(String label) throws Exception {
-        Activity top = sStack.peek();
-        Menu menu = (Menu) make("com.android.internal.view.menu.MenuBuilder", top);
-        top.onCreateOptionsMenu(menu);
-        top.onPrepareOptionsMenu(menu);
-        for (int i = 0; i < menu.size(); i++) {
-            MenuItem item = menu.getItem(i);
+        final Activity top = sStack.peek();
+        Object menu = make("com.android.internal.view.menu.MenuBuilder", top);
+        // performItemAction routes app-handled items through this callback (to
+        // onOptionsItemSelected) and falls back to an item's intent otherwise;
+        // without a callback it returns false and nothing fires.
+        Class<?> cbClass = Class.forName("com.android.internal.view.menu.MenuBuilder$Callback");
+        Object cb = Proxy.newProxyInstance(cbClass.getClassLoader(), new Class<?>[] { cbClass },
+                new InvocationHandler() {
+                    public Object invoke(Object p, Method m, Object[] a) throws Throwable {
+                        if (m.getName().equals("onMenuItemSelected")) {
+                            return top.onMenuItemSelected(Window.FEATURE_OPTIONS_PANEL, (MenuItem) a[1]);
+                        }
+                        return null;  // onMenuModeChange: void
+                    }
+                });
+        call(menu, "setCallback", cb);
+        Menu mb = (Menu) menu;
+        top.onCreateOptionsMenu(mb);
+        top.onPrepareOptionsMenu(mb);
+        for (int i = 0; i < mb.size(); i++) {
+            MenuItem item = mb.getItem(i);
             CharSequence t = item.getTitle();
             if (t != null && label.contentEquals(t)) {
-                boolean ok = top.onMenuItemSelected(Window.FEATURE_OPTIONS_PANEL, item);
+                boolean ok = (Boolean) call(menu, "performItemAction", item, 0);
                 System.out.println("facade: menu \"" + label + "\" selected=" + ok);
                 return;
             }
@@ -837,6 +857,52 @@ public final class Launcher {
         long t = SystemClock.uptimeMillis();
         boolean ok = sDecor.dispatchKeyEvent(new KeyEvent(t, str, KeyCharacterMap.VIRTUAL_KEYBOARD, 0));
         System.out.println("facade: keys \"" + str + "\" handled=" + ok);
+    }
+
+    // long:<rowId>:<item> -> long-press a list row and pick a context-menu item.
+    // The real path shows an AlertDialog (MenuDialogHelper); the facade builds the
+    // same ContextMenuBuilder, attaches the row's AdapterContextMenuInfo (its id
+    // is what onContextItemSelected reads), and dispatches directly.
+    static void contextMenu(String spec) throws Exception {
+        int c = spec.indexOf(':');
+        if (c < 0) throw new IllegalArgumentException("long:<rowId>:<item>");
+        View row = viewById(spec.substring(0, c));
+        String title = spec.substring(c + 1);
+        ListView lv = null;
+        for (android.view.ViewParent par = row.getParent(); par instanceof View; par = par.getParent()) {
+            if (par instanceof ListView) { lv = (ListView) par; break; }
+        }
+        if (lv == null) throw new IllegalArgumentException("no ListView over " + spec.substring(0, c));
+        int pos = lv.getPositionForView(row);
+        long id = lv.getItemIdAtPosition(pos);
+        Activity top = sStack.peek();
+        Object menu = make("com.android.internal.view.menu.ContextMenuBuilder", top);
+        Object info = make("android.widget.AdapterView$AdapterContextMenuInfo", row, pos, id);
+        call(menu, "setCurrentMenuInfo", info);  // added items carry this menuInfo
+        top.onCreateContextMenu((android.view.ContextMenu) menu, row,
+                (android.view.ContextMenu.ContextMenuInfo) info);
+        Menu mb = (Menu) menu;
+        for (int i = 0; i < mb.size(); i++) {
+            MenuItem item = mb.getItem(i);
+            CharSequence t = item.getTitle();
+            if (t != null && title.contentEquals(t)) {
+                boolean ok = top.onContextItemSelected(item);
+                // A context action changes the provider in place (Delete); with
+                // no stop/restart to requery the managed cursor, refresh it here.
+                android.widget.ListAdapter ad = lv.getAdapter();
+                while (ad instanceof android.widget.WrapperListAdapter) {
+                    ad = ((android.widget.WrapperListAdapter) ad).getWrappedAdapter();
+                }
+                if (ad instanceof android.widget.CursorAdapter) {
+                    Cursor cur = ((android.widget.CursorAdapter) ad).getCursor();
+                    if (cur != null) cur.requery();
+                }
+                layoutPass();
+                System.out.println("facade: context \"" + title + "\" pos=" + pos + " id=" + id + " handled=" + ok);
+                return;
+            }
+        }
+        throw new IllegalArgumentException("no context item \"" + title + "\"");
     }
 
     // key:<NAME> -> a single hardware key, down then up. BACK pops the stack
@@ -1001,7 +1067,7 @@ public final class Launcher {
         SERVICES.put("activity", serve("activity", "android.app.IActivityManager", new HashMap<String, Object>()));
         // A9: every EditText's Editor requires a PackageManager, which
         // ContextImpl only builds when this service answers.
-        SERVICES.put("package", serve("package", "android.content.pm.IPackageManager", new HashMap<String, Object>()));
+        SERVICES.put("package", packageService());
         // EditText attach and focus: spell checking (off) and the input method.
         SERVICES.put("textservices", serve("textservices",
                 "com.android.internal.textservice.ITextServicesManager", new HashMap<String, Object>()));
@@ -1014,8 +1080,9 @@ public final class Launcher {
 
         // Cursor change notification (setNotificationUri, notifyChange).
         SERVICES.put("content", serve("content", "android.content.IContentService", new HashMap<String, Object>()));
-        // NotesList.onPrepareOptionsMenu asks the clipboard whether Paste is live.
-        SERVICES.put("clipboard", serve("clipboard", "android.content.IClipboard", new HashMap<String, Object>()));
+        // NotesList.onPrepareOptionsMenu asks the clipboard whether Paste is live;
+        // context Copy writes to it and Paste reads it, so it holds real state.
+        SERVICES.put("clipboard", clipboardService());
         // NOD-33: a text field's TextKeyListener loads a KeyCharacterMap through
         // InputManager. Serve one virtual-keyboard device whose KCM is a minimal
         // FULL map (ACTION_MULTIPLE inserts from getCharacters(), so no per-key
@@ -1024,6 +1091,11 @@ public final class Launcher {
         input.put("getInputDeviceIds", new int[] { KeyCharacterMap.VIRTUAL_KEYBOARD });
         input.put("getInputDevice", virtualKeyboard());
         SERVICES.put("input", serve("input", "android.hardware.input.IInputManager", input));
+        // Loading a menu item's icon badges it for the user profile; answer no
+        // profiles so the badge step is skipped (addIntentOptions, context menus).
+        Map<String, Object> user = new HashMap<String, Object>();
+        user.put("getProfiles", new ArrayList<Object>());
+        SERVICES.put("user", serve("user", "android.os.IUserManager", user));
 
         // Unknown names answer null, as a missing service would.
         Class<?> sm = Class.forName("android.os.IServiceManager");
@@ -1059,6 +1131,78 @@ public final class Launcher {
         return make("android.view.InputDevice", KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, "q20-virtual",
                 0, 0, "virtual", false, InputDevice.SOURCE_KEYBOARD, InputDevice.KEYBOARD_TYPE_ALPHABETIC,
                 kcm, false, false, false);
+    }
+
+    // The package manager answers queryIntentActivityOptions (NoteEditor's
+    // addIntentOptions builds the "Note title:" alternative from it); everything
+    // else is a logged no-op. Resolution reuses the same filter match as
+    // resolveActivity, returning a ResolveInfo per matching activity (MenuBuilder
+    // drops the caller itself).
+    static IBinder packageService() throws Exception {
+        final String iface = "android.content.pm.IPackageManager";
+        final Binder binder = new Binder();
+        Object proxy = Proxy.newProxyInstance(Class.forName(iface).getClassLoader(),
+                new Class<?>[] { Class.forName(iface) }, new InvocationHandler() {
+                    public Object invoke(Object p, Method m, Object[] args) throws Throwable {
+                        String n = m.getName();
+                        if (n.equals("asBinder")) return binder;
+                        if (m.getDeclaringClass() == Object.class) {
+                            if (n.equals("equals")) return p == args[0];
+                            if (n.equals("hashCode")) return System.identityHashCode(p);
+                            return "fake package";
+                        }
+                        if (n.equals("queryIntentActivityOptions")) return resolveInfos((Intent) args[3]);
+                        System.out.println("facade: svc package." + n);
+                        return zero(m.getReturnType());
+                    }
+                });
+        binder.attachInterface((IInterface) proxy, iface);
+        return binder;
+    }
+
+    static List<ResolveInfo> resolveInfos(Intent intent) throws Exception {
+        ArrayList<ResolveInfo> out = new ArrayList<ResolveInfo>();
+        ContentResolver cr = sApp.getContentResolver();
+        for (Object a : (List<?>) get(sPkg, "activities")) {
+            for (Object f : (List<?>) get(a, "intents")) {
+                if (((IntentFilter) f).match(cr, intent, true, "facade") >= 0) {
+                    ResolveInfo ri = new ResolveInfo();
+                    ri.activityInfo = (ActivityInfo) get(a, "info");
+                    ri.filter = (IntentFilter) f;
+                    out.add(ri);
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    // A stateful clipboard: context Copy sets a ClipData, Paste and the Paste
+    // menu item's enabled state read it back. The generic serve() can only
+    // answer fixed values, so this one holds the clip.
+    static ClipData sClip;
+    static IBinder clipboardService() throws Exception {
+        final String iface = "android.content.IClipboard";
+        final Binder binder = new Binder();
+        Object proxy = Proxy.newProxyInstance(Class.forName(iface).getClassLoader(),
+                new Class<?>[] { Class.forName(iface) }, new InvocationHandler() {
+                    public Object invoke(Object p, Method m, Object[] args) {
+                        String n = m.getName();
+                        if (n.equals("asBinder")) return binder;
+                        if (m.getDeclaringClass() == Object.class) {
+                            if (n.equals("equals")) return p == args[0];
+                            if (n.equals("hashCode")) return System.identityHashCode(p);
+                            return "fake clipboard";
+                        }
+                        if (n.equals("setPrimaryClip")) { sClip = (ClipData) args[0]; return null; }
+                        if (n.equals("getPrimaryClip")) return sClip;
+                        if (n.equals("hasPrimaryClip") || n.equals("hasClipboardText")) return sClip != null;
+                        if (n.equals("getPrimaryClipDescription")) return sClip != null ? sClip.getDescription() : null;
+                        return zero(m.getReturnType());
+                    }
+                });
+        binder.attachInterface((IInterface) proxy, iface);
+        return binder;
     }
 
     static IBinder serve(final String name, String iface, final Map<String, Object> answers) throws Exception {
